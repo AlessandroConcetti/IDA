@@ -1,3 +1,4 @@
+import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -5,18 +6,55 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createApp } from "./app.js";
 
+type MultipartTestPart =
+  | { name: string; value: string }
+  | { name: string; filename: string; contentType: string; value: Buffer };
+
+function multipartPayload(parts: MultipartTestPart[]): { headers: Record<string, string>; payload: Buffer } {
+  const boundary = `----ida-test-${randomUUID()}`;
+  const chunks: Buffer[] = [];
+
+  for (const part of parts) {
+    chunks.push(Buffer.from(`--${boundary}\r\n`));
+
+    if ("filename" in part) {
+      chunks.push(
+        Buffer.from(
+          `Content-Disposition: form-data; name="${part.name}"; filename="${part.filename}"\r\nContent-Type: ${part.contentType}\r\n\r\n`,
+        ),
+      );
+      chunks.push(part.value);
+    } else {
+      chunks.push(Buffer.from(`Content-Disposition: form-data; name="${part.name}"\r\n\r\n${part.value}`));
+    }
+
+    chunks.push(Buffer.from("\r\n"));
+  }
+
+  chunks.push(Buffer.from(`--${boundary}--\r\n`));
+
+  return {
+    headers: { "content-type": `multipart/form-data; boundary=${boundary}` },
+    payload: Buffer.concat(chunks),
+  };
+}
+
 describe("IDA API — première tranche Phase 1", () => {
   let app: Awaited<ReturnType<typeof createApp>>;
+  let storageDir: string;
 
   beforeEach(async () => {
+    storageDir = await mkdtemp(join(tmpdir(), "ida-media-storage-"));
     app = await createApp({
       dataDir: "memory://",
+      storageDir,
       now: () => new Date("2026-08-30T09:00:00.000Z"),
     });
   });
 
   afterEach(async () => {
     await app.close();
+    await rm(storageDir, { recursive: true, force: true });
   });
 
   it("expose un health check local explicite", async () => {
@@ -84,6 +122,158 @@ describe("IDA API — première tranche Phase 1", () => {
     );
     expect(body.data.some((asset) => asset.id === "med_other_workspace")).toBe(false);
     expect(body.data.some((asset) => asset.filename === "private-other-video.mp4")).toBe(false);
+  });
+
+  it("importe un média privé, normalise ses tags et le rend visible dans la bibliothèque", async () => {
+    const file = Buffer.from("ida-private-image-content");
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/media",
+      ...multipartPayload([
+        {
+          name: "file",
+          filename: "..\\studio-frame.jpg",
+          contentType: "image/jpeg",
+          value: file,
+        },
+        { name: "description", value: "Photo studio importée localement." },
+        { name: "tags", value: "Studio, Vertical, studio" },
+      ]),
+    });
+
+    const expectedHash = createHash("sha256").update(file).digest("hex");
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toMatchObject({
+      data: {
+        id: expect.stringMatching(/^med_[a-f0-9]{32}$/),
+        workspaceId: "wsp_demo_aless",
+        artistProjectId: "prj_demo_aless",
+        filename: "studio-frame.jpg",
+        type: "IMAGE",
+        mimeType: "image/jpeg",
+        size: file.byteLength,
+        hash: expectedHash,
+        status: "UNUSED",
+        description: "Photo studio importée localement.",
+        tags: ["studio", "vertical"],
+      },
+    });
+    expect((response.json() as { data: Record<string, unknown> }).data).not.toHaveProperty("storageKey");
+    expect((response.json() as { data: Record<string, unknown> }).data).not.toHaveProperty("filePath");
+
+    const listing = await app.inject({ method: "GET", url: "/v1/media?status=UNUSED" });
+    expect(listing.statusCode).toBe(200);
+    expect((listing.json() as { data: Array<{ hash: string; filename: string; tags: string[] }> }).data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ hash: expectedHash, filename: "studio-frame.jpg", tags: ["studio", "vertical"] }),
+      ]),
+    );
+  });
+
+  it("conserve un média importé après un redémarrage local", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "ida-media-data-"));
+    const persistentStorageDir = await mkdtemp(join(tmpdir(), "ida-media-private-storage-"));
+    let firstApp: Awaited<ReturnType<typeof createApp>> | undefined;
+    let restartedApp: Awaited<ReturnType<typeof createApp>> | undefined;
+
+    try {
+      firstApp = await createApp({ dataDir, storageDir: persistentStorageDir });
+      const file = Buffer.from("ida-persistent-audio");
+      const imported = await firstApp.inject({
+        method: "POST",
+        url: "/v1/media",
+        ...multipartPayload([
+          { name: "file", filename: "persistent-demo.mp3", contentType: "audio/mpeg", value: file },
+          { name: "tags", value: "demo, local" },
+        ]),
+      });
+
+      expect(imported.statusCode).toBe(201);
+      const hash = createHash("sha256").update(file).digest("hex");
+      await firstApp.close();
+      firstApp = undefined;
+
+      restartedApp = await createApp({ dataDir, storageDir: persistentStorageDir });
+      const listing = await restartedApp.inject({ method: "GET", url: "/v1/media" });
+
+      expect(listing.statusCode).toBe(200);
+      expect((listing.json() as { data: Array<{ hash: string; filename: string; tags: string[] }> }).data).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ hash, filename: "persistent-demo.mp3", tags: ["demo", "local"] }),
+        ]),
+      );
+    } finally {
+      await firstApp?.close();
+      await restartedApp?.close();
+      await rm(dataDir, { recursive: true, force: true });
+      await rm(persistentStorageDir, { recursive: true, force: true });
+    }
+  });
+
+  it("refuse un doublon exact sans créer un second média", async () => {
+    const file = Buffer.from("ida-duplicate-file");
+    const first = await app.inject({
+      method: "POST",
+      url: "/v1/media",
+      ...multipartPayload([{ name: "file", filename: "first.png", contentType: "image/png", value: file }]),
+    });
+    const second = await app.inject({
+      method: "POST",
+      url: "/v1/media",
+      ...multipartPayload([{ name: "file", filename: "renamed.png", contentType: "image/png", value: file }]),
+    });
+
+    expect(first.statusCode).toBe(201);
+    expect(second.statusCode).toBe(409);
+    expect(second.json()).toMatchObject({ error: { code: "DUPLICATE_MEDIA" } });
+
+    const hash = createHash("sha256").update(file).digest("hex");
+    const listing = await app.inject({ method: "GET", url: "/v1/media" });
+    expect(
+      (listing.json() as { data: Array<{ hash: string }> }).data.filter((asset) => asset.hash === hash),
+    ).toHaveLength(1);
+  });
+
+  it("refuse un type de fichier ou une tentative de scope non autorisés", async () => {
+    const initial = await app.inject({ method: "GET", url: "/v1/media" });
+    const initialCount = (initial.json() as { data: unknown[] }).data.length;
+    const invalidFile = await app.inject({
+      method: "POST",
+      url: "/v1/media",
+      ...multipartPayload([
+        { name: "file", filename: "unsafe.exe", contentType: "image/jpeg", value: Buffer.from("not an image") },
+      ]),
+    });
+    const invalidScope = await app.inject({
+      method: "POST",
+      url: "/v1/media",
+      ...multipartPayload([
+        { name: "file", filename: "allowed.png", contentType: "image/png", value: Buffer.from("image") },
+        { name: "workspaceId", value: "wsp_other" },
+      ]),
+    });
+
+    expect(invalidFile.statusCode).toBe(415);
+    expect(invalidFile.json()).toMatchObject({ error: { code: "UNSUPPORTED_MEDIA_FILE" } });
+    expect(invalidScope.statusCode).toBe(400);
+    expect(invalidScope.json()).toMatchObject({ error: { code: "INVALID_MEDIA_IMPORT" } });
+
+    const after = await app.inject({ method: "GET", url: "/v1/media" });
+    expect((after.json() as { data: unknown[] }).data).toHaveLength(initialCount);
+  });
+
+  it("applique la limite explicite de 25 MiB aux imports", async () => {
+    const oversizedFile = Buffer.alloc(25 * 1024 * 1024 + 1, 1);
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/media",
+      ...multipartPayload([
+        { name: "file", filename: "too-large.mp4", contentType: "video/mp4", value: oversizedFile },
+      ]),
+    });
+
+    expect(response.statusCode).toBe(413);
+    expect(response.json()).toMatchObject({ error: { code: "MEDIA_FILE_TOO_LARGE" } });
   });
 
   it("crée un morceau Music Brain avec un outil WRITE et le conserve dans le workspace serveur", async () => {

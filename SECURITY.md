@@ -44,9 +44,9 @@ L’IA n’obtient ni accès direct à la base de données, ni clé de productio
 ### 3.1 Frontières temporaires du runtime local
 
 - L’identité et le workspace de démonstration sont fixés uniquement côté serveur ; un header, un query string ou le corps d’une requête ne peut pas choisir un autre workspace.
-- PGlite est conservé dans un dossier local ignoré par Git. Il ne contient que des données de démonstration, aucun secret, token, média privé ou identifiant bancaire.
+- PGlite est conservé dans un dossier local ignoré par Git. Il ne contient que des métadonnées de démonstration, aucun secret, token ou identifiant bancaire. Les fichiers importés localement résident séparément dans un stockage privé ignoré par Git ; cette solution de développement ne remplace pas le stockage objet, le scan et la quarantaine de production.
 - L’API locale n’accepte que l’origine du Command Center de développement et n’utilise pas de cookies de session tant que l’authentification réelle n’est pas livrée.
-- Les outils réellement exposés sont les lectures contrôlées et `update_artist_profile` en `WRITE` interne. Cet unique droit d’écriture est validé par schéma, limité au workspace serveur et n’a aucun effet externe. Les autres chemins `WRITE`, ainsi que `APPROVAL_REQUIRED`, `PUBLISH` et `SYSTEM`, restent inaccessibles depuis la commande web.
+- Les outils réellement exposés sont les lectures contrôlées et trois écritures internes allowlistées : `update_artist_profile`, `create_track` et `import_media`. Elles sont validées par schéma, limitées au workspace serveur, journalisées et n’ont aucun effet externe. `import_media` limite un fichier à 25 MiB et valide actuellement son couple MIME/extension, mais ne remplace pas le contrôle de signature binaire et la quarantaine requis avant toute donnée personnelle réelle. Les autres chemins `WRITE`, ainsi que `APPROVAL_REQUIRED`, `PUBLISH` et `SYSTEM`, restent inaccessibles depuis la commande web.
 - Ce runtime n’est pas éligible à une bêta avec données personnelles. Avant cela, les exigences de la section 12 restent obligatoires.
 
 ## 4. Identité, appareils et autorisation

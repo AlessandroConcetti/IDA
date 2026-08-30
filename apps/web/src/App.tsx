@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { type DragEvent, type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   createTrack,
   type DashboardSnapshot,
@@ -9,6 +9,7 @@ import {
   submitIdaCommand,
   type TrackCreateInput,
   updateArtistBrain,
+  uploadMediaAsset,
 } from "./api";
 import {
   type ArtistBrain,
@@ -265,7 +266,7 @@ function MediaGrid({ assets }: { assets: MediaAsset[] }) {
   return (
     <section className="media-grid" aria-label="Médias récents">
       {assets.map((asset) => (
-        <article className="media-card" key={asset.filename}>
+        <article className="media-card" key={asset.id ?? asset.filename}>
           <div className={`media-thumbnail ${asset.tone}`} aria-hidden="true">
             <span>
               {asset.kind === "VIDEO" ? "▶" : asset.kind === "AUDIO" ? "♫" : asset.kind === "IMAGE" ? "◇" : "◫"}
@@ -606,7 +607,121 @@ function MusicView({
   );
 }
 
-function ContentView({ dashboard }: { dashboard: DashboardSnapshot }) {
+const maximumMediaUploadBytes = 25 * 1024 * 1024;
+
+type MediaUploadForm = {
+  description: string;
+  tags: string;
+};
+
+const emptyMediaUploadForm: MediaUploadForm = {
+  description: "",
+  tags: "",
+};
+
+function displayFileSize(bytes: number): string {
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function ContentView({
+  dashboard,
+  onMediaAssetCreated,
+}: {
+  dashboard: DashboardSnapshot;
+  onMediaAssetCreated: (asset: MediaAsset) => void;
+}) {
+  const [form, setForm] = useState<MediaUploadForm>(emptyMediaUploadForm);
+  const [file, setFile] = useState<File | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [notice, setNotice] = useState("Un fichier à la fois, stocké dans la bibliothèque privée IDA.");
+  const [noticeState, setNoticeState] = useState<"default" | "success" | "error">("default");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  function setSelectedFile(nextFile: File | undefined) {
+    if (!nextFile) {
+      return;
+    }
+
+    if (nextFile.size > maximumMediaUploadBytes) {
+      setFile(null);
+      setNotice("Ce fichier dépasse la limite locale de 25 MiB.");
+      setNoticeState("error");
+      return;
+    }
+
+    setFile(nextFile);
+    setNotice(`« ${nextFile.name} » est prêt à être importé.`);
+    setNoticeState("default");
+  }
+
+  function handleDrop(event: DragEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    setIsDragging(false);
+    setSelectedFile(event.dataTransfer.files.item(0) ?? undefined);
+  }
+
+  function handleFileSelection(event: FormEvent<HTMLInputElement>) {
+    setSelectedFile(event.currentTarget.files?.item(0) ?? undefined);
+  }
+
+  function updateField(field: keyof MediaUploadForm, value: string) {
+    setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!file) {
+      setNotice("Choisis un fichier avant de l’ajouter à la bibliothèque.");
+      setNoticeState("error");
+      return;
+    }
+
+    if (file.size > maximumMediaUploadBytes) {
+      setNotice("Ce fichier dépasse la limite locale de 25 MiB.");
+      setNoticeState("error");
+      return;
+    }
+
+    setIsUploading(true);
+    setNotice("Importation sécurisée en cours…");
+    setNoticeState("default");
+
+    try {
+      const asset = await uploadMediaAsset({
+        file,
+        description: optionalFormValue(form.description),
+        tags: optionalFormValue(form.tags),
+      });
+      onMediaAssetCreated(asset);
+      setForm(emptyMediaUploadForm);
+      setFile(null);
+
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+
+      setNotice(`« ${asset.filename} » est maintenant disponible dans la Content Library.`);
+      setNoticeState("success");
+    } catch (error: unknown) {
+      const reason = error instanceof IdaApiError ? error.message : "IDA API est indisponible.";
+      const prefix = error instanceof IdaApiError && error.status === 409 ? "Ce fichier est déjà connu. " : "";
+      setNotice(`${prefix}Aucun média n’a été importé : ${reason}`);
+      setNoticeState("error");
+    } finally {
+      setIsUploading(false);
+    }
+  }
+
   return (
     <div className="content-view">
       <section className="panel wide-panel">
@@ -618,6 +733,95 @@ function ContentView({ dashboard }: { dashboard: DashboardSnapshot }) {
           <span className="quiet-label">Hash & freshness planned</span>
         </div>
         <MediaGrid assets={dashboard.mediaAssets} />
+      </section>
+      <section className="panel content-import-card" aria-labelledby="content-import-title">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">LOCAL IMPORT</p>
+            <h2 id="content-import-title">Add one media asset.</h2>
+          </div>
+          <span className="status-tag demo">PRIVATE</span>
+        </div>
+        <p className="content-import-intro">
+          Import local uniquement : aucun post, brouillon public ou action sociale n’est créé ici.
+        </p>
+        <p className={`content-import-notice ${noticeState}`} role="status">
+          <span aria-hidden="true" />
+          {notice}
+        </p>
+        <form className="content-import-form" noValidate onSubmit={handleSubmit}>
+          <input
+            className="sr-only"
+            ref={fileInputRef}
+            type="file"
+            onChange={handleFileSelection}
+            disabled={isUploading}
+            aria-label="Choisir un fichier média"
+          />
+          <button
+            className={`content-dropzone ${isDragging ? "is-dragging" : ""} ${file ? "has-file" : ""}`}
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            onDragEnter={(event) => {
+              event.preventDefault();
+              setIsDragging(true);
+            }}
+            onDragOver={(event) => event.preventDefault()}
+            onDragLeave={(event) => {
+              if (event.currentTarget === event.target) {
+                setIsDragging(false);
+              }
+            }}
+            onDrop={handleDrop}
+            disabled={isUploading}
+            aria-describedby="media-upload-hint"
+          >
+            <span className="content-dropzone-mark" aria-hidden="true">
+              {file ? "✓" : "↑"}
+            </span>
+            <span className="content-dropzone-copy">
+              <strong>{file ? file.name : "Drop a media file here"}</strong>
+              <small id="media-upload-hint">
+                {file
+                  ? `${displayFileSize(file.size)} · Click to replace`
+                  : "ou sélectionne un fichier · 25 MiB maximum"}
+              </small>
+            </span>
+          </button>
+          <div className="content-import-fields">
+            <label className="content-import-field content-import-field-wide">
+              <span>Description</span>
+              <textarea
+                value={form.description}
+                onChange={(event) => updateField("description", event.target.value)}
+                placeholder="Contexte, intention ou note de production…"
+                rows={3}
+                disabled={isUploading}
+              />
+            </label>
+            <label className="content-import-field content-import-field-wide">
+              <span>Tags</span>
+              <input
+                value={form.tags}
+                onChange={(event) => updateField("tags", event.target.value)}
+                placeholder="studio, Afterimage, nocturne…"
+                disabled={isUploading}
+              />
+            </label>
+          </div>
+          {isUploading ? (
+            <div className="content-upload-progress" role="progressbar" aria-label="Importation en cours">
+              <span />
+            </div>
+          ) : null}
+          <div className="content-import-actions">
+            <p>IDA vérifiera le fichier côté serveur avant de le rendre disponible dans ce workspace.</p>
+            <button className="send-button" type="submit" disabled={isUploading || !file}>
+              {isUploading ? "Importation…" : "Add media"}
+              <span aria-hidden="true">↗</span>
+            </button>
+          </div>
+        </form>
       </section>
       <section className="panel freshness-card">
         <p className="eyebrow">FRESHNESS</p>
@@ -1040,12 +1244,14 @@ function SectionContent({
   dashboard,
   source,
   onTrackCreated,
+  onMediaAssetCreated,
 }: {
   activeId: NavigationId;
   messages: ConversationMessage[];
   dashboard: DashboardSnapshot;
   source: DashboardSource;
   onTrackCreated: (track: Track) => void;
+  onMediaAssetCreated: (asset: MediaAsset) => void;
 }) {
   switch (activeId) {
     case "ida":
@@ -1053,7 +1259,7 @@ function SectionContent({
     case "music":
       return <MusicView dashboard={dashboard} source={source} onTrackCreated={onTrackCreated} />;
     case "content":
-      return <ContentView dashboard={dashboard} />;
+      return <ContentView dashboard={dashboard} onMediaAssetCreated={onMediaAssetCreated} />;
     case "social":
       return <SocialView dashboard={dashboard} source={source} />;
     case "calendar":
@@ -1135,6 +1341,15 @@ function App() {
     }));
     setDashboardSource("api");
     setDashboardNotice(`Catalogue synchronisé : « ${track.title} » a été ajouté au Music Brain.`);
+  }
+
+  function handleMediaAssetCreated(asset: MediaAsset) {
+    setDashboard((current) => ({
+      ...current,
+      mediaAssets: [asset, ...current.mediaAssets],
+    }));
+    setDashboardSource("api");
+    setDashboardNotice(`Bibliothèque synchronisée : « ${asset.filename} » a été ajouté à la Content Library.`);
   }
 
   async function handleCommand(command: string) {
@@ -1249,6 +1464,7 @@ function App() {
             dashboard={dashboard}
             source={dashboardSource}
             onTrackCreated={handleTrackCreated}
+            onMediaAssetCreated={handleMediaAssetCreated}
           />
         </div>
       </main>

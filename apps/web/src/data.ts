@@ -54,6 +54,7 @@ export interface Track {
 }
 
 export interface MediaAsset {
+  id?: string;
   filename: string;
   kind: "VIDEO" | "IMAGE" | "AUDIO" | "FILE";
   status: "UNUSED" | "USED" | "SCHEDULED" | "PUBLISHED" | "ARCHIVED";

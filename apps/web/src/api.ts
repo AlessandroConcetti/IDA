@@ -25,6 +25,12 @@ export interface TrackCreateInput {
   description?: string;
 }
 
+export interface MediaUploadInput {
+  file: File;
+  description?: string;
+  tags?: string;
+}
+
 export class IdaApiError extends Error {
   public readonly status?: number;
 
@@ -129,6 +135,35 @@ async function postApiJson(path: string, body: unknown): Promise<unknown> {
         "X-Request-Id": createRequestId(),
       },
       body: JSON.stringify(body),
+    });
+  } catch {
+    throw new IdaApiError("IDA API est indisponible.");
+  }
+
+  const payload: unknown = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new IdaApiError(extractErrorMessage(payload, response.status), response.status);
+  }
+
+  return payload;
+}
+
+async function postApiFormData(path: string, body: FormData): Promise<unknown> {
+  if (!isApiConfigured) {
+    throw new IdaApiError("VITE_IDA_API_URL n’est pas configurée.");
+  }
+
+  let response: Response;
+
+  try {
+    response = await fetch(`${apiBaseUrl}${path}`, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "X-Request-Id": createRequestId(),
+      },
+      body,
     });
   } catch {
     throw new IdaApiError("IDA API est indisponible.");
@@ -349,27 +384,66 @@ export async function createTrack(input: TrackCreateInput): Promise<Track> {
   return toTrack(readDataObjectOrDirect(payload, "/v1/tracks"));
 }
 
-function toMediaAssets(payload: unknown): MediaAsset[] {
+function formatFileSize(value: unknown): string | undefined {
+  const bytes = readNumber(value);
+
+  if (bytes === undefined || bytes < 0) {
+    return undefined;
+  }
+
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function toMediaAsset(record: Record<string, unknown>, index = 0): MediaAsset {
   const tones: MediaAsset["tone"][] = ["violet", "blue", "coral"];
-  const records = readDataList(payload, "/v1/media");
 
-  return records.map((record, index) => {
-    const description = readString(record.description);
-    const tags = Array.isArray(record.tags)
-      ? record.tags.filter((tag): tag is string => typeof tag === "string" && tag.length > 0)
-      : [];
-    const usageCount = readNumber(record.usageCount) ?? 0;
-    const detail =
-      description ?? (tags.length > 0 ? tags.join(" · ") : `${usageCount} utilisation${usageCount === 1 ? "" : "s"}`);
+  const description = readString(record.description);
+  const tags = Array.isArray(record.tags)
+    ? record.tags.filter((tag): tag is string => typeof tag === "string" && tag.length > 0)
+    : [];
+  const usageCount = readNumber(record.usageCount) ?? 0;
+  const size = formatFileSize(record.size);
+  const detail =
+    description ??
+    (tags.length > 0 ? tags.join(" · ") : (size ?? `${usageCount} utilisation${usageCount === 1 ? "" : "s"}`));
 
-    return {
-      filename: readString(record.filename) ?? "untitled-asset",
-      kind: mediaKind(record.type),
-      status: mediaStatus(record.status),
-      detail,
-      tone: tones[index % tones.length] ?? "violet",
-    };
-  });
+  return {
+    id: readString(record.id),
+    filename: readString(record.filename) ?? "untitled-asset",
+    kind: mediaKind(record.type),
+    status: mediaStatus(record.status),
+    detail,
+    tone: tones[index % tones.length] ?? "violet",
+  };
+}
+
+function toMediaAssets(payload: unknown): MediaAsset[] {
+  return readDataList(payload, "/v1/media").map(toMediaAsset);
+}
+
+export async function uploadMediaAsset(input: MediaUploadInput): Promise<MediaAsset> {
+  const body = new FormData();
+  body.append("file", input.file, input.file.name);
+
+  if (input.description) {
+    body.append("description", input.description);
+  }
+
+  if (input.tags) {
+    body.append("tags", input.tags);
+  }
+
+  const payload = await postApiFormData("/v1/media", body);
+
+  return toMediaAsset(readDataObjectOrDirect(payload, "/v1/media"));
 }
 
 export async function fetchDashboardSnapshot(): Promise<DashboardSnapshot> {

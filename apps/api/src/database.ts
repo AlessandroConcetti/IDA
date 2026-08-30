@@ -2,7 +2,12 @@ import { randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { PGlite } from "@electric-sql/pglite";
-import type { ArtistProfile as ArtistProfileContract, ArtistProfileUpdate, TrackCreate } from "@ida/contracts";
+import type {
+  ArtistProfile as ArtistProfileContract,
+  ArtistProfileUpdate,
+  MediaImport,
+  TrackCreate,
+} from "@ida/contracts";
 
 import { demoContext, demoWorkspace } from "./demo-context.js";
 
@@ -64,10 +69,12 @@ export type Track = {
 
 export type MediaAsset = {
   id: string;
+  projectId: string | null;
   filename: string;
   mediaType: string;
   mimeType: string;
   byteSize: number;
+  sha256: string;
   status: MediaStatus;
   description: string | null;
   usageCount: number;
@@ -76,7 +83,23 @@ export type MediaAsset = {
   releaseTitle: string | null;
   trackTitle: string | null;
   tags: string[];
+  createdAt: string;
+  updatedAt: string;
 };
+
+export type MediaImportFile = {
+  filename: string;
+  mediaType: string;
+  mimeType: string;
+  byteSize: number;
+  sha256: string;
+  storageKey: string;
+};
+
+export type CreateMediaResult =
+  | { kind: "created"; asset: MediaAsset }
+  | { kind: "duplicate" }
+  | { kind: "project-not-found" };
 
 export type Memory = {
   id: string;
@@ -208,6 +231,32 @@ function toTrack(row: ScalarRow): Track {
     createdAt: asTimestamp(row.createdAt) ?? "1970-01-01T00:00:00.000Z",
     updatedAt: asTimestamp(row.updatedAt) ?? "1970-01-01T00:00:00.000Z",
   };
+}
+
+function toMediaAsset(row: ScalarRow): MediaAsset {
+  return {
+    id: asString(row.id),
+    projectId: asNullableString(row.projectId),
+    filename: asString(row.filename),
+    mediaType: asString(row.mediaType),
+    mimeType: asString(row.mimeType),
+    byteSize: asNumber(row.byteSize),
+    sha256: asString(row.sha256),
+    status: asString(row.status) as MediaStatus,
+    description: asNullableString(row.description),
+    usageCount: asNumber(row.usageCount),
+    lastUsedAt: asTimestamp(row.lastUsedAt),
+    projectName: asNullableString(row.projectName),
+    releaseTitle: asNullableString(row.releaseTitle),
+    trackTitle: asNullableString(row.trackTitle),
+    tags: asStringArray(row.tags),
+    createdAt: asTimestamp(row.createdAt) ?? "1970-01-01T00:00:00.000Z",
+    updatedAt: asTimestamp(row.updatedAt) ?? "1970-01-01T00:00:00.000Z",
+  };
+}
+
+function normalizeMediaTag(value: string): string {
+  return value.normalize("NFKC").trim().toLocaleLowerCase("fr-FR");
 }
 
 export class DemoDatabase {
@@ -505,14 +554,18 @@ export class DemoDatabase {
       `
         SELECT
           asset.id,
+          asset.artist_project_id AS "projectId",
           asset.filename,
           asset.media_type AS "mediaType",
           asset.mime_type AS "mimeType",
           asset.byte_size AS "byteSize",
+          asset.sha256,
           asset.status,
           asset.description,
           asset.usage_count AS "usageCount",
           asset.last_used_at AS "lastUsedAt",
+          asset.created_at AS "createdAt",
+          asset.updated_at AS "updatedAt",
           project.name AS "projectName",
           release.title AS "releaseTitle",
           track.title AS "trackTitle",
@@ -533,21 +586,159 @@ export class DemoDatabase {
       values,
     );
 
-    return result.rows.map((row) => ({
-      id: asString(row.id),
-      filename: asString(row.filename),
-      mediaType: asString(row.mediaType),
-      mimeType: asString(row.mimeType),
-      byteSize: asNumber(row.byteSize),
-      status: asString(row.status) as MediaStatus,
-      description: asNullableString(row.description),
-      usageCount: asNumber(row.usageCount),
-      lastUsedAt: asTimestamp(row.lastUsedAt),
-      projectName: asNullableString(row.projectName),
-      releaseTitle: asNullableString(row.releaseTitle),
-      trackTitle: asNullableString(row.trackTitle),
-      tags: asStringArray(row.tags),
-    }));
+    return result.rows.map(toMediaAsset);
+  }
+
+  async hasMediaWithHash(workspaceId: string, sha256: string): Promise<boolean> {
+    const result = await this.pglite.query<ScalarRow>(
+      `
+        SELECT id
+        FROM media_assets
+        WHERE workspace_id = $1
+          AND sha256 = $2
+        LIMIT 1
+      `,
+      [workspaceId, sha256],
+    );
+
+    return result.rows.length > 0;
+  }
+
+  async createMedia(
+    workspaceId: string,
+    actorUserId: string,
+    input: MediaImport,
+    file: MediaImportFile,
+  ): Promise<CreateMediaResult> {
+    return this.pglite.transaction(async (transaction) => {
+      const existing = await transaction.query<ScalarRow>(
+        `
+          SELECT id
+          FROM media_assets
+          WHERE workspace_id = $1
+            AND sha256 = $2
+          LIMIT 1
+        `,
+        [workspaceId, file.sha256],
+      );
+
+      if (existing.rows.length > 0) {
+        return { kind: "duplicate" };
+      }
+
+      const projectResult = await transaction.query<ScalarRow>(
+        `
+          SELECT id
+          FROM artist_projects
+          WHERE workspace_id = $1
+          ORDER BY created_at ASC
+          LIMIT 1
+        `,
+        [workspaceId],
+      );
+      const project = projectResult.rows[0];
+
+      if (!project) {
+        return { kind: "project-not-found" };
+      }
+
+      const projectId = asString(project.id);
+      const mediaId = `med_${randomUUID().replaceAll("-", "")}`;
+      const normalizedTags = [...new Set(input.tags.map(normalizeMediaTag))];
+      const created = await transaction.query<ScalarRow>(
+        `
+          INSERT INTO media_assets (
+            id, workspace_id, artist_project_id, filename, media_type, mime_type,
+            byte_size, sha256, storage_key, status, description
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'UNUSED', $10)
+          ON CONFLICT (workspace_id, sha256) DO NOTHING
+          RETURNING
+            id,
+            artist_project_id AS "projectId",
+            filename,
+            media_type AS "mediaType",
+            mime_type AS "mimeType",
+            byte_size AS "byteSize",
+            sha256,
+            status,
+            description,
+            usage_count AS "usageCount",
+            last_used_at AS "lastUsedAt",
+            created_at AS "createdAt",
+            updated_at AS "updatedAt"
+        `,
+        [
+          mediaId,
+          workspaceId,
+          projectId,
+          file.filename,
+          file.mediaType,
+          file.mimeType,
+          file.byteSize,
+          file.sha256,
+          file.storageKey,
+          input.description ?? null,
+        ],
+      );
+      const row = created.rows[0];
+
+      if (!row) {
+        return { kind: "duplicate" };
+      }
+
+      const asset = toMediaAsset(row);
+
+      for (const tagName of normalizedTags) {
+        const tagResult = await transaction.query<ScalarRow>(
+          `
+            INSERT INTO media_tags (id, workspace_id, name, normalized_name)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (workspace_id, normalized_name)
+            DO UPDATE SET normalized_name = EXCLUDED.normalized_name
+            RETURNING id
+          `,
+          [`tag_${randomUUID().replaceAll("-", "")}`, workspaceId, tagName, tagName],
+        );
+        const tag = tagResult.rows[0];
+
+        if (!tag) {
+          throw new Error("Impossible de rattacher le tag du média.");
+        }
+
+        await transaction.query(
+          `
+            INSERT INTO media_asset_tags (media_asset_id, media_tag_id)
+            VALUES ($1, $2)
+            ON CONFLICT (media_asset_id, media_tag_id) DO NOTHING
+          `,
+          [asset.id, asString(tag.id)],
+        );
+      }
+
+      await transaction.query(
+        `
+          INSERT INTO activity_logs (id, workspace_id, actor_user_id, action, entity_type, entity_id, payload)
+          VALUES ($1, $2, $3, 'media.imported', 'MEDIA_ASSET', $4, $5::json)
+        `,
+        [
+          `act_${randomUUID().replaceAll("-", "")}`,
+          workspaceId,
+          actorUserId,
+          asset.id,
+          JSON.stringify({
+            filename: asset.filename,
+            mediaType: asset.mediaType,
+            mimeType: asset.mimeType,
+            byteSize: asset.byteSize,
+            sha256: asset.sha256,
+            tags: normalizedTags,
+          }),
+        ],
+      );
+
+      return { kind: "created", asset: { ...asset, tags: normalizedTags } };
+    });
   }
 
   async listMemories(workspaceId: string): Promise<Memory[]> {
@@ -725,11 +916,13 @@ export class DemoDatabase {
         mime_type TEXT NOT NULL,
         byte_size BIGINT NOT NULL,
         sha256 TEXT NOT NULL,
+        storage_key TEXT,
         status TEXT NOT NULL,
         description TEXT,
         usage_count INTEGER NOT NULL DEFAULT 0,
         last_used_at TIMESTAMPTZ,
         created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
         UNIQUE (workspace_id, sha256)
       );
 
@@ -831,6 +1024,10 @@ export class DemoDatabase {
       ALTER TABLE tracks
         ADD COLUMN IF NOT EXISTS description TEXT;
       ALTER TABLE tracks
+        ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+      ALTER TABLE media_assets
+        ADD COLUMN IF NOT EXISTS storage_key TEXT;
+      ALTER TABLE media_assets
         ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
     `);
   }

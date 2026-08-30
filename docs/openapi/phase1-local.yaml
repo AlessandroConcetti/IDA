@@ -164,6 +164,40 @@ paths:
                 $ref: '#/components/schemas/MediaListResponse'
         '400':
           $ref: '#/components/responses/InvalidCommand'
+    post:
+      operationId: importMedia
+      summary: Importe un média local privé dans la Content Library
+      description: >-
+        Accepte exactement un fichier et les champs texte optionnels description
+        et tags (liste séparée par des virgules). Le workspace, le projet et
+        l'acteur sont imposés par le serveur ; l'outil interne allowlisté
+        import_media utilise CONTENT/WRITE. Aucun chemin, URL de stockage,
+        scope client, publication ou appel externe n'est accepté.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MediaImportRequest'
+      responses:
+        '201':
+          description: Média privé importé dans le workspace local
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaAssetResponse'
+        '400':
+          $ref: '#/components/responses/InvalidMediaImport'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/DuplicateMedia'
+        '413':
+          $ref: '#/components/responses/MediaFileTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaFile'
   /v1/memories:
     get:
       operationId: listMemories
@@ -224,6 +258,30 @@ components:
             $ref: '#/components/schemas/ErrorResponse'
     InvalidTrack:
       description: Corps Music Brain invalide ou tentative de définir le scope client
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InvalidMediaImport:
+      description: Formulaire media invalide, champ inattendu ou tentative de définir le scope client
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    DuplicateMedia:
+      description: Un média avec le même SHA-256 existe déjà dans ce workspace
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    MediaFileTooLarge:
+      description: Le fichier dépasse la limite d'import de 25 MiB
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    UnsupportedMediaFile:
+      description: Le couple MIME/extension n'est pas autorisé pour l'import local
       content:
         application/json:
           schema:
@@ -524,6 +582,25 @@ components:
             $ref: '#/components/schemas/Track'
     MediaStatus:
       enum: [UNUSED, USED, SCHEDULED, PUBLISHED, ARCHIVED]
+    MediaImportRequest:
+      type: object
+      required: [file]
+      additionalProperties: false
+      properties:
+        file:
+          type: string
+          format: binary
+          description: >-
+            Un fichier privé de 25 MiB maximum. MIME et extension doivent former
+            un couple autorisé par le serveur.
+        description:
+          type: string
+          minLength: 1
+          maxLength: 4000
+        tags:
+          type: string
+          description: Liste de 30 tags maximum, séparés par des virgules.
+          maxLength: 4096
     MediaAsset:
       type: object
       required: [id, workspaceId, artistProjectId, filename, type, mimeType, size, hash, tags, status, usageCount, createdAt, updatedAt]
@@ -554,6 +631,12 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/MediaAsset'
+    MediaAssetResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/MediaAsset'
     Memory:
       type: object
       required: [id, workspaceId, category, content, state, createdAt, updatedAt]

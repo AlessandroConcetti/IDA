@@ -12,6 +12,7 @@
   "dependencies": {
     "@electric-sql/pglite": "latest",
     "@fastify/cors": "latest",
+    "@fastify/multipart": "^10.1.1",
     "@ida/contracts": "workspace:*",
     "@ida/domain": "workspace:*",
     "fastify": "latest"

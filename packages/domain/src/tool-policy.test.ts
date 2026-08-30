@@ -24,9 +24,15 @@ describe("ToolGateway", () => {
   });
 
   it("peut limiter explicitement les outils WRITE autorisés", () => {
-    const gateway = new ToolGateway(undefined, [{ toolKey: "create_track", moduleKey: "MUSIC", permission: "WRITE" }]);
+    const gateway = new ToolGateway(undefined, [
+      { toolKey: "create_track", moduleKey: "MUSIC", permission: "WRITE" },
+      { toolKey: "import_media", moduleKey: "CONTENT", permission: "WRITE" },
+    ]);
 
     expect(gateway.authorize({ toolKey: "create_track", moduleKey: "MUSIC", permission: "WRITE" })).toMatchObject({
+      allowed: true,
+    });
+    expect(gateway.authorize({ toolKey: "import_media", moduleKey: "CONTENT", permission: "WRITE" })).toMatchObject({
       allowed: true,
     });
     expect(gateway.authorize({ toolKey: "delete_track", moduleKey: "MUSIC", permission: "WRITE" })).toMatchObject({

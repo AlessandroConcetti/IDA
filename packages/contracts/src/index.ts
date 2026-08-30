@@ -211,6 +211,21 @@ export type MediaType = z.infer<typeof mediaTypeSchema>;
 export const mediaStatusSchema = z.enum(["UNUSED", "USED", "SCHEDULED", "PUBLISHED", "ARCHIVED"]);
 export type MediaStatus = z.infer<typeof mediaStatusSchema>;
 
+const mediaDescriptionSchema = z.string().trim().min(1).max(4_000);
+const mediaTagSchema = z.string().trim().min(1).max(80);
+
+// Les métadonnées multipart sont converties par l'API avant validation. Le
+// fichier, son scope et ses associations ne font jamais partie de ce contrat
+// client : ils sont traités ou résolus exclusivement côté serveur.
+export const mediaImportSchema = z
+  .object({
+    description: mediaDescriptionSchema.optional(),
+    tags: z.array(mediaTagSchema).max(30).default([]),
+  })
+  .strict();
+
+export type MediaImport = z.infer<typeof mediaImportSchema>;
+
 export const mediaAssetSchema = z.object({
   id: entityIdSchema,
   workspaceId: entityIdSchema,
@@ -223,8 +238,8 @@ export const mediaAssetSchema = z.object({
   createdAtSource: timestampSchema.optional(),
   releaseId: entityIdSchema.optional(),
   trackId: entityIdSchema.optional(),
-  tags: z.array(z.string().trim().min(1)).default([]),
-  description: z.string().trim().optional(),
+  tags: z.array(mediaTagSchema).default([]),
+  description: mediaDescriptionSchema.optional(),
   status: mediaStatusSchema,
   usageCount: z.number().int().nonnegative().default(0),
   lastUsedAt: timestampSchema.optional(),

@@ -21,11 +21,11 @@ Le premier runtime est une API Fastify locale sur `http://127.0.0.1:8787`, conso
 | `GET /v1/me` | Livrée | Identité et workspace de démonstration, marqués `LOCAL_DEMO`. |
 | `GET /v1/modules` | Livrée | Registre des modules visibles du Command Center. |
 | `GET /v1/system/status` | Livrée | États factuels de la tranche locale ; les intégrations absentes sont `WARNING` ou `DISCONNECTED`. |
-| `GET/PATCH /v1/artist-profile`, `/v1/releases`, `GET/POST /v1/tracks`, `/v1/media`, `/v1/memories` | Livrées | Données de démonstration isolées par workspace côté serveur. L’Artist Brain et la création bornée d’un morceau Music Brain passent par des outils `WRITE` allowlistés ; `GET /v1/media?status=UNUSED` est supporté. |
+| `GET/PATCH /v1/artist-profile`, `/v1/releases`, `GET/POST /v1/tracks`, `GET/POST /v1/media`, `/v1/memories` | Livrées | Données de démonstration isolées par workspace côté serveur. L’Artist Brain, la création bornée d’un morceau Music Brain et l’import local privé d’un média passent par des outils `WRITE` allowlistés ; `GET /v1/media?status=UNUSED` est supporté. |
 | `GET /v1/social/platforms` | Livrée | Capacités déclaratives de démonstration ; aucune connexion sociale n’est créée. |
 | `POST /v1/ida/commands` | Livrée | Corps `{ "message": "…" }` ; commandes déterministes de lecture pour la journée, les contenus inutilisés et l’état système. |
 
-La commande retourne un objet `data` contenant la commande structurée, les outils de lecture autorisés et un résultat. À l’exception de la modification interne de l’Artist Brain et de la création Music Brain bornée décrites ci-dessous, toute mutation, publication, intégration externe ou accès financier est hors de cette tranche et reste refusée par conception.
+La commande retourne un objet `data` contenant la commande structurée, les outils de lecture autorisés et un résultat. À l’exception de la modification interne de l’Artist Brain, de la création Music Brain bornée et de l’import local privé décrit ci-dessous, toute mutation, publication, intégration externe ou accès financier est hors de cette tranche et reste refusée par conception.
 
 ### Artist Brain local éditable
 
@@ -45,6 +45,16 @@ La commande retourne un objet `data` contenant la commande structurée, les outi
 - L’identifiant `trk_…` est généré côté serveur, la clé primaire le protège contre les collisions et une activité append-only `track.created` est ajoutée dans le journal local.
 - Les valeurs sont bornées (BPM strictement positif et au plus 400, 30 tags maximum, description au plus 4 000 caractères). Une création réussie retourne `201 Created` et le morceau est visible uniquement dans `GET /v1/tracks` du workspace imposé par le serveur.
 
+### Content Library : import local privé
+
+`POST /v1/media` accepte uniquement un formulaire `multipart/form-data` contenant un fichier `file` et, au plus une fois chacun, les champs texte optionnels `description` et `tags`. Les tags sont transmis en liste séparée par des virgules, normalisés puis dédupliqués.
+
+- Le corps multipart est strict : aucun `workspaceId`, projet, release, track, identifiant client ou champ supplémentaire n’est accepté. Le workspace, le projet et l’acteur sont imposés par le contexte serveur local ; l’import passe par l’outil interne allowlisté `import_media` (`CONTENT`, `WRITE`).
+- Un seul fichier est accepté, avec une limite de **25 MiB**. L’API contrôle une whitelist conjointe MIME/extension : JPEG, PNG, WebP, GIF, MP4, MOV, WebM, MP3, WAV, FLAC, OGG, AAC, M4A et PDF. Aucun contenu n’est publié, envoyé à une IA ou transmis à un service tiers.
+- Le serveur calcule SHA-256 puis vérifie le couple `(workspace_id, sha256)` avant l’écriture. Un doublon exact répond `409 DUPLICATE_MEDIA` et ne crée ni second asset ni second fichier.
+- Le fichier est enregistré hors de toute URL publique dans un stockage privé à clé générée côté serveur. La clé, le chemin local et toute URL de stockage restent absents des réponses et des journaux. L’asset démarre à `UNUSED`, ses tags sont associés localement et l’activité append-only `media.imported` est écrite.
+- Une réussite retourne `201 Created` avec le contrat `MediaAsset`, et l’asset est ensuite visible uniquement dans `GET /v1/media` du workspace imposé.
+
 La version machine-lisible de ces routes est disponible dans [`docs/openapi/phase1-local.yaml`](docs/openapi/phase1-local.yaml). Elle décrit uniquement le runtime local existant, pas les endpoints projetés plus bas.
 
 ## Conventions de transport
@@ -53,7 +63,7 @@ La version machine-lisible de ces routes est disponible dans [`docs/openapi/phas
 
 ```text
 Base URL : /v1
-Content-Type : application/json; charset=utf-8
+Content-Type : application/json; charset=utf-8 (sauf POST /v1/media : multipart/form-data)
 Dates : ISO 8601 UTC, par exemple 2026-08-30T16:00:00Z
 IDs : UUID ou ULID opaques
 JSON API : camelCase
@@ -168,6 +178,7 @@ Les filtres supportent notamment projet, release, statut, tag, période, BPM, to
 ### Content Library et fichiers
 
 ```text
+POST   /v1/media
 POST   /v1/media/upload-intents
 POST   /v1/media/:mediaId/complete
 GET    /v1/media
@@ -179,7 +190,7 @@ POST   /v1/media/:mediaId/tags
 DELETE /v1/media/:mediaId/tags/:tagId
 ```
 
-Flux d’upload :
+Le MVP local livre uniquement `POST /v1/media`, vers stockage privé interne et sans URL signée. Le flux ci-dessous reste une cible ultérieure, à activer seulement avec stockage objet et contrôle de sécurité dédiés :
 
 ```text
 Client → POST upload-intents → URL signée courte
