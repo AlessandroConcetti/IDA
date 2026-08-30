@@ -1,6 +1,6 @@
 # SECURITY — principes de sécurité et d’exploitation
 
-> **Statut :** document d’architecture, sans implémentation.
+> **Statut :** architecture complétée et première tranche locale implémentée ; aucune donnée réelle ni intégration externe n’est active.
 > **Dernière revue :** 30 août 2026.
 > **Règle MVP :** aucune publication publique, aucun paiement et aucun transfert ne peuvent être déclenchés sans une validation humaine explicite — et les paiements/transferts ne font pas partie du périmètre MVP.
 
@@ -40,6 +40,14 @@ Tool Gateway — vérifie droit, schéma, état, idempotence
 ```
 
 L’IA n’obtient ni accès direct à la base de données, ni clé de production, ni jeton social. Elle peut demander un outil via une sortie structurée ; le serveur décide ensuite de l’autoriser, de créer une proposition ou de la refuser.
+
+### 3.1 Frontières temporaires du runtime local
+
+- L’identité et le workspace de démonstration sont fixés uniquement côté serveur ; un header, un query string ou le corps d’une requête ne peut pas choisir un autre workspace.
+- PGlite est conservé dans un dossier local ignoré par Git. Il ne contient que des données de démonstration, aucun secret, token, média privé ou identifiant bancaire.
+- L’API locale n’accepte que l’origine du Command Center de développement et n’utilise pas de cookies de session tant que l’authentification réelle n’est pas livrée.
+- Les outils réellement exposés dans cette tranche sont en lecture. Les chemins `WRITE`, `APPROVAL_REQUIRED`, `PUBLISH` et `SYSTEM` ne sont pas accessibles depuis la commande web.
+- Ce runtime n’est pas éligible à une bêta avec données personnelles. Avant cela, les exigences de la section 12 restent obligatoires.
 
 ## 4. Identité, appareils et autorisation
 

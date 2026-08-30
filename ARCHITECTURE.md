@@ -57,7 +57,7 @@ flowchart TB
 
 ### 4.1 Web et PWA au MVP
 
-Le premier client est une application web responsive, installable comme PWA. Elle sert à la fois de hub desktop et mobile : même compte, même session, même conversation et même état système.
+Le premier client est une application web responsive servant à la fois de hub desktop et mobile : même compte, même session, même conversation et même état système. La couche installable PWA viendra lorsqu’elle apportera un bénéfice concret (offline, notifications ou accès mobile) sans créer de logique métier parallèle.
 
 - Sur desktop : navigation complète `HOME`, `IDA`, `MUSIC`, `CONTENT`, `SOCIAL`, `CALENDAR`, `CAMPAIGNS`, `ANALYTICS`, `TASKS`, `MEMORY`, `SYSTEM`.
 - Sur mobile : parcours resserré `HOME`, `IDA`, `CONTENT`, `CALENDAR`, `MORE`.
@@ -135,6 +135,18 @@ tests/                       # Tests transverses et E2E
 ```
 
 Cette structure est une cible de création progressive. Aucun dossier ni package n'est ajouté tant qu'il ne soutient pas une fonctionnalité validée.
+
+### 5.4 Tranche réellement implémentée — Phase 1 locale
+
+La première tranche conserve volontairement un périmètre réduit et vérifiable :
+
+- `apps/web` est un Command Center React/Vite responsive. Il affiche les onze modules initiaux sur desktop et le parcours `HOME`, `IDA`, `CONTENT`, `CALENDAR`, `MORE` sur mobile ; tous restent des vues du même backend.
+- `apps/api` est un monolithe Fastify/TypeScript. Il fournit une identité de démonstration fixée côté serveur, les ressources musicales/de contenu de démonstration et une commande IDA déterministe en lecture seule.
+- `packages/contracts` porte les schémas de transport validés et `packages/domain` le registre de modules et la politique d’outils. Le noyau n’autorise pas une opération `PUBLISH` sans approbation explicite.
+- PGlite est employé uniquement comme base locale de développement et de tests. PostgreSQL centralisé, migrations de production, stockage objet et fournisseur d’identité restent des décisions de la suite de Phase 1.
+- Les écrans Social et System rendent visibles les capacités et indisponibilités actuelles. Aucun OAuth, token, scraping, appel social, upload ou publication n’est présent dans cette tranche.
+
+Cette implémentation prouve le flux partagé web → API → contrat → données. Elle n’est pas encore une bêta avec données personnelles.
 
 ## 6. IDA Core
 

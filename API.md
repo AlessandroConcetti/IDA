@@ -1,6 +1,6 @@
-# IDA — Contrat API (phase 0)
+# IDA — Contrat API
 
-Ce document définit les conventions et la surface API prévue pour IDA. Il ne crée aucun endpoint ni dépendance. L’API est le point de partage unique entre le hub desktop/web, le futur iPhone et d’éventuels clients natifs.
+Ce document définit les conventions et la surface API d’IDA. L’API est le point de partage unique entre le hub desktop/web, le futur iPhone et d’éventuels clients natifs. Les routes effectivement livrées sont distinguées de la surface cible afin que l’interface ne promette jamais une capacité absente.
 
 ## Principes
 
@@ -10,6 +10,24 @@ Ce document définit les conventions et la surface API prévue pour IDA. Il ne c
 - Les routes représentent des ressources et des cas d’usage métier ; les agents sont internes au backend et ne sont pas exposés comme des services publics.
 - Le contrat est stable et API-first : le web, une PWA, un futur client desktop et un futur client iOS partagent la même API.
 - Les écritures à effet externe sont idempotentes, auditables et soumises à la policy engine.
+
+## Tranche locale Phase 1 livrée
+
+Le premier runtime est une API Fastify locale sur `http://127.0.0.1:8787`, consommée par le Command Center web. Il emploie un contexte de démonstration fixé côté serveur, sans session, token, OAuth ni données réelles. Ce contexte est uniquement un mécanisme de développement : il ne remplace pas l’authentification ni l’autorisation de production.
+
+| Route | État actuel | Contrat actif |
+|---|---|---|
+| `GET /health` | Livrée | Santé du runtime local et disponibilité de la base locale. |
+| `GET /v1/me` | Livrée | Identité et workspace de démonstration, marqués `LOCAL_DEMO`. |
+| `GET /v1/modules` | Livrée | Registre des modules visibles du Command Center. |
+| `GET /v1/system/status` | Livrée | États factuels de la tranche locale ; les intégrations absentes sont `WARNING` ou `DISCONNECTED`. |
+| `GET /v1/artist-profile`, `/v1/releases`, `/v1/tracks`, `/v1/media`, `/v1/memories` | Livrées | Données de démonstration isolées par workspace côté serveur. `GET /v1/media?status=UNUSED` est supporté. |
+| `GET /v1/social/platforms` | Livrée | Capacités déclaratives de démonstration ; aucune connexion sociale n’est créée. |
+| `POST /v1/ida/commands` | Livrée | Corps `{ "message": "…" }` ; commandes déterministes de lecture pour la journée, les contenus inutilisés et l’état système. |
+
+La commande retourne un objet `data` contenant la commande structurée, les outils de lecture autorisés et un résultat. Toute commande de mutation, publication, intégration externe ou accès financier est hors de cette tranche et reste refusée par conception.
+
+La version machine-lisible de ces routes est disponible dans [`docs/openapi/phase1-local.yaml`](docs/openapi/phase1-local.yaml). Elle décrit uniquement le runtime local existant, pas les endpoints projetés plus bas.
 
 ## Conventions de transport
 

@@ -10,15 +10,15 @@ La roadmap décrit une séquence de capacité, pas une promesse de date. Elle pr
 
 | Phase | Objectif | Résultat principal |
 |---|---|---|
-| 0 | Figer les fondations | Architecture, décisions, conventions et périmètre MVP |
-| 1 | Rendre IDA utilisable comme hub musical | Auth, dashboard, chat, Artist Brain, Music Brain, DAM |
+| 0 | Figer les fondations | Architecture, décisions, conventions et périmètre MVP — terminé |
+| 1 | Rendre IDA utilisable comme hub musical | En cours : Command Center, API locale, chat déterministe, Artist/Music Brain et DAM à compléter |
 | 2 | Rendre IDA utile pour le contenu | Planning, propositions, Approval Center et fraîcheur |
 | 3 | Connecter prudemment les plateformes | OAuth, adaptateurs sociaux pilotes et capacités réelles |
 | 4 | Ajouter l'exploitation continue | Jobs, notifications, analytics, campagnes et système |
 | 5 | Ajouter la voix au même cœur | STT/TTS déclenchés à la demande et commandes vocales |
 | 6 | Renforcer l'intelligence et l'extensibilité | Recommandations, multimodal, agents avancés et modules opt-in |
 
-## Phase 0 — Architecture et fondations
+## Phase 0 — Architecture et fondations — terminée
 
 ### Objectif
 
@@ -56,6 +56,17 @@ Transformer la vision en cadre de travail précis, sans développer de fonctionn
 ### Objectif
 
 Créer le premier produit réellement utilisable : un Command Center responsive où l'utilisateur peut centraliser son univers artistique et interroger IDA par écrit.
+
+### Tranche 1 livrée
+
+- dépôt TypeScript en workspace, tests, lint et vérification de types ;
+- Command Center React responsive desktop/iPhone avec tous les modules initiaux, dont `SOCIAL`, `CAMPAIGNS`, `ANALYTICS`, `TASKS`, `MEMORY` et `SYSTEM` ;
+- API Fastify locale, contrats Zod partagés et policy d’outils ;
+- données musicales, médias, mémoire, tâches et capacités sociales de démonstration isolées par workspace côté serveur ;
+- commandes textuelles déterministes de lecture : journée, contenus inutilisés et état système ;
+- PGlite uniquement pour le développement/test local ; aucun compte social, aucun token, aucune publication et aucune donnée personnelle réelle.
+
+La tranche suivante de Phase 1 remplace le contexte de démonstration par une vraie identité/workspace, puis ajoute les écritures internes, Artist Brain éditable, uploads/recherche de médias, mémoire consentie et journal d’activité. Elle ne débloque pas encore la publication sociale.
 
 ### Périmètre
 

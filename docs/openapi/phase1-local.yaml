@@ -1,0 +1,491 @@
+openapi: 3.1.0
+info:
+  title: IDA local Phase 1 API
+  version: 0.1.0
+  description: >-
+    Contrat du runtime de développement local. Il expose uniquement des données
+    de démonstration et des commandes IDA déterministes en lecture seule.
+servers:
+  - url: http://127.0.0.1:8787
+    description: API locale de développement
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      summary: Vérifie la disponibilité du runtime local
+      responses:
+        '200':
+          description: Runtime disponible
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+  /v1/me:
+    get:
+      operationId: getDemoIdentity
+      summary: Retourne l'identité locale de démonstration
+      responses:
+        '200':
+          description: Identité et workspace fixés côté serveur
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    $ref: '#/components/schemas/DemoIdentity'
+  /v1/modules:
+    get:
+      operationId: listModules
+      summary: Liste les modules déclarés du Command Center
+      responses:
+        '200':
+          description: Modules de l'interface commune
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModuleListResponse'
+  /v1/system/status:
+    get:
+      operationId: getSystemStatus
+      summary: Retourne les états système observés
+      responses:
+        '200':
+          description: États du runtime local et des intégrations absentes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemStatusListResponse'
+  /v1/artist-profile:
+    get:
+      operationId: getArtistProfile
+      summary: Retourne le profil artistique de démonstration
+      responses:
+        '200':
+          description: Artist Brain de démonstration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArtistProfileResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /v1/releases:
+    get:
+      operationId: listReleases
+      summary: Liste les releases de démonstration
+      responses:
+        '200':
+          description: Releases du workspace local
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReleaseListResponse'
+  /v1/tracks:
+    get:
+      operationId: listTracks
+      summary: Liste les tracks de démonstration
+      responses:
+        '200':
+          description: Tracks du workspace local
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrackListResponse'
+  /v1/media:
+    get:
+      operationId: listMedia
+      summary: Liste les médias de démonstration
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/MediaStatus'
+      responses:
+        '200':
+          description: Médias filtrés dans le workspace local
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaListResponse'
+        '400':
+          $ref: '#/components/responses/InvalidCommand'
+  /v1/memories:
+    get:
+      operationId: listMemories
+      summary: Liste la mémoire de démonstration
+      responses:
+        '200':
+          description: Mémoires structurées du workspace local
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryListResponse'
+  /v1/social/platforms:
+    get:
+      operationId: listSocialPlatformCapabilities
+      summary: Retourne les capacités sociales déclarées
+      description: Ne connecte aucun compte et n'appelle aucune plateforme externe.
+      responses:
+        '200':
+          description: Capacités de démonstration à revalider avant intégration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SocialPlatformListResponse'
+  /v1/ida/commands:
+    post:
+      operationId: executeIdaCommand
+      summary: Exécute une commande IDA déterministe et en lecture seule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IdaCommandRequest'
+      responses:
+        '200':
+          description: Commande comprise et exécutée avec des outils READ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IdaCommandResponse'
+        '400':
+          $ref: '#/components/responses/InvalidCommand'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+components:
+  responses:
+    InvalidCommand:
+      description: Corps de commande ou filtre invalide
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Ressource de démonstration introuvable
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Outil non autorisé par la policy serveur
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    Health:
+      type: object
+      required: [status, service, mode, database]
+      properties:
+        status:
+          const: ok
+        service:
+          const: ida-api
+        mode:
+          const: LOCAL_DEMO
+        database:
+          const: ready
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+    DemoIdentity:
+      type: object
+      required: [id, email, displayName, timezone, workspace, authentication]
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+          format: email
+        displayName:
+          type: string
+        timezone:
+          type: string
+        workspace:
+          $ref: '#/components/schemas/Workspace'
+        authentication:
+          type: object
+          required: [mode, message]
+          properties:
+            mode:
+              const: LOCAL_DEMO
+            message:
+              type: string
+    Workspace:
+      type: object
+      required: [id, name, timezone, locale, role]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        timezone:
+          type: string
+        locale:
+          type: string
+        role:
+          enum: [OWNER, EDITOR, VIEWER]
+    Module:
+      type: object
+      required: [key, label, route, description]
+      properties:
+        key:
+          enum: [HOME, IDA, MUSIC, CONTENT, SOCIAL, CALENDAR, CAMPAIGNS, ANALYTICS, TASKS, MEMORY, SYSTEM]
+        label:
+          type: string
+        route:
+          type: string
+        description:
+          type: string
+    ModuleListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Module'
+    SystemStatus:
+      type: object
+      required: [component, state, message, checkedAt]
+      properties:
+        component:
+          enum: [AI, DATABASE, STORAGE, SOCIAL_ACCOUNTS, SCHEDULER, NOTIFICATIONS]
+        state:
+          enum: [ONLINE, WARNING, ERROR, DISCONNECTED]
+        message:
+          type: string
+        checkedAt:
+          type: string
+          format: date-time
+    SystemStatusListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/SystemStatus'
+    ArtistProfile:
+      type: object
+      required: [id, workspaceId, artistProjectId, identity, genres, influences, tone, goals, audience, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        workspaceId:
+          type: string
+        artistProjectId:
+          type: string
+        identity:
+          type: string
+        genres:
+          type: array
+          items: { type: string }
+        influences:
+          type: array
+          items: { type: string }
+        tone:
+          type: string
+        goals:
+          type: array
+          items: { type: string }
+        audience:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ArtistProfileResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/ArtistProfile'
+    Release:
+      type: object
+      required: [id, workspaceId, artistProjectId, title, releaseType, status, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        workspaceId: { type: string }
+        artistProjectId: { type: string }
+        title: { type: string }
+        releaseType: { type: string }
+        releaseDate: { type: string, format: date }
+        label: { type: string }
+        status:
+          enum: [DRAFT, SCHEDULED, RELEASED, ARCHIVED]
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ReleaseListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Release'
+    Track:
+      type: object
+      required: [id, workspaceId, artistProjectId, title, artistCredit, status, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        workspaceId: { type: string }
+        artistProjectId: { type: string }
+        releaseId: { type: string }
+        title: { type: string }
+        artistCredit: { type: string }
+        bpm: { type: number }
+        musicalKey: { type: string }
+        status:
+          enum: [DEMO, UNRELEASED, SCHEDULED, RELEASED, ARCHIVED]
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    TrackListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Track'
+    MediaStatus:
+      enum: [UNUSED, USED, SCHEDULED, PUBLISHED, ARCHIVED]
+    MediaAsset:
+      type: object
+      required: [id, workspaceId, artistProjectId, filename, type, mimeType, size, hash, tags, status, usageCount, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        workspaceId: { type: string }
+        artistProjectId: { type: string }
+        filename: { type: string }
+        type:
+          enum: [AUDIO, IMAGE, VIDEO, DOCUMENT, OTHER]
+        mimeType: { type: string }
+        size: { type: integer, minimum: 0 }
+        hash: { type: string }
+        tags:
+          type: array
+          items: { type: string }
+        status:
+          $ref: '#/components/schemas/MediaStatus'
+        usageCount: { type: integer, minimum: 0 }
+        lastUsedAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    MediaListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/MediaAsset'
+    Memory:
+      type: object
+      required: [id, workspaceId, category, content, state, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        workspaceId: { type: string }
+        category:
+          enum: [ARTIST_MEMORY, CONTENT_MEMORY, CAMPAIGN_MEMORY, SOCIAL_MEMORY, PREFERENCE_MEMORY, SYSTEM_MEMORY]
+        content: { type: string }
+        state:
+          enum: [PENDING, CONFIRMED, REJECTED]
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    MemoryListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Memory'
+    SocialPlatformCapability:
+      type: object
+      required: [platform, apiVersion, oauthSupported, draftSupported, scheduleSupported, publishSupported, analyticsSupported, requiresHumanApproval, requiresPlatformReview, notes]
+      properties:
+        platform:
+          enum: [INSTAGRAM, TIKTOK, YOUTUBE, FACEBOOK]
+        apiVersion: { type: string }
+        oauthSupported: { type: boolean }
+        draftSupported: { type: boolean }
+        scheduleSupported: { type: boolean }
+        publishSupported: { type: boolean }
+        analyticsSupported: { type: boolean }
+        requiresHumanApproval: { const: true }
+        requiresPlatformReview: { type: boolean }
+        notes:
+          type: array
+          items: { type: string }
+    SocialPlatformListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/SocialPlatformCapability'
+    IdaCommandRequest:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+          minLength: 1
+          maxLength: 4000
+      additionalProperties: true
+    IdaCommandResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [command, kind, message, tools, result]
+          properties:
+            command:
+              type: object
+              required: [id, workspaceId, message, intent, state, requestedPermission, createdAt, updatedAt]
+              properties:
+                id: { type: string }
+                workspaceId: { type: string }
+                message: { type: string }
+                intent:
+                  enum: [PREPARE_DAY, LIST_UNUSED_CONTENT, UNKNOWN]
+                state:
+                  const: COMPLETED
+                requestedPermission:
+                  const: READ
+                createdAt: { type: string, format: date-time }
+                updatedAt: { type: string, format: date-time }
+            kind:
+              enum: [TODAY, UNUSED_CONTENT, SYSTEM, HELP]
+            message: { type: string }
+            tools:
+              type: array
+              items:
+                type: object
+                required: [key, moduleKey, permission]
+                properties:
+                  key: { type: string }
+                  moduleKey:
+                    enum: [TASKS, CONTENT, SYSTEM, IDA]
+                  permission:
+                    const: READ
+            result:
+              type: object
+              additionalProperties: true

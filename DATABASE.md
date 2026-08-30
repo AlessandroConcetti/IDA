@@ -1,6 +1,6 @@
-# IDA — Modèle de données (phase 0)
+# IDA — Modèle de données
 
-Ce document décrit le modèle relationnel cible du MVP d’IDA. Il fixe les frontières de données avant toute implémentation ; il ne crée ni base de données, ni migration, ni dépendance.
+Ce document décrit le modèle relationnel cible du MVP d’IDA et distingue ce modèle de la tranche locale réellement livrée. Le modèle complet reste la source de vérité fonctionnelle ; la persistance locale actuelle sert à vérifier le premier flux sans préjuger du déploiement de production.
 
 ## Principes de conception
 
@@ -11,6 +11,14 @@ Ce document décrit le modèle relationnel cible du MVP d’IDA. Il fixe les fro
 - Les données externes brutes peuvent être conservées dans un champ `jsonb` limité et documenté. Les relations recherchées, filtrées ou contraintes restent relationnelles.
 - Les journaux, approbations et tentatives de publication sont append-only. Les entités éditables peuvent utiliser une suppression logique avec `deleted_at`.
 - Toute requête métier doit appliquer le filtre `workspace_id`. Cette isolation est une règle applicative dès le départ, même avec un seul utilisateur.
+
+## Mise en œuvre actuelle — tranche locale Phase 1
+
+L’API utilise actuellement **PGlite** dans `apps/api/.data/` pour les tests et l’exécution locale. Cette base est ignorée par Git et est initialisée avec un workspace de démonstration ; elle ne reçoit ni données réelles, ni secrets, ni tokens sociaux.
+
+Les tables minimales actuellement créées couvrent l’identité de démonstration, workspaces et memberships, projets/profils artistiques, releases, tracks, médias/tags, mémoires, plateformes sociales, tâches et posts planifiés. Chaque méthode de lecture du repository applique le `workspace_id` fixé côté serveur ; les paramètres du client ne peuvent pas sélectionner un workspace arbitraire.
+
+Cette implémentation n’est pas encore la base de production : il n’y a pas de fournisseur d’identité réel, de migrations versionnées de production, de stockage média, ni de connexion PostgreSQL centralisée. Ces éléments seront introduits ensemble avant toute bêta avec données personnelles.
 
 ## Vue d’ensemble des relations
 

@@ -1,5 +1,6 @@
 # Dependencies and builds
 node_modules/
+.pnpm-store/
 .next/
 dist/
 build/
@@ -12,6 +13,7 @@ coverage/
 
 # Local services and generated media
 .data/
+**/.data/
 storage/
 uploads/
 tmp/

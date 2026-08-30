@@ -1,0 +1,22 @@
+{
+  "name": "@ida/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm build && node dist/server.js",
+    "start": "node dist/server.js",
+    "build": "tsc --project tsconfig.build.json",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "latest",
+    "@fastify/cors": "latest",
+    "@ida/contracts": "workspace:*",
+    "@ida/domain": "workspace:*",
+    "fastify": "latest"
+  },
+  "devDependencies": {
+    "@types/node": "latest"
+  }
+}
