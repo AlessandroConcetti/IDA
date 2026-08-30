@@ -1,6 +1,7 @@
 import { mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { PGlite } from "@electric-sql/pglite";
+import type { ArtistProfile as ArtistProfileContract, ArtistProfileUpdate } from "@ida/contracts";
 
 import { demoContext, demoWorkspace } from "./demo-context.js";
 
@@ -20,9 +21,15 @@ export type ArtistProfile = {
   displayName: string;
   identity: string;
   genres: string[];
+  influences: string[];
   tone: string;
+  preferredVocabulary: string[];
+  forbiddenVocabulary: string[];
   audience: string;
   goals: string[];
+  platformPreferences: ArtistProfileContract["platformPreferences"];
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type Release = {
@@ -156,6 +163,22 @@ function asStringArray(value: unknown): string[] {
   return [];
 }
 
+function asPlatformPreferences(value: unknown): ArtistProfileContract["platformPreferences"] {
+  if (typeof value === "string") {
+    try {
+      return asPlatformPreferences(JSON.parse(value));
+    } catch {
+      return {};
+    }
+  }
+
+  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+    return value as ArtistProfileContract["platformPreferences"];
+  }
+
+  return {};
+}
+
 function isPersistentDirectory(dataDir: string): boolean {
   return !dataDir.startsWith("memory://");
 }
@@ -199,9 +222,15 @@ export class DemoDatabase {
           profile.display_name AS "displayName",
           profile.identity,
           profile.genres,
+          profile.influences,
           profile.tone,
+          profile.preferred_vocabulary AS "preferredVocabulary",
+          profile.forbidden_vocabulary AS "forbiddenVocabulary",
           profile.audience,
-          profile.goals
+          profile.goals,
+          profile.platform_preferences AS "platformPreferences",
+          profile.created_at AS "createdAt",
+          profile.updated_at AS "updatedAt"
         FROM artist_profiles profile
         INNER JOIN artist_projects project ON project.id = profile.project_id
         WHERE profile.workspace_id = $1
@@ -223,10 +252,63 @@ export class DemoDatabase {
       displayName: asString(row.displayName),
       identity: asString(row.identity),
       genres: asStringArray(row.genres),
+      influences: asStringArray(row.influences),
       tone: asString(row.tone),
+      preferredVocabulary: asStringArray(row.preferredVocabulary),
+      forbiddenVocabulary: asStringArray(row.forbiddenVocabulary),
       audience: asString(row.audience),
       goals: asStringArray(row.goals),
+      platformPreferences: asPlatformPreferences(row.platformPreferences),
+      createdAt: asTimestamp(row.createdAt) ?? "1970-01-01T00:00:00.000Z",
+      updatedAt: asTimestamp(row.updatedAt) ?? "1970-01-01T00:00:00.000Z",
     };
+  }
+
+  async updateArtistProfile(workspaceId: string, update: ArtistProfileUpdate): Promise<ArtistProfile | null> {
+    const current = await this.getArtistProfile(workspaceId);
+
+    if (!current) {
+      return null;
+    }
+
+    const result = await this.pglite.query<ScalarRow>(
+      `
+        UPDATE artist_profiles
+        SET
+          identity = COALESCE($1::text, identity),
+          genres = CASE WHEN $2::text IS NULL THEN genres ELSE $2::json END,
+          influences = CASE WHEN $3::text IS NULL THEN influences ELSE $3::json END,
+          tone = COALESCE($4::text, tone),
+          preferred_vocabulary = CASE WHEN $5::text IS NULL THEN preferred_vocabulary ELSE $5::json END,
+          forbidden_vocabulary = CASE WHEN $6::text IS NULL THEN forbidden_vocabulary ELSE $6::json END,
+          goals = CASE WHEN $7::text IS NULL THEN goals ELSE $7::json END,
+          audience = COALESCE($8::text, audience),
+          platform_preferences = CASE WHEN $9::text IS NULL THEN platform_preferences ELSE $9::json END,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = $10
+          AND workspace_id = $11
+        RETURNING id
+      `,
+      [
+        update.identity ?? null,
+        update.genres === undefined ? null : JSON.stringify(update.genres),
+        update.influences === undefined ? null : JSON.stringify(update.influences),
+        update.tone ?? null,
+        update.preferredVocabulary === undefined ? null : JSON.stringify(update.preferredVocabulary),
+        update.forbiddenVocabulary === undefined ? null : JSON.stringify(update.forbiddenVocabulary),
+        update.goals === undefined ? null : JSON.stringify(update.goals),
+        update.audience ?? null,
+        update.platformPreferences === undefined ? null : JSON.stringify(update.platformPreferences),
+        current.id,
+        workspaceId,
+      ],
+    );
+
+    if (result.rows.length === 0) {
+      return null;
+    }
+
+    return this.getArtistProfile(workspaceId);
   }
 
   async listReleases(workspaceId: string): Promise<Release[]> {
@@ -470,9 +552,15 @@ export class DemoDatabase {
         display_name TEXT NOT NULL,
         identity TEXT NOT NULL,
         genres JSON NOT NULL,
+        influences JSON NOT NULL DEFAULT '[]'::json,
         tone TEXT NOT NULL,
+        preferred_vocabulary JSON NOT NULL DEFAULT '[]'::json,
+        forbidden_vocabulary JSON NOT NULL DEFAULT '[]'::json,
         audience TEXT NOT NULL,
         goals JSON NOT NULL,
+        platform_preferences JSON NOT NULL DEFAULT '{}'::json,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
         UNIQUE (workspace_id, project_id)
       );
 
@@ -585,6 +673,23 @@ export class DemoDatabase {
       CREATE INDEX IF NOT EXISTS idx_memories_workspace_created
         ON memories (workspace_id, created_at DESC);
     `);
+
+    // Cette migration additive garde un Artist Brain local déjà modifié intact.
+    // Les seeds utilisent ensuite uniquement `ON CONFLICT DO NOTHING`.
+    await this.pglite.exec(`
+      ALTER TABLE artist_profiles
+        ADD COLUMN IF NOT EXISTS influences JSON NOT NULL DEFAULT '[]'::json;
+      ALTER TABLE artist_profiles
+        ADD COLUMN IF NOT EXISTS preferred_vocabulary JSON NOT NULL DEFAULT '[]'::json;
+      ALTER TABLE artist_profiles
+        ADD COLUMN IF NOT EXISTS forbidden_vocabulary JSON NOT NULL DEFAULT '[]'::json;
+      ALTER TABLE artist_profiles
+        ADD COLUMN IF NOT EXISTS platform_preferences JSON NOT NULL DEFAULT '{}'::json;
+      ALTER TABLE artist_profiles
+        ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+      ALTER TABLE artist_profiles
+        ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+    `);
   }
 
   private async seed(): Promise<void> {
@@ -632,15 +737,20 @@ export class DemoDatabase {
       await transaction.query(
         `
           INSERT INTO artist_profiles (
-            id, workspace_id, project_id, display_name, identity, genres, tone, audience, goals
+            id, workspace_id, project_id, display_name, identity, genres, influences, tone,
+            preferred_vocabulary, forbidden_vocabulary, audience, goals, platform_preferences
           )
           VALUES (
             'profile_demo_aless', $1, 'prj_demo_aless', 'Aless',
             'Producteur et DJ électronique entre textures nocturnes et énergie club.',
             '["Melodic techno", "Progressive house", "Electronic"]'::json,
+            '["Eric Prydz", "Tale Of Us", "RÜFÜS DU SOL"]'::json,
             'Direct, lumineux, précis et jamais générique.',
+            '["direct", "précis", "nocturne"]'::json,
+            '["vibes", "banger"]'::json,
             'Auditeurs de musique électronique et public de clubs européens.',
-            '["Préparer une release cohérente", "Faire émerger les contenus studio", "Maintenir une voix éditoriale concise"]'::json
+            '["Préparer une release cohérente", "Faire émerger les contenus studio", "Maintenir une voix éditoriale concise"]'::json,
+            '{"instagram":{"preferredFormats":["Reel","Carousel"],"cadencePerWeek":3},"tiktok":{"preferredFormats":["Vertical studio clip"],"cadencePerWeek":3}}'::json
           )
           ON CONFLICT (id) DO NOTHING
         `,

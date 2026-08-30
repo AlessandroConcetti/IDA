@@ -25,6 +25,7 @@ body {
 }
 
 button,
+input,
 textarea {
   font: inherit;
 }
@@ -38,6 +39,7 @@ button:disabled {
 }
 
 button:focus-visible,
+input:focus-visible,
 textarea:focus-visible {
   outline: 2px solid #a79bff;
   outline-offset: 3px;
@@ -1072,6 +1074,89 @@ h3 {
   letter-spacing: -0.018em;
 }
 
+.artist-brain-summary {
+  margin-top: 18px;
+}
+
+.artist-brain-form {
+  margin-top: 26px;
+  padding-top: 23px;
+  border-top: 1px solid rgba(255, 255, 255, 0.075);
+}
+
+.artist-brain-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 13px;
+}
+
+.artist-brain-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.artist-brain-field-wide {
+  grid-column: 1 / -1;
+}
+
+.artist-brain-field > span {
+  color: #b0b4c1;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.075em;
+  text-transform: uppercase;
+}
+
+.artist-brain-field input,
+.artist-brain-field textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 11px 12px;
+  color: #e9e9f1;
+  border: 1px solid rgba(255, 255, 255, 0.095);
+  border-radius: 10px;
+  outline: 0;
+  background: rgba(7, 9, 14, 0.54);
+  line-height: 1.45;
+  resize: vertical;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease;
+}
+
+.artist-brain-field input:focus,
+.artist-brain-field textarea:focus {
+  border-color: rgba(164, 152, 255, 0.7);
+  background: rgba(5, 7, 11, 0.74);
+}
+
+.artist-brain-field input::placeholder,
+.artist-brain-field textarea::placeholder {
+  color: #6f7585;
+}
+
+.artist-brain-field input:disabled,
+.artist-brain-field textarea:disabled {
+  opacity: 0.65;
+}
+
+.artist-brain-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.artist-brain-actions p {
+  max-width: 570px;
+  color: #8f95a5;
+  font-size: 0.74rem;
+  line-height: 1.5;
+}
+
 .metrics-grid span {
   color: #7e8596;
   font-size: 0.63rem;
@@ -1265,8 +1350,18 @@ h3 {
   .media-grid,
   .social-list,
   .metrics-grid,
-  .memory-grid {
+  .memory-grid,
+  .artist-brain-fields {
     grid-template-columns: 1fr;
+  }
+
+  .artist-brain-field-wide {
+    grid-column: auto;
+  }
+
+  .artist-brain-actions {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .media-thumbnail {

@@ -8,7 +8,7 @@
     "dev": "pnpm --parallel --filter @ida/api --filter @ida/web dev",
     "build": "pnpm --filter @ida/contracts build && pnpm --filter @ida/domain build && pnpm --filter @ida/api build && pnpm --filter @ida/web build",
     "typecheck": "pnpm --filter @ida/contracts typecheck && pnpm --filter @ida/domain typecheck && pnpm --filter @ida/api typecheck && pnpm --filter @ida/web typecheck",
-    "test": "vitest run",
+    "test": "pnpm --filter @ida/contracts build && pnpm --filter @ida/domain build && vitest run",
     "lint": "biome check .",
     "format": "biome format --write ."
   },

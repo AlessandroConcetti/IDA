@@ -75,24 +75,61 @@ export const systemStatusSchema = z.object({
 
 export type SystemStatus = z.infer<typeof systemStatusSchema>;
 
+const artistProfileTextSchema = z.string().trim().min(1).max(2_000);
+const artistProfileListItemSchema = z.string().trim().min(1).max(240);
+const artistProfileListSchema = z.array(artistProfileListItemSchema).max(60);
+
+export const artistPlatformPreferenceSchema = z
+  .object({
+    preferredFormats: z.array(artistProfileListItemSchema).max(20).optional(),
+    cadencePerWeek: z.number().int().min(0).max(31).optional(),
+    notes: z.string().trim().min(1).max(2_000).optional(),
+  })
+  .strict();
+
+export const artistPlatformPreferencesSchema = z
+  .record(z.string().trim().min(1).max(48), artistPlatformPreferenceSchema)
+  .refine((preferences) => Object.keys(preferences).length <= 12, {
+    message: "Le profil ne peut pas contenir plus de douze préférences de plateforme.",
+  });
+
 export const artistProfileSchema = z.object({
   id: entityIdSchema,
   workspaceId: entityIdSchema,
   artistProjectId: entityIdSchema,
-  identity: z.string().trim().min(1),
-  genres: z.array(z.string().trim().min(1)).default([]),
-  influences: z.array(z.string().trim().min(1)).default([]),
-  tone: z.string().trim().min(1).optional(),
-  preferredVocabulary: z.array(z.string().trim().min(1)).default([]),
-  forbiddenVocabulary: z.array(z.string().trim().min(1)).default([]),
-  goals: z.array(z.string().trim().min(1)).default([]),
-  audience: z.string().trim().min(1).optional(),
-  platformPreferences: z.record(z.string(), z.unknown()).default({}),
+  identity: artistProfileTextSchema,
+  genres: artistProfileListSchema.default([]),
+  influences: artistProfileListSchema.default([]),
+  tone: artistProfileTextSchema.optional(),
+  preferredVocabulary: artistProfileListSchema.default([]),
+  forbiddenVocabulary: artistProfileListSchema.default([]),
+  goals: artistProfileListSchema.default([]),
+  audience: artistProfileTextSchema.optional(),
+  platformPreferences: artistPlatformPreferencesSchema.default({}),
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
 });
 
 export type ArtistProfile = z.infer<typeof artistProfileSchema>;
+
+export const artistProfileUpdateSchema = z
+  .object({
+    identity: artistProfileTextSchema.optional(),
+    genres: artistProfileListSchema.optional(),
+    influences: artistProfileListSchema.optional(),
+    tone: artistProfileTextSchema.optional(),
+    preferredVocabulary: artistProfileListSchema.optional(),
+    forbiddenVocabulary: artistProfileListSchema.optional(),
+    goals: artistProfileListSchema.optional(),
+    audience: artistProfileTextSchema.optional(),
+    platformPreferences: artistPlatformPreferencesSchema.optional(),
+  })
+  .strict()
+  .refine((update) => Object.values(update).some((value) => value !== undefined), {
+    message: "Au moins un champ éditable est requis pour mettre à jour l’Artist Brain.",
+  });
+
+export type ArtistProfileUpdate = z.infer<typeof artistProfileUpdateSchema>;
 
 export const releaseStatusSchema = z.enum(["DRAFT", "SCHEDULED", "RELEASED", "ARCHIVED"]);
 export type ReleaseStatus = z.infer<typeof releaseStatusSchema>;

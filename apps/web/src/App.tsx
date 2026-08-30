@@ -1,8 +1,18 @@
 import { type FormEvent, useEffect, useMemo, useState } from "react";
-import { type DashboardSnapshot, fetchDashboardSnapshot, IdaApiError, isApiConfigured, submitIdaCommand } from "./api";
 import {
+  type DashboardSnapshot,
+  fetchArtistBrain,
+  fetchDashboardSnapshot,
+  IdaApiError,
+  isApiConfigured,
+  submitIdaCommand,
+  updateArtistBrain,
+} from "./api";
+import {
+  type ArtistBrain,
   calendarItems,
   getLocalIdaResponse,
+  artistBrain as localArtistBrain,
   mediaAssets as localMediaAssets,
   systemServices as localSystemServices,
   tracks as localTracks,
@@ -493,11 +503,140 @@ function TasksView() {
   );
 }
 
+type ArtistBrainForm = {
+  identity: string;
+  genres: string;
+  influences: string;
+  tone: string;
+  preferredVocabulary: string;
+  forbiddenVocabulary: string;
+  goals: string;
+  audience: string;
+};
+
+function listToText(values: string[]): string {
+  return values.join(", ");
+}
+
+function textToList(value: string): string[] {
+  const unique = new Map<string, string>();
+
+  for (const item of value.split(/[\n,]/u)) {
+    const trimmed = item.trim();
+    const key = trimmed.toLocaleLowerCase("fr-FR");
+
+    if (trimmed && !unique.has(key)) {
+      unique.set(key, trimmed);
+    }
+  }
+
+  return [...unique.values()];
+}
+
+function artistBrainToForm(profile: ArtistBrain): ArtistBrainForm {
+  return {
+    identity: profile.identity,
+    genres: listToText(profile.genres),
+    influences: listToText(profile.influences),
+    tone: profile.tone,
+    preferredVocabulary: listToText(profile.preferredVocabulary),
+    forbiddenVocabulary: listToText(profile.forbiddenVocabulary),
+    goals: listToText(profile.goals),
+    audience: profile.audience,
+  };
+}
+
+function formToArtistBrain(form: ArtistBrainForm, current: ArtistBrain): ArtistBrain {
+  return {
+    identity: form.identity.trim(),
+    genres: textToList(form.genres),
+    influences: textToList(form.influences),
+    tone: form.tone.trim(),
+    preferredVocabulary: textToList(form.preferredVocabulary),
+    forbiddenVocabulary: textToList(form.forbiddenVocabulary),
+    goals: textToList(form.goals),
+    audience: form.audience.trim(),
+    platformPreferences: current.platformPreferences,
+  };
+}
+
 function MemoryView() {
-  const memoryCards = [
-    ["Tone", "Direct, sensible, précis"],
-    ["Editorial rule", "Captions courtes, intention claire"],
-    ["Preference", "Toujours proposer avant de publier"],
+  const [profile, setProfile] = useState<ArtistBrain>(localArtistBrain);
+  const [form, setForm] = useState<ArtistBrainForm>(() => artistBrainToForm(localArtistBrain));
+  const [source, setSource] = useState<"loading" | "api" | "local">(isApiConfigured ? "loading" : "local");
+  const [notice, setNotice] = useState(
+    isApiConfigured ? "Chargement de ton Artist Brain…" : "Aperçu local : API IDA indisponible.",
+  );
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    if (!isApiConfigured) {
+      return () => {
+        isCurrent = false;
+      };
+    }
+
+    void fetchArtistBrain()
+      .then((nextProfile) => {
+        if (!isCurrent) {
+          return;
+        }
+
+        setProfile(nextProfile);
+        setForm(artistBrainToForm(nextProfile));
+        setSource("api");
+        setNotice("Artist Brain synchronisé depuis ton workspace IDA.");
+      })
+      .catch((error: unknown) => {
+        if (!isCurrent) {
+          return;
+        }
+
+        const reason = error instanceof IdaApiError ? error.message : "IDA API est indisponible.";
+        setSource("local");
+        setNotice(`Aperçu local : ${reason}`);
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, []);
+
+  function updateField(field: keyof ArtistBrainForm, value: string) {
+    setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const nextProfile = formToArtistBrain(form, profile);
+
+    if (!nextProfile.identity || !nextProfile.tone || !nextProfile.audience) {
+      setNotice("Identité, ton et audience sont nécessaires pour enregistrer ton Artist Brain.");
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      const savedProfile = await updateArtistBrain(nextProfile);
+      setProfile(savedProfile);
+      setForm(artistBrainToForm(savedProfile));
+      setSource("api");
+      setNotice("Artist Brain mis à jour. IDA utilisera cette base pour ses futures propositions.");
+    } catch (error: unknown) {
+      const reason = error instanceof IdaApiError ? error.message : "IDA API est indisponible.";
+      setNotice(`Aucune modification n’a été enregistrée : ${reason}`);
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  const summaryCards = [
+    ["Tone", profile.tone],
+    ["Genres", profile.genres.join(" · ") || "À préciser"],
+    ["Audience", profile.audience],
   ] as const;
 
   return (
@@ -507,20 +646,105 @@ function MemoryView() {
           <p className="eyebrow">ARTIST BRAIN</p>
           <h2>Memory under your control.</h2>
         </div>
-        <span className="quiet-label">Editable by design</span>
+        <span className="quiet-label">{source === "api" ? "Editable workspace data" : "Local preview"}</span>
       </div>
-      <div className="memory-grid">
-        {memoryCards.map(([label, value]) => (
+      <p className={`data-source-notice ${source}`} role="status">
+        <span aria-hidden="true" />
+        {notice}
+      </p>
+      <div className="memory-grid artist-brain-summary">
+        {summaryCards.map(([label, value]) => (
           <article key={label}>
             <p>{label}</p>
             <strong>{value}</strong>
           </article>
         ))}
       </div>
-      <p className="panel-intro">
-        IDA proposera l’enregistrement d’une préférence ; elle ne transformera pas une conversation en mémoire durable
-        sans ta décision.
-      </p>
+      <form className="artist-brain-form" onSubmit={handleSubmit}>
+        <div className="artist-brain-fields">
+          <label className="artist-brain-field artist-brain-field-wide">
+            <span>Identité artistique</span>
+            <textarea
+              value={form.identity}
+              onChange={(event) => updateField("identity", event.target.value)}
+              rows={3}
+              disabled={isSaving}
+            />
+          </label>
+          <label className="artist-brain-field">
+            <span>Ton</span>
+            <input
+              value={form.tone}
+              onChange={(event) => updateField("tone", event.target.value)}
+              disabled={isSaving}
+            />
+          </label>
+          <label className="artist-brain-field">
+            <span>Genres</span>
+            <input
+              value={form.genres}
+              onChange={(event) => updateField("genres", event.target.value)}
+              placeholder="Melodic techno, progressive house…"
+              disabled={isSaving}
+            />
+          </label>
+          <label className="artist-brain-field artist-brain-field-wide">
+            <span>Audience</span>
+            <textarea
+              value={form.audience}
+              onChange={(event) => updateField("audience", event.target.value)}
+              rows={2}
+              disabled={isSaving}
+            />
+          </label>
+          <label className="artist-brain-field">
+            <span>Influences</span>
+            <input
+              value={form.influences}
+              onChange={(event) => updateField("influences", event.target.value)}
+              placeholder="Sépare chaque influence par une virgule"
+              disabled={isSaving}
+            />
+          </label>
+          <label className="artist-brain-field">
+            <span>Objectifs</span>
+            <input
+              value={form.goals}
+              onChange={(event) => updateField("goals", event.target.value)}
+              placeholder="Sépare chaque objectif par une virgule"
+              disabled={isSaving}
+            />
+          </label>
+          <label className="artist-brain-field">
+            <span>Vocabulaire préféré</span>
+            <input
+              value={form.preferredVocabulary}
+              onChange={(event) => updateField("preferredVocabulary", event.target.value)}
+              placeholder="nocturne, texture…"
+              disabled={isSaving}
+            />
+          </label>
+          <label className="artist-brain-field">
+            <span>Vocabulaire à éviter</span>
+            <input
+              value={form.forbiddenVocabulary}
+              onChange={(event) => updateField("forbiddenVocabulary", event.target.value)}
+              placeholder="banger, vibes…"
+              disabled={isSaving}
+            />
+          </label>
+        </div>
+        <div className="artist-brain-actions">
+          <p>
+            Les changements restent internes à IDA. Ils ne créent aucune publication ni mémoire conversationnelle
+            implicite.
+          </p>
+          <button className="send-button" type="submit" disabled={isSaving}>
+            {isSaving ? "Enregistrement…" : "Save Artist Brain"}
+            <span aria-hidden="true">↗</span>
+          </button>
+        </div>
+      </form>
     </section>
   );
 }

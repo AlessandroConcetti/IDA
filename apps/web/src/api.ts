@@ -1,4 +1,4 @@
-import type { MediaAsset, OperationalState, SystemService, Track } from "./data";
+import type { ArtistBrain, MediaAsset, OperationalState, SystemService, Track } from "./data";
 
 export interface IdaCommandResult {
   message: string;
@@ -45,6 +45,16 @@ function readString(...values: unknown[]): string | undefined {
 
 function readNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function readStringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string" && item.length > 0)
+    : [];
+}
+
+function readRecord(value: unknown): Record<string, unknown> {
+  return isRecord(value) ? value : {};
 }
 
 function createRequestId(): string {
@@ -141,6 +151,40 @@ async function getApiJson(path: string): Promise<unknown> {
   return payload;
 }
 
+async function patchApiJson(path: string, body: unknown): Promise<unknown> {
+  let response: Response;
+
+  try {
+    response = await fetch(`${apiBaseUrl}${path}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        "X-Request-Id": createRequestId(),
+      },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new IdaApiError("IDA API est indisponible.");
+  }
+
+  const payload: unknown = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new IdaApiError(extractErrorMessage(payload, response.status), response.status);
+  }
+
+  return payload;
+}
+
+function readDataObject(payload: unknown, endpoint: string): Record<string, unknown> {
+  if (!isRecord(payload) || !isRecord(payload.data)) {
+    throw new IdaApiError(`La réponse ${endpoint} n’a pas le format attendu.`);
+  }
+
+  return payload.data;
+}
+
 function readDataList(payload: unknown, endpoint: string): Record<string, unknown>[] {
   if (!isRecord(payload) || !Array.isArray(payload.data)) {
     throw new IdaApiError(`La réponse ${endpoint} n’a pas le format attendu.`);
@@ -219,6 +263,30 @@ function toSystemServices(payload: unknown): SystemService[] {
     state: operationalState(record.state),
     detail: readString(record.message) ?? "État rapporté par IDA API",
   }));
+}
+
+function toArtistBrain(payload: unknown): ArtistBrain {
+  const profile = readDataObject(payload, "/v1/artist-profile");
+
+  return {
+    identity: readString(profile.identity) ?? "Identité artistique à préciser.",
+    genres: readStringArray(profile.genres),
+    influences: readStringArray(profile.influences),
+    tone: readString(profile.tone) ?? "Ton éditorial à préciser.",
+    preferredVocabulary: readStringArray(profile.preferredVocabulary),
+    forbiddenVocabulary: readStringArray(profile.forbiddenVocabulary),
+    goals: readStringArray(profile.goals),
+    audience: readString(profile.audience) ?? "Audience à préciser.",
+    platformPreferences: readRecord(profile.platformPreferences),
+  };
+}
+
+export async function fetchArtistBrain(): Promise<ArtistBrain> {
+  return toArtistBrain(await getApiJson("/v1/artist-profile"));
+}
+
+export async function updateArtistBrain(profile: ArtistBrain): Promise<ArtistBrain> {
+  return toArtistBrain(await patchApiJson("/v1/artist-profile", profile));
 }
 
 function toTracks(payload: unknown): Track[] {

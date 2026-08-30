@@ -25,6 +25,18 @@ export interface SystemService {
   detail: string;
 }
 
+export interface ArtistBrain {
+  identity: string;
+  genres: string[];
+  influences: string[];
+  tone: string;
+  preferredVocabulary: string[];
+  forbiddenVocabulary: string[];
+  goals: string[];
+  audience: string;
+  platformPreferences: Record<string, unknown>;
+}
+
 export interface TodayPriority {
   label: string;
   value: string;
@@ -78,6 +90,18 @@ export const navigation: NavigationItem[] = [
 ];
 
 export const mobilePrimaryNavigation: NavigationId[] = ["home", "ida", "content", "calendar"];
+
+export const artistBrain: ArtistBrain = {
+  identity: "Producteur et DJ électronique entre textures nocturnes et énergie club.",
+  genres: ["Melodic techno", "Progressive house", "Electronic"],
+  influences: ["Nuits de club", "Cinéma analogique", "Architecture lumineuse"],
+  tone: "Direct, lumineux, précis et jamais générique.",
+  preferredVocabulary: ["nocturne", "texture", "élan"],
+  forbiddenVocabulary: ["banger", "vibes"],
+  goals: ["Préparer une release cohérente", "Faire émerger les contenus studio"],
+  audience: "Auditeurs de musique électronique et public de clubs européens.",
+  platformPreferences: {},
+};
 
 export const sectionCopy: Record<NavigationId, { eyebrow: string; title: string; description: string }> = {
   home: {

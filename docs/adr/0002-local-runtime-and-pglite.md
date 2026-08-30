@@ -13,7 +13,7 @@ IDA doit démontrer rapidement un premier flux complet — Command Center, API, 
 - Le backend est un monolithe Fastify/TypeScript avec `packages/contracts` et `packages/domain` partagés.
 - PGlite fournit une persistance PostgreSQL-compatible locale dans `apps/api/.data/`, exclusivement pour le développement et les tests.
 - Le runtime injecte un contexte de démonstration fixé côté serveur. Le client ne peut pas choisir librement de workspace.
-- IDA Core reste déterministe et limité à des outils de lecture. Il ne reçoit aucun secret ni capacité réseau arbitraire.
+- IDA Core reste déterministe et limité à des outils de lecture. L’Artist Brain peut être modifié séparément par un unique outil interne `WRITE` validé, sans secret, capacité réseau arbitraire ni effet externe.
 
 ## Conséquences
 

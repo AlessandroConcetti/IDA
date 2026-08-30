@@ -4,7 +4,7 @@ IDA est un AI Command Center personnel centré sur l'écosystème musical : cata
 
 ## État du projet
 
-La **Phase 0 — architecture et fondations** est terminée. La première tranche de **Phase 1** est en place : un Command Center responsive, une API modulaire locale, des contrats partagés, un Music Brain et une Content Library de démonstration, ainsi que des commandes IDA déterministes et strictement en lecture seule.
+La **Phase 0 — architecture et fondations** est terminée. Les premières tranches de **Phase 1** sont en place : un Command Center responsive, une API modulaire locale, des contrats partagés, un Artist Brain réellement éditable, un Music Brain et une Content Library de démonstration, ainsi que des commandes IDA déterministes en lecture seule.
 
 Cette tranche ne contient volontairement ni authentification réelle, ni données utilisateur réelles, ni upload, ni OAuth social, ni publication, ni scheduler, ni paiement. Les modules affichés dans l’interface préparent le même cœur partagé sans prétendre que les intégrations sont déjà actives.
 
@@ -41,4 +41,4 @@ Le web est alors disponible sur `http://127.0.0.1:5173` et l’API locale sur `h
 
 ## Prochain jalon
 
-Terminer Phase 1 avec l’authentification, les vraies données par workspace, l’Artist Brain éditable, les uploads et la recherche de médias, la mémoire consentie et l’historique de commandes. Les connexions sociales restent une Phase 3 contrôlée par les capacités documentées dans `SOCIAL_APIS.md`.
+Terminer Phase 1 avec l’authentification, les vraies données par workspace, les uploads et la recherche de médias, la mémoire consentie et l’historique de commandes. Les connexions sociales restent une Phase 3 contrôlée par les capacités documentées dans `SOCIAL_APIS.md`.

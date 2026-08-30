@@ -4,7 +4,8 @@ info:
   version: 0.1.0
   description: >-
     Contrat du runtime de développement local. Il expose uniquement des données
-    de démonstration et des commandes IDA déterministes en lecture seule.
+    de démonstration, des commandes IDA déterministes en lecture seule et une
+    modification interne bornée de l’Artist Brain.
 servers:
   - url: http://127.0.0.1:8787
     description: API locale de développement
@@ -68,6 +69,30 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ArtistProfileResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      operationId: updateArtistProfile
+      summary: Met à jour une partie de l’Artist Brain local
+      description: >-
+        Utilise le contexte workspace imposé par le serveur et l’outil interne
+        update_artist_profile avec la permission WRITE. Aucun champ de scope,
+        appel externe ou effet de publication n’est accepté.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ArtistProfileUpdateRequest'
+      responses:
+        '200':
+          description: Artist Brain local mis à jour
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArtistProfileResponse'
+        '400':
+          $ref: '#/components/responses/InvalidArtistProfile'
         '404':
           $ref: '#/components/responses/NotFound'
   /v1/releases:
@@ -159,6 +184,12 @@ components:
   responses:
     InvalidCommand:
       description: Corps de commande ou filtre invalide
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InvalidArtistProfile:
+      description: Corps Artist Brain invalide ou tentative de définir le scope client
       content:
         application/json:
           schema:
@@ -280,7 +311,7 @@ components:
             $ref: '#/components/schemas/SystemStatus'
     ArtistProfile:
       type: object
-      required: [id, workspaceId, artistProjectId, identity, genres, influences, tone, goals, audience, createdAt, updatedAt]
+      required: [id, workspaceId, artistProjectId, identity, genres, influences, tone, preferredVocabulary, forbiddenVocabulary, goals, audience, platformPreferences, createdAt, updatedAt]
       properties:
         id:
           type: string
@@ -298,11 +329,19 @@ components:
           items: { type: string }
         tone:
           type: string
+        preferredVocabulary:
+          type: array
+          items: { type: string }
+        forbiddenVocabulary:
+          type: array
+          items: { type: string }
         goals:
           type: array
           items: { type: string }
         audience:
           type: string
+        platformPreferences:
+          $ref: '#/components/schemas/ArtistPlatformPreferences'
         createdAt:
           type: string
           format: date-time
@@ -315,6 +354,57 @@ components:
       properties:
         data:
           $ref: '#/components/schemas/ArtistProfile'
+    ArtistProfileUpdateRequest:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        identity: { type: string, minLength: 1, maxLength: 2000 }
+        genres:
+          type: array
+          maxItems: 60
+          items: { type: string, minLength: 1, maxLength: 240 }
+        influences:
+          type: array
+          maxItems: 60
+          items: { type: string, minLength: 1, maxLength: 240 }
+        tone: { type: string, minLength: 1, maxLength: 2000 }
+        preferredVocabulary:
+          type: array
+          maxItems: 60
+          items: { type: string, minLength: 1, maxLength: 240 }
+        forbiddenVocabulary:
+          type: array
+          maxItems: 60
+          items: { type: string, minLength: 1, maxLength: 240 }
+        goals:
+          type: array
+          maxItems: 60
+          items: { type: string, minLength: 1, maxLength: 240 }
+        audience: { type: string, minLength: 1, maxLength: 2000 }
+        platformPreferences:
+          $ref: '#/components/schemas/ArtistPlatformPreferences'
+    ArtistPlatformPreferences:
+      type: object
+      maxProperties: 12
+      additionalProperties:
+        $ref: '#/components/schemas/ArtistPlatformPreference'
+    ArtistPlatformPreference:
+      type: object
+      additionalProperties: false
+      properties:
+        preferredFormats:
+          type: array
+          maxItems: 20
+          items: { type: string, minLength: 1, maxLength: 240 }
+        cadencePerWeek:
+          type: integer
+          minimum: 0
+          maximum: 31
+        notes:
+          type: string
+          minLength: 1
+          maxLength: 2000
     Release:
       type: object
       required: [id, workspaceId, artistProjectId, title, releaseType, status, createdAt, updatedAt]

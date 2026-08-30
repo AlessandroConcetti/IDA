@@ -143,6 +143,7 @@ La première tranche conserve volontairement un périmètre réduit et vérifiab
 - `apps/web` est un Command Center React/Vite responsive. Il affiche les onze modules initiaux sur desktop et le parcours `HOME`, `IDA`, `CONTENT`, `CALENDAR`, `MORE` sur mobile ; tous restent des vues du même backend.
 - `apps/api` est un monolithe Fastify/TypeScript. Il fournit une identité de démonstration fixée côté serveur, les ressources musicales/de contenu de démonstration et une commande IDA déterministe en lecture seule.
 - `packages/contracts` porte les schémas de transport validés et `packages/domain` le registre de modules et la politique d’outils. Le noyau n’autorise pas une opération `PUBLISH` sans approbation explicite.
+- L’Artist Brain est désormais éditable dans le workspace local : la mise à jour passe par un schéma strict, un outil interne `WRITE` allowlisté et une migration additive. Elle ne déclenche ni IA, ni connexion, ni publication.
 - PGlite est employé uniquement comme base locale de développement et de tests. PostgreSQL centralisé, migrations de production, stockage objet et fournisseur d’identité restent des décisions de la suite de Phase 1.
 - Les écrans Social et System rendent visibles les capacités et indisponibilités actuelles. Aucun OAuth, token, scraping, appel social, upload ou publication n’est présent dans cette tranche.
 

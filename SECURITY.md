@@ -46,7 +46,7 @@ L’IA n’obtient ni accès direct à la base de données, ni clé de productio
 - L’identité et le workspace de démonstration sont fixés uniquement côté serveur ; un header, un query string ou le corps d’une requête ne peut pas choisir un autre workspace.
 - PGlite est conservé dans un dossier local ignoré par Git. Il ne contient que des données de démonstration, aucun secret, token, média privé ou identifiant bancaire.
 - L’API locale n’accepte que l’origine du Command Center de développement et n’utilise pas de cookies de session tant que l’authentification réelle n’est pas livrée.
-- Les outils réellement exposés dans cette tranche sont en lecture. Les chemins `WRITE`, `APPROVAL_REQUIRED`, `PUBLISH` et `SYSTEM` ne sont pas accessibles depuis la commande web.
+- Les outils réellement exposés sont les lectures contrôlées et `update_artist_profile` en `WRITE` interne. Cet unique droit d’écriture est validé par schéma, limité au workspace serveur et n’a aucun effet externe. Les autres chemins `WRITE`, ainsi que `APPROVAL_REQUIRED`, `PUBLISH` et `SYSTEM`, restent inaccessibles depuis la commande web.
 - Ce runtime n’est pas éligible à une bêta avec données personnelles. Avant cela, les exigences de la section 12 restent obligatoires.
 
 ## 4. Identité, appareils et autorisation

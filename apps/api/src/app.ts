@@ -1,6 +1,7 @@
 import cors from "@fastify/cors";
 import {
   artistProfileSchema,
+  artistProfileUpdateSchema,
   mediaAssetSchema,
   mediaStatusSchema,
   memorySchema,
@@ -8,10 +9,10 @@ import {
   socialPlatformCapabilitySchema,
   trackSchema,
 } from "@ida/contracts";
-import { createModuleRegistry, ToolPolicyError } from "@ida/domain";
+import { createModuleRegistry, ToolGateway, ToolPolicyError } from "@ida/domain";
 import Fastify, { type FastifyInstance } from "fastify";
 
-import { DemoDatabase, type DemoDatabaseOptions, mediaStatuses } from "./database.js";
+import { type ArtistProfile, DemoDatabase, type DemoDatabaseOptions, mediaStatuses } from "./database.js";
 import { demoContext, demoWorkspace } from "./demo-context.js";
 import { CommandInputError, DeterministicIdaCore } from "./ida-core.js";
 
@@ -40,15 +41,44 @@ function timestampFromDate(value: string | null, fallback: string): string | und
   return new Date(`${value}T00:00:00.000Z`).toISOString() || fallback;
 }
 
+class ArtistProfileInputError extends Error {
+  readonly statusCode = 400;
+  readonly code = "INVALID_ARTIST_PROFILE";
+
+  constructor() {
+    super("Les champs transmis pour l’Artist Brain sont invalides.");
+  }
+}
+
+function toArtistProfileResponse(profile: ArtistProfile) {
+  return artistProfileSchema.parse({
+    id: profile.id,
+    workspaceId: demoContext.workspaceId,
+    artistProjectId: profile.projectId,
+    identity: profile.identity,
+    genres: profile.genres,
+    influences: profile.influences,
+    tone: profile.tone,
+    preferredVocabulary: profile.preferredVocabulary,
+    forbiddenVocabulary: profile.forbiddenVocabulary,
+    goals: profile.goals,
+    audience: profile.audience,
+    platformPreferences: profile.platformPreferences,
+    createdAt: profile.createdAt,
+    updatedAt: profile.updatedAt,
+  });
+}
+
 export async function createApp(options: CreateAppOptions = {}): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   const database = await DemoDatabase.open(options);
   const core = new DeterministicIdaCore(database, undefined, options.now);
   const modules = createModuleRegistry();
+  const toolGateway = new ToolGateway();
 
   await app.register(cors, {
     origin: "http://127.0.0.1:5173",
-    methods: ["GET", "POST", "OPTIONS"],
+    methods: ["GET", "PATCH", "POST", "OPTIONS"],
   });
 
   app.addHook("onClose", async () => {
@@ -114,25 +144,35 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
         .send({ error: { code: "ARTIST_PROFILE_NOT_FOUND", message: "Profil artistique introuvable." } });
     }
 
-    const timestamp = "2026-08-30T00:00:00.000Z";
     return {
-      data: artistProfileSchema.parse({
-        id: profile.id,
-        workspaceId: demoContext.workspaceId,
-        artistProjectId: profile.projectId,
-        identity: profile.identity,
-        genres: profile.genres,
-        influences: [],
-        tone: profile.tone,
-        preferredVocabulary: ["direct", "précis", "nocturne"],
-        forbiddenVocabulary: ["vibes", "banger"],
-        goals: profile.goals,
-        audience: profile.audience,
-        platformPreferences: {},
-        createdAt: timestamp,
-        updatedAt: timestamp,
-      }),
+      data: toArtistProfileResponse(profile),
     };
+  });
+
+  app.patch("/v1/artist-profile", async (request, reply) => {
+    const update = artistProfileUpdateSchema.safeParse(request.body);
+
+    if (!update.success) {
+      throw new ArtistProfileInputError();
+    }
+
+    toolGateway.assertAuthorized({
+      toolKey: "update_artist_profile",
+      moduleKey: "MEMORY",
+      permission: "WRITE",
+    });
+
+    // Le workspace est imposé par le contexte serveur local ; le client ne peut
+    // ni choisir un autre workspace, ni déplacer le profil vers un projet tiers.
+    const profile = await database.updateArtistProfile(demoContext.workspaceId, update.data);
+
+    if (!profile) {
+      return reply
+        .status(404)
+        .send({ error: { code: "ARTIST_PROFILE_NOT_FOUND", message: "Profil artistique introuvable." } });
+    }
+
+    return { data: toArtistProfileResponse(profile) };
   });
 
   app.get("/v1/releases", async () => {

@@ -1,3 +1,6 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createApp } from "./app.js";
@@ -81,6 +84,121 @@ describe("IDA API — première tranche Phase 1", () => {
     );
     expect(body.data.some((asset) => asset.id === "med_other_workspace")).toBe(false);
     expect(body.data.some((asset) => asset.filename === "private-other-video.mp4")).toBe(false);
+  });
+
+  it("met à jour et persiste l’Artist Brain avec un outil WRITE sans écraser les autres champs", async () => {
+    const firstUpdate = await app.inject({
+      method: "PATCH",
+      url: "/v1/artist-profile",
+      payload: {
+        identity: "Producteur électronique focalisé sur des récits nocturnes et l’énergie du club.",
+        influences: ["Bicep", "Jon Hopkins"],
+        preferredVocabulary: ["précis", "immersif"],
+        forbiddenVocabulary: ["banger"],
+        goals: ["Finaliser la campagne de Lumière Noire"],
+        audience: "Auditeurs de musique électronique et clubbers européens.",
+        platformPreferences: {
+          instagram: { preferredFormats: ["Reel", "Carousel"], cadencePerWeek: 3 },
+          tiktok: { preferredFormats: ["Studio clip"], notes: "Privilégier les hooks directs." },
+        },
+      },
+    });
+
+    expect(firstUpdate.statusCode).toBe(200);
+    expect(firstUpdate.json()).toMatchObject({
+      data: {
+        workspaceId: "wsp_demo_aless",
+        identity: "Producteur électronique focalisé sur des récits nocturnes et l’énergie du club.",
+        influences: ["Bicep", "Jon Hopkins"],
+        preferredVocabulary: ["précis", "immersif"],
+        forbiddenVocabulary: ["banger"],
+        goals: ["Finaliser la campagne de Lumière Noire"],
+        audience: "Auditeurs de musique électronique et clubbers européens.",
+        platformPreferences: {
+          instagram: { preferredFormats: ["Reel", "Carousel"], cadencePerWeek: 3 },
+          tiktok: { preferredFormats: ["Studio clip"], notes: "Privilégier les hooks directs." },
+        },
+      },
+    });
+
+    const secondUpdate = await app.inject({
+      method: "PATCH",
+      url: "/v1/artist-profile",
+      payload: { tone: "Chaleureux, direct et précis." },
+    });
+
+    expect(secondUpdate.statusCode).toBe(200);
+    expect(secondUpdate.json()).toMatchObject({
+      data: {
+        tone: "Chaleureux, direct et précis.",
+        influences: ["Bicep", "Jon Hopkins"],
+        preferredVocabulary: ["précis", "immersif"],
+        goals: ["Finaliser la campagne de Lumière Noire"],
+      },
+    });
+
+    const persisted = await app.inject({ method: "GET", url: "/v1/artist-profile" });
+    expect(persisted.statusCode).toBe(200);
+    expect(persisted.json()).toMatchObject({
+      data: {
+        tone: "Chaleureux, direct et précis.",
+        platformPreferences: {
+          instagram: { cadencePerWeek: 3 },
+        },
+      },
+    });
+  });
+
+  it("refuse un corps Artist Brain invalide ou qui tente de choisir un autre workspace", async () => {
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/v1/artist-profile",
+      payload: {
+        workspaceId: "wsp_other",
+        identity: "Tentative hors périmètre",
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({ error: { code: "INVALID_ARTIST_PROFILE" } });
+
+    const profile = await app.inject({ method: "GET", url: "/v1/artist-profile" });
+    expect(profile.statusCode).toBe(200);
+    expect(profile.json()).toMatchObject({
+      data: {
+        workspaceId: "wsp_demo_aless",
+        identity: "Producteur et DJ électronique entre textures nocturnes et énergie club.",
+      },
+    });
+  });
+
+  it("garde un Artist Brain modifié après un redémarrage local et un nouveau seed", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "ida-artist-brain-"));
+    let firstApp: Awaited<ReturnType<typeof createApp>> | undefined;
+    let restartedApp: Awaited<ReturnType<typeof createApp>> | undefined;
+
+    try {
+      firstApp = await createApp({ dataDir });
+      const update = await firstApp.inject({
+        method: "PATCH",
+        url: "/v1/artist-profile",
+        payload: { identity: "Profil local déjà édité." },
+      });
+
+      expect(update.statusCode).toBe(200);
+      await firstApp.close();
+      firstApp = undefined;
+
+      restartedApp = await createApp({ dataDir });
+      const profile = await restartedApp.inject({ method: "GET", url: "/v1/artist-profile" });
+
+      expect(profile.statusCode).toBe(200);
+      expect(profile.json()).toMatchObject({ data: { identity: "Profil local déjà édité." } });
+    } finally {
+      await firstApp?.close();
+      await restartedApp?.close();
+      await rm(dataDir, { recursive: true, force: true });
+    }
   });
 
   it("traite une commande de contenus inutilisés uniquement avec un outil READ", async () => {

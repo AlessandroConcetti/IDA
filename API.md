@@ -21,11 +21,20 @@ Le premier runtime est une API Fastify locale sur `http://127.0.0.1:8787`, conso
 | `GET /v1/me` | Livrée | Identité et workspace de démonstration, marqués `LOCAL_DEMO`. |
 | `GET /v1/modules` | Livrée | Registre des modules visibles du Command Center. |
 | `GET /v1/system/status` | Livrée | États factuels de la tranche locale ; les intégrations absentes sont `WARNING` ou `DISCONNECTED`. |
-| `GET /v1/artist-profile`, `/v1/releases`, `/v1/tracks`, `/v1/media`, `/v1/memories` | Livrées | Données de démonstration isolées par workspace côté serveur. `GET /v1/media?status=UNUSED` est supporté. |
+| `GET/PATCH /v1/artist-profile`, `/v1/releases`, `/v1/tracks`, `/v1/media`, `/v1/memories` | Livrées | Données de démonstration isolées par workspace côté serveur. L’Artist Brain est modifiable en interne via un outil `WRITE`; `GET /v1/media?status=UNUSED` est supporté. |
 | `GET /v1/social/platforms` | Livrée | Capacités déclaratives de démonstration ; aucune connexion sociale n’est créée. |
 | `POST /v1/ida/commands` | Livrée | Corps `{ "message": "…" }` ; commandes déterministes de lecture pour la journée, les contenus inutilisés et l’état système. |
 
-La commande retourne un objet `data` contenant la commande structurée, les outils de lecture autorisés et un résultat. Toute commande de mutation, publication, intégration externe ou accès financier est hors de cette tranche et reste refusée par conception.
+La commande retourne un objet `data` contenant la commande structurée, les outils de lecture autorisés et un résultat. À l’exception de la modification interne de l’Artist Brain décrite ci-dessous, toute mutation, publication, intégration externe ou accès financier est hors de cette tranche et reste refusée par conception.
+
+### Artist Brain local éditable
+
+`PATCH /v1/artist-profile` accepte un corps JSON partiel contenant un ou plusieurs des champs suivants : `identity`, `genres`, `influences`, `tone`, `preferredVocabulary`, `forbiddenVocabulary`, `goals`, `audience` et `platformPreferences`.
+
+- Le workspace et le projet ne font pas partie du corps : ils restent imposés par le contexte de démonstration serveur. Un champ inconnu, y compris `workspaceId` ou `artistProjectId`, est refusé avec `400 INVALID_ARTIST_PROFILE`.
+- L’action passe par l’outil interne allowlisté `update_artist_profile` avec la permission `WRITE`. Elle ne déclenche aucune publication, connexion OAuth, appel IA ou effet externe.
+- La mise à jour est partielle : les champs omis restent inchangés. Le bootstrap PGlite ajoute les colonnes de façon additive et le seed conserve `ON CONFLICT DO NOTHING`, afin de ne jamais remplacer un profil local déjà édité.
+- Les préférences de plateforme sont volontairement bornées à des formats préférés, une cadence hebdomadaire et une note, pour éviter de stocker une configuration externe arbitraire avant l’intégration officielle des plateformes.
 
 La version machine-lisible de ces routes est disponible dans [`docs/openapi/phase1-local.yaml`](docs/openapi/phase1-local.yaml). Elle décrit uniquement le runtime local existant, pas les endpoints projetés plus bas.
 
