@@ -1,11 +1,13 @@
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import {
+  createTrack,
   type DashboardSnapshot,
   fetchArtistBrain,
   fetchDashboardSnapshot,
   IdaApiError,
   isApiConfigured,
   submitIdaCommand,
+  type TrackCreateInput,
   updateArtistBrain,
 } from "./api";
 import {
@@ -240,7 +242,7 @@ function TrackPanel({ items, source }: { items: Track[]; source: DashboardSource
       </div>
       <div className="track-list">
         {items.map((track, index) => (
-          <article className="track-row" key={track.title}>
+          <article className="track-row" key={`${track.title}-${index}`}>
             <span className="track-index">0{index + 1}</span>
             <div className="track-information">
               <h3>{track.title}</h3>
@@ -359,18 +361,246 @@ function SocialView({ dashboard, source }: { dashboard: DashboardSnapshot; sourc
   );
 }
 
-function MusicView({ dashboard, source }: { dashboard: DashboardSnapshot; source: DashboardSource }) {
+type MusicTrackForm = {
+  title: string;
+  artistCredit: string;
+  genre: string;
+  bpm: string;
+  musicalKey: string;
+  releaseDate: string;
+  label: string;
+  status: Track["status"];
+  tags: string;
+  description: string;
+};
+
+const emptyMusicTrackForm: MusicTrackForm = {
+  title: "",
+  artistCredit: "",
+  genre: "",
+  bpm: "",
+  musicalKey: "",
+  releaseDate: "",
+  label: "",
+  status: "DEMO",
+  tags: "",
+  description: "",
+};
+
+const musicTrackStatuses: Track["status"][] = ["DEMO", "UNRELEASED", "SCHEDULED", "RELEASED", "ARCHIVED"];
+
+function optionalFormValue(value: string): string | undefined {
+  const trimmed = value.trim();
+
+  return trimmed || undefined;
+}
+
+function musicTrackFormToInput(form: MusicTrackForm): TrackCreateInput {
+  const bpmValue = form.bpm.trim();
+
+  return {
+    title: form.title.trim(),
+    artistCredit: form.artistCredit.trim(),
+    genre: optionalFormValue(form.genre),
+    bpm: bpmValue ? Number(bpmValue) : undefined,
+    musicalKey: optionalFormValue(form.musicalKey),
+    releaseDate: optionalFormValue(form.releaseDate),
+    label: optionalFormValue(form.label),
+    status: form.status,
+    tags: textToList(form.tags),
+    description: optionalFormValue(form.description),
+  };
+}
+
+function MusicView({
+  dashboard,
+  source,
+  onTrackCreated,
+}: {
+  dashboard: DashboardSnapshot;
+  source: DashboardSource;
+  onTrackCreated: (track: Track) => void;
+}) {
+  const [form, setForm] = useState<MusicTrackForm>(emptyMusicTrackForm);
+  const [notice, setNotice] = useState("Ajoute les métadonnées essentielles. Le workspace est résolu côté serveur.");
+  const [noticeState, setNoticeState] = useState<"default" | "success" | "error">("default");
+  const [isSaving, setIsSaving] = useState(false);
+
+  function updateField(field: keyof MusicTrackForm, value: string) {
+    setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const title = form.title.trim();
+    const artistCredit = form.artistCredit.trim();
+    const bpm = form.bpm.trim() ? Number(form.bpm) : undefined;
+
+    if (!title || !artistCredit) {
+      setNotice("Le titre et le crédit artiste sont nécessaires pour créer un morceau.");
+      setNoticeState("error");
+      return;
+    }
+
+    if (bpm !== undefined && (!Number.isFinite(bpm) || bpm <= 0 || bpm > 400)) {
+      setNotice("Le BPM doit être un nombre compris entre 1 et 400.");
+      setNoticeState("error");
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      const track = await createTrack(musicTrackFormToInput(form));
+      onTrackCreated(track);
+      setForm((current) => ({
+        ...emptyMusicTrackForm,
+        artistCredit: current.artistCredit,
+        label: current.label,
+      }));
+      setNotice(`« ${track.title} » a été ajouté au catalogue local IDA.`);
+      setNoticeState("success");
+    } catch (error: unknown) {
+      const reason = error instanceof IdaApiError ? error.message : "IDA API est indisponible.";
+      setNotice(`Aucun morceau n’a été enregistré : ${reason}`);
+      setNoticeState("error");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
   return (
-    <div className="page-grid">
+    <div className="page-grid music-view">
       <TrackPanel items={dashboard.tracks} source={source} />
-      <section className="panel helper-panel">
-        <p className="eyebrow">NEXT STEP</p>
-        <h2>Build the Music Brain.</h2>
-        <p>
-          Les données visibles sont un aperçu local. Les futurs endpoints chargeront tes vraies releases, tracks et
-          liens média.
+      <section className="panel music-entry-card" aria-labelledby="music-entry-title">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">CATALOGUE ENTRY</p>
+            <h2 id="music-entry-title">Add a track.</h2>
+          </div>
+          <span className="status-tag demo">LOCAL ONLY</span>
+        </div>
+        <p className="music-entry-intro">
+          Crée une fiche de morceau contrôlée. Aucun média, lien externe ou contenu public n’est créé ici.
         </p>
-        <span className="status-tag unreleased">READY FOR API</span>
+        <p className={`music-entry-notice ${noticeState}`} role="status">
+          <span aria-hidden="true" />
+          {notice}
+        </p>
+        <form className="music-entry-form" noValidate onSubmit={handleSubmit}>
+          <div className="music-entry-fields">
+            <label className="music-entry-field music-entry-field-wide">
+              <span>Titre</span>
+              <input
+                value={form.title}
+                onChange={(event) => updateField("title", event.target.value)}
+                placeholder="Nom du morceau"
+                required
+                disabled={isSaving}
+              />
+            </label>
+            <label className="music-entry-field">
+              <span>Crédit artiste</span>
+              <input
+                value={form.artistCredit}
+                onChange={(event) => updateField("artistCredit", event.target.value)}
+                placeholder="Artiste principal"
+                required
+                disabled={isSaving}
+              />
+            </label>
+            <label className="music-entry-field">
+              <span>Statut</span>
+              <select
+                value={form.status}
+                onChange={(event) => updateField("status", event.target.value)}
+                disabled={isSaving}
+              >
+                {musicTrackStatuses.map((status) => (
+                  <option key={status} value={status}>
+                    {status}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="music-entry-field">
+              <span>Genre</span>
+              <input
+                value={form.genre}
+                onChange={(event) => updateField("genre", event.target.value)}
+                placeholder="Melodic techno…"
+                disabled={isSaving}
+              />
+            </label>
+            <label className="music-entry-field">
+              <span>BPM</span>
+              <input
+                type="number"
+                inputMode="decimal"
+                min="1"
+                max="400"
+                step="0.01"
+                value={form.bpm}
+                onChange={(event) => updateField("bpm", event.target.value)}
+                placeholder="124"
+                disabled={isSaving}
+              />
+            </label>
+            <label className="music-entry-field">
+              <span>Tonalité</span>
+              <input
+                value={form.musicalKey}
+                onChange={(event) => updateField("musicalKey", event.target.value)}
+                placeholder="F♯ minor"
+                disabled={isSaving}
+              />
+            </label>
+            <label className="music-entry-field">
+              <span>Date de release</span>
+              <input
+                type="date"
+                value={form.releaseDate}
+                onChange={(event) => updateField("releaseDate", event.target.value)}
+                disabled={isSaving}
+              />
+            </label>
+            <label className="music-entry-field">
+              <span>Label</span>
+              <input
+                value={form.label}
+                onChange={(event) => updateField("label", event.target.value)}
+                placeholder="Optionnel"
+                disabled={isSaving}
+              />
+            </label>
+            <label className="music-entry-field">
+              <span>Tags</span>
+              <input
+                value={form.tags}
+                onChange={(event) => updateField("tags", event.target.value)}
+                placeholder="club, nocturne…"
+                disabled={isSaving}
+              />
+            </label>
+            <label className="music-entry-field music-entry-field-wide">
+              <span>Description</span>
+              <textarea
+                value={form.description}
+                onChange={(event) => updateField("description", event.target.value)}
+                placeholder="Contexte créatif ou notes de production…"
+                rows={3}
+                disabled={isSaving}
+              />
+            </label>
+          </div>
+          <div className="music-entry-actions">
+            <p>Tu pourras relier ce morceau à une release ou à des médias dans une prochaine tranche.</p>
+            <button className="send-button" type="submit" disabled={isSaving}>
+              {isSaving ? "Ajout…" : "Add track"}
+              <span aria-hidden="true">↗</span>
+            </button>
+          </div>
+        </form>
       </section>
     </div>
   );
@@ -809,17 +1039,19 @@ function SectionContent({
   messages,
   dashboard,
   source,
+  onTrackCreated,
 }: {
   activeId: NavigationId;
   messages: ConversationMessage[];
   dashboard: DashboardSnapshot;
   source: DashboardSource;
+  onTrackCreated: (track: Track) => void;
 }) {
   switch (activeId) {
     case "ida":
       return <IdaView messages={messages} />;
     case "music":
-      return <MusicView dashboard={dashboard} source={source} />;
+      return <MusicView dashboard={dashboard} source={source} onTrackCreated={onTrackCreated} />;
     case "content":
       return <ContentView dashboard={dashboard} />;
     case "social":
@@ -894,6 +1126,15 @@ function App() {
   function navigateTo(id: NavigationId) {
     setActiveId(id);
     setIsMoreOpen(false);
+  }
+
+  function handleTrackCreated(track: Track) {
+    setDashboard((current) => ({
+      ...current,
+      tracks: [track, ...current.tracks],
+    }));
+    setDashboardSource("api");
+    setDashboardNotice(`Catalogue synchronisé : « ${track.title} » a été ajouté au Music Brain.`);
   }
 
   async function handleCommand(command: string) {
@@ -1002,7 +1243,13 @@ function App() {
         </p>
 
         <div className="content-area">
-          <SectionContent activeId={activeId} messages={messages} dashboard={dashboard} source={dashboardSource} />
+          <SectionContent
+            activeId={activeId}
+            messages={messages}
+            dashboard={dashboard}
+            source={dashboardSource}
+            onTrackCreated={handleTrackCreated}
+          />
         </div>
       </main>
 

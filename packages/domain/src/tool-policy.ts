@@ -14,7 +14,9 @@ export interface ToolAuthorizationRequest {
   readonly explicitApproval?: ExplicitApproval;
 }
 
-export type ToolPolicyDenialCode = "APPROVAL_REQUIRED" | "SYSTEM_POLICY_REQUIRED";
+export type AllowedTool = Pick<ToolAuthorizationRequest, "toolKey" | "moduleKey" | "permission">;
+
+export type ToolPolicyDenialCode = "APPROVAL_REQUIRED" | "SYSTEM_POLICY_REQUIRED" | "TOOL_NOT_ALLOWED";
 
 export type ToolPolicyDecision =
   | { readonly allowed: true; readonly reason: string }
@@ -68,10 +70,34 @@ export class ToolPolicy {
 }
 
 export class ToolGateway {
-  constructor(private readonly policy: ToolPolicy = new ToolPolicy()) {}
+  constructor(
+    private readonly policy: ToolPolicy = new ToolPolicy(),
+    private readonly allowedTools?: readonly AllowedTool[],
+  ) {}
 
   authorize(request: ToolAuthorizationRequest): ToolPolicyDecision {
-    return this.policy.evaluate(request);
+    const policyDecision = this.policy.evaluate(request);
+
+    if (!policyDecision.allowed || !this.allowedTools) {
+      return policyDecision;
+    }
+
+    const isAllowed = this.allowedTools.some(
+      (tool) =>
+        tool.toolKey === request.toolKey &&
+        tool.moduleKey === request.moduleKey &&
+        tool.permission === request.permission,
+    );
+
+    if (!isAllowed) {
+      return {
+        allowed: false,
+        code: "TOOL_NOT_ALLOWED",
+        reason: `L’outil ${request.toolKey} n’est pas autorisé dans cette tranche.`,
+      };
+    }
+
+    return policyDecision;
   }
 
   assertAuthorized(request: ToolAuthorizationRequest): void {

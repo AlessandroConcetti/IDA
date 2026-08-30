@@ -4,8 +4,9 @@ info:
   version: 0.1.0
   description: >-
     Contrat du runtime de développement local. Il expose uniquement des données
-    de démonstration, des commandes IDA déterministes en lecture seule et une
-    modification interne bornée de l’Artist Brain.
+    de démonstration, des commandes IDA déterministes en lecture seule, une
+    modification interne bornée de l’Artist Brain et une création Music Brain
+    strictement contrôlée.
 servers:
   - url: http://127.0.0.1:8787
     description: API locale de développement
@@ -117,6 +118,33 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TrackListResponse'
+    post:
+      operationId: createTrack
+      summary: Ajoute un morceau interne au Music Brain local
+      description: >-
+        Utilise le contexte workspace, le projet et l'acteur imposés par le
+        serveur, puis l'outil interne allowlisté create_track avec la permission
+        WRITE. Aucun champ de scope, upload, association média ou effet externe
+        n'est accepté.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TrackCreateRequest'
+      responses:
+        '201':
+          description: Morceau local créé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrackResponse'
+        '400':
+          $ref: '#/components/responses/InvalidTrack'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /v1/media:
     get:
       operationId: listMedia
@@ -190,6 +218,12 @@ components:
             $ref: '#/components/schemas/ErrorResponse'
     InvalidArtistProfile:
       description: Corps Artist Brain invalide ou tentative de définir le scope client
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InvalidTrack:
+      description: Corps Music Brain invalide ou tentative de définir le scope client
       content:
         application/json:
           schema:
@@ -436,14 +470,50 @@ components:
         workspaceId: { type: string }
         artistProjectId: { type: string }
         releaseId: { type: string }
-        title: { type: string }
-        artistCredit: { type: string }
-        bpm: { type: number }
-        musicalKey: { type: string }
+        title: { type: string, minLength: 1, maxLength: 240 }
+        artistCredit: { type: string, minLength: 1, maxLength: 240 }
+        genre: { type: string, minLength: 1, maxLength: 120 }
+        bpm: { type: number, exclusiveMinimum: 0, maximum: 400 }
+        musicalKey: { type: string, minLength: 1, maxLength: 32 }
+        releaseDate: { type: string, format: date }
+        label: { type: string, minLength: 1, maxLength: 240 }
         status:
           enum: [DEMO, UNRELEASED, SCHEDULED, RELEASED, ARCHIVED]
+        links:
+          type: array
+          items: { type: string, format: uri }
+        tags:
+          type: array
+          maxItems: 30
+          items: { type: string, minLength: 1, maxLength: 80 }
+        description: { type: string, minLength: 1, maxLength: 4000 }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    TrackCreateRequest:
+      type: object
+      required: [title, artistCredit, status]
+      additionalProperties: false
+      properties:
+        title: { type: string, minLength: 1, maxLength: 240 }
+        artistCredit: { type: string, minLength: 1, maxLength: 240 }
+        genre: { type: string, minLength: 1, maxLength: 120 }
+        bpm: { type: number, exclusiveMinimum: 0, maximum: 400 }
+        musicalKey: { type: string, minLength: 1, maxLength: 32 }
+        releaseDate: { type: string, format: date }
+        label: { type: string, minLength: 1, maxLength: 240 }
+        status:
+          enum: [DEMO, UNRELEASED, SCHEDULED, RELEASED, ARCHIVED]
+        tags:
+          type: array
+          maxItems: 30
+          items: { type: string, minLength: 1, maxLength: 80 }
+        description: { type: string, minLength: 1, maxLength: 4000 }
+    TrackResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/Track'
     TrackListResponse:
       type: object
       required: [data]

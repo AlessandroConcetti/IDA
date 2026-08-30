@@ -86,6 +86,97 @@ describe("IDA API — première tranche Phase 1", () => {
     expect(body.data.some((asset) => asset.filename === "private-other-video.mp4")).toBe(false);
   });
 
+  it("crée un morceau Music Brain avec un outil WRITE et le conserve dans le workspace serveur", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/tracks",
+      payload: {
+        title: "Signal Horizon",
+        artistCredit: "Aless",
+        genre: "Melodic techno",
+        bpm: 128,
+        musicalKey: "E minor",
+        releaseDate: "2026-10-03",
+        label: "Aural Motion",
+        status: "UNRELEASED",
+        tags: ["club", "draft"],
+        description: "Démo construite autour d’un break progressif.",
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toMatchObject({
+      data: {
+        id: expect.stringMatching(/^trk_[a-f0-9]{32}$/),
+        workspaceId: "wsp_demo_aless",
+        artistProjectId: "prj_demo_aless",
+        title: "Signal Horizon",
+        artistCredit: "Aless",
+        genre: "Melodic techno",
+        bpm: 128,
+        musicalKey: "E minor",
+        releaseDate: "2026-10-03",
+        label: "Aural Motion",
+        status: "UNRELEASED",
+        tags: ["club", "draft"],
+        description: "Démo construite autour d’un break progressif.",
+      },
+    });
+
+    const tracks = await app.inject({ method: "GET", url: "/v1/tracks" });
+    expect(tracks.statusCode).toBe(200);
+    expect((tracks.json() as { data: Array<{ title: string; workspaceId: string }> }).data).toEqual(
+      expect.arrayContaining([expect.objectContaining({ title: "Signal Horizon", workspaceId: "wsp_demo_aless" })]),
+    );
+  });
+
+  it("refuse un morceau Music Brain invalide avant toute écriture", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/tracks",
+      payload: {
+        title: "Sans tempo valide",
+        artistCredit: "Aless",
+        bpm: 0,
+        status: "DEMO",
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({ error: { code: "INVALID_TRACK" } });
+
+    const tracks = await app.inject({ method: "GET", url: "/v1/tracks" });
+    expect((tracks.json() as { data: Array<{ title: string }> }).data).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ title: "Sans tempo valide" })]),
+    );
+  });
+
+  it("refuse toute tentative de choisir le workspace pendant la création d’un morceau", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/tracks",
+      payload: {
+        workspaceId: "wsp_other",
+        title: "Tentative hors périmètre",
+        artistCredit: "Aless",
+        status: "DEMO",
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({ error: { code: "INVALID_TRACK" } });
+
+    const tracks = await app.inject({ method: "GET", url: "/v1/tracks?workspaceId=wsp_other" });
+    expect((tracks.json() as { data: Array<{ title: string; workspaceId: string }> }).data).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ title: "Tentative hors périmètre" })]),
+    );
+    expect(
+      (tracks.json() as { data: Array<{ workspaceId: string }> }).data.every(
+        (track) => track.workspaceId === "wsp_demo_aless",
+      ),
+    ).toBe(true);
+  });
+
   it("met à jour et persiste l’Artist Brain avec un outil WRITE sans écraser les autres champs", async () => {
     const firstUpdate = await app.inject({
       method: "PATCH",

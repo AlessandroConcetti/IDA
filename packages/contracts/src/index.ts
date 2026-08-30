@@ -155,27 +155,55 @@ export type Release = z.infer<typeof releaseSchema>;
 export const trackStatusSchema = z.enum(["DEMO", "UNRELEASED", "SCHEDULED", "RELEASED", "ARCHIVED"]);
 export type TrackStatus = z.infer<typeof trackStatusSchema>;
 
+const trackTitleSchema = z.string().trim().min(1).max(240);
+const trackArtistCreditSchema = z.string().trim().min(1).max(240);
+const trackGenreSchema = z.string().trim().min(1).max(120);
+const trackMusicalKeySchema = z.string().trim().min(1).max(32);
+const trackLabelSchema = z.string().trim().min(1).max(240);
+const trackTagSchema = z.string().trim().min(1).max(80);
+const trackTagsSchema = z.array(trackTagSchema).max(30);
+const trackDescriptionSchema = z.string().trim().min(1).max(4_000);
+
 export const trackSchema = z.object({
   id: entityIdSchema,
   workspaceId: entityIdSchema,
   artistProjectId: entityIdSchema,
   releaseId: entityIdSchema.optional(),
-  title: z.string().trim().min(1),
-  artistCredit: z.string().trim().min(1),
-  genre: z.string().trim().min(1).optional(),
+  title: trackTitleSchema,
+  artistCredit: trackArtistCreditSchema,
+  genre: trackGenreSchema.optional(),
   bpm: z.number().positive().max(400).optional(),
-  musicalKey: z.string().trim().min(1).optional(),
+  musicalKey: trackMusicalKeySchema.optional(),
   releaseDate: z.string().date().optional(),
-  label: z.string().trim().min(1).optional(),
+  label: trackLabelSchema.optional(),
   status: trackStatusSchema,
   links: z.array(z.string().url()).default([]),
-  tags: z.array(z.string().trim().min(1)).default([]),
-  description: z.string().trim().optional(),
+  tags: trackTagsSchema.default([]),
+  description: trackDescriptionSchema.optional(),
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
 });
 
 export type Track = z.infer<typeof trackSchema>;
+
+// Le projet et le workspace sont résolus par le backend : le client ne peut
+// pas les injecter dans une création de morceau.
+export const trackCreateSchema = z
+  .object({
+    title: trackTitleSchema,
+    artistCredit: trackArtistCreditSchema,
+    genre: trackGenreSchema.optional(),
+    bpm: z.number().finite().positive().max(400).optional(),
+    musicalKey: trackMusicalKeySchema.optional(),
+    releaseDate: z.string().date().optional(),
+    label: trackLabelSchema.optional(),
+    status: trackStatusSchema,
+    tags: trackTagsSchema.default([]),
+    description: trackDescriptionSchema.optional(),
+  })
+  .strict();
+
+export type TrackCreate = z.infer<typeof trackCreateSchema>;
 
 export const mediaTypeSchema = z.enum(["IMAGE", "VIDEO", "AUDIO", "DOCUMENT", "OTHER"]);
 export type MediaType = z.infer<typeof mediaTypeSchema>;

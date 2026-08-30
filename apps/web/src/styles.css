@@ -26,6 +26,7 @@ body {
 
 button,
 input,
+select,
 textarea {
   font: inherit;
 }
@@ -40,6 +41,7 @@ button:disabled {
 
 button:focus-visible,
 input:focus-visible,
+select:focus-visible,
 textarea:focus-visible {
   outline: 2px solid #a79bff;
   outline-offset: 3px;
@@ -1157,6 +1159,145 @@ h3 {
   line-height: 1.5;
 }
 
+.music-entry-card {
+  align-self: start;
+  background: radial-gradient(circle at 94% 0%, rgba(114, 100, 255, 0.16), transparent 45%), rgba(18, 21, 30, 0.78);
+}
+
+.music-entry-intro {
+  margin: -4px 0 0;
+  color: #9399aa;
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+.music-entry-notice {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 13px 0 0;
+  color: #8f96a8;
+  font-size: 0.67rem;
+  line-height: 1.4;
+}
+
+.music-entry-notice > span {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: #8e96a6;
+}
+
+.music-entry-notice.success {
+  color: #96d6bf;
+}
+
+.music-entry-notice.success > span {
+  background: #60d4b1;
+  box-shadow: 0 0 10px rgba(96, 212, 177, 0.45);
+}
+
+.music-entry-notice.error {
+  color: #e1b479;
+}
+
+.music-entry-notice.error > span {
+  background: #e4b271;
+}
+
+.music-entry-form {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.075);
+}
+
+.music-entry-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.music-entry-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.music-entry-field-wide {
+  grid-column: 1 / -1;
+}
+
+.music-entry-field > span {
+  color: #b0b4c1;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.075em;
+  text-transform: uppercase;
+}
+
+.music-entry-field input,
+.music-entry-field select,
+.music-entry-field textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 11px;
+  color: #e9e9f1;
+  border: 1px solid rgba(255, 255, 255, 0.095);
+  border-radius: 10px;
+  outline: 0;
+  background: rgba(7, 9, 14, 0.54);
+  color-scheme: dark;
+  line-height: 1.4;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease;
+}
+
+.music-entry-field select {
+  min-height: 40px;
+}
+
+.music-entry-field textarea {
+  resize: vertical;
+}
+
+.music-entry-field input:focus,
+.music-entry-field select:focus,
+.music-entry-field textarea:focus {
+  border-color: rgba(164, 152, 255, 0.7);
+  background: rgba(5, 7, 11, 0.74);
+}
+
+.music-entry-field input::placeholder,
+.music-entry-field textarea::placeholder {
+  color: #6f7585;
+}
+
+.music-entry-field input:disabled,
+.music-entry-field select:disabled,
+.music-entry-field textarea:disabled {
+  opacity: 0.65;
+}
+
+.music-entry-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-top: 17px;
+}
+
+.music-entry-actions p {
+  max-width: 330px;
+  margin-bottom: 0;
+  color: #8f95a5;
+  font-size: 0.71rem;
+  line-height: 1.45;
+}
+
 .metrics-grid span {
   color: #7e8596;
   font-size: 0.63rem;
@@ -1351,15 +1492,18 @@ h3 {
   .social-list,
   .metrics-grid,
   .memory-grid,
-  .artist-brain-fields {
+  .artist-brain-fields,
+  .music-entry-fields {
     grid-template-columns: 1fr;
   }
 
-  .artist-brain-field-wide {
+  .artist-brain-field-wide,
+  .music-entry-field-wide {
     grid-column: auto;
   }
 
-  .artist-brain-actions {
+  .artist-brain-actions,
+  .music-entry-actions {
     align-items: flex-start;
     flex-direction: column;
   }

@@ -1,7 +1,8 @@
+import { randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { PGlite } from "@electric-sql/pglite";
-import type { ArtistProfile as ArtistProfileContract, ArtistProfileUpdate } from "@ida/contracts";
+import type { ArtistProfile as ArtistProfileContract, ArtistProfileUpdate, TrackCreate } from "@ida/contracts";
 
 import { demoContext, demoWorkspace } from "./demo-context.js";
 
@@ -45,14 +46,20 @@ export type Release = {
 
 export type Track = {
   id: string;
+  projectId: string;
   releaseId: string | null;
   title: string;
   artistCredit: string;
   genre: string | null;
   bpm: number | null;
   musicalKey: string | null;
-  status: string;
   releaseDate: string | null;
+  label: string | null;
+  status: string;
+  tags: string[];
+  description: string | null;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type MediaAsset = {
@@ -181,6 +188,26 @@ function asPlatformPreferences(value: unknown): ArtistProfileContract["platformP
 
 function isPersistentDirectory(dataDir: string): boolean {
   return !dataDir.startsWith("memory://");
+}
+
+function toTrack(row: ScalarRow): Track {
+  return {
+    id: asString(row.id),
+    projectId: asString(row.projectId),
+    releaseId: asNullableString(row.releaseId),
+    title: asString(row.title),
+    artistCredit: asString(row.artistCredit),
+    genre: asNullableString(row.genre),
+    bpm: row.bpm === null || row.bpm === undefined ? null : asNumber(row.bpm),
+    musicalKey: asNullableString(row.musicalKey),
+    releaseDate: asDateString(row.releaseDate),
+    label: asNullableString(row.label),
+    status: asString(row.status),
+    tags: asStringArray(row.tags),
+    description: asNullableString(row.description),
+    createdAt: asTimestamp(row.createdAt) ?? "1970-01-01T00:00:00.000Z",
+    updatedAt: asTimestamp(row.updatedAt) ?? "1970-01-01T00:00:00.000Z",
+  };
 }
 
 export class DemoDatabase {
@@ -347,14 +374,20 @@ export class DemoDatabase {
       `
         SELECT
           id,
+          artist_project_id AS "projectId",
           release_id AS "releaseId",
           title,
           artist_credit AS "artistCredit",
           genre,
           bpm,
           musical_key AS "musicalKey",
+          release_date AS "releaseDate",
+          label,
           status,
-          release_date AS "releaseDate"
+          tags,
+          description,
+          created_at AS "createdAt",
+          updated_at AS "updatedAt"
         FROM tracks
         WHERE workspace_id = $1
         ORDER BY release_date NULLS LAST, title
@@ -362,17 +395,102 @@ export class DemoDatabase {
       [workspaceId],
     );
 
-    return result.rows.map((row) => ({
-      id: asString(row.id),
-      releaseId: asNullableString(row.releaseId),
-      title: asString(row.title),
-      artistCredit: asString(row.artistCredit),
-      genre: asNullableString(row.genre),
-      bpm: row.bpm === null || row.bpm === undefined ? null : asNumber(row.bpm),
-      musicalKey: asNullableString(row.musicalKey),
-      status: asString(row.status),
-      releaseDate: asDateString(row.releaseDate),
-    }));
+    return result.rows.map(toTrack);
+  }
+
+  async createTrack(workspaceId: string, actorUserId: string, input: TrackCreate): Promise<Track | null> {
+    return this.pglite.transaction(async (transaction) => {
+      const projectResult = await transaction.query<ScalarRow>(
+        `
+          SELECT id
+          FROM artist_projects
+          WHERE workspace_id = $1
+          ORDER BY created_at ASC
+          LIMIT 1
+        `,
+        [workspaceId],
+      );
+      const project = projectResult.rows[0];
+
+      if (!project) {
+        return null;
+      }
+
+      const projectId = asString(project.id);
+
+      // Un ID est généré côté serveur et la contrainte primaire conserve la
+      // garantie d'unicité même dans le cas extrêmement improbable d'une collision.
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const trackId = `trk_${randomUUID().replaceAll("-", "")}`;
+        const result = await transaction.query<ScalarRow>(
+          `
+            INSERT INTO tracks (
+              id, workspace_id, artist_project_id, title, artist_credit, genre, bpm,
+              musical_key, release_date, label, tags, description, status
+            )
+            VALUES (
+              $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::json, $12, $13
+            )
+            ON CONFLICT (id) DO NOTHING
+            RETURNING
+              id,
+              artist_project_id AS "projectId",
+              release_id AS "releaseId",
+              title,
+              artist_credit AS "artistCredit",
+              genre,
+              bpm,
+              musical_key AS "musicalKey",
+              release_date AS "releaseDate",
+              label,
+              status,
+              tags,
+              description,
+              created_at AS "createdAt",
+              updated_at AS "updatedAt"
+          `,
+          [
+            trackId,
+            workspaceId,
+            projectId,
+            input.title,
+            input.artistCredit,
+            input.genre ?? null,
+            input.bpm ?? null,
+            input.musicalKey ?? null,
+            input.releaseDate ?? null,
+            input.label ?? null,
+            JSON.stringify(input.tags),
+            input.description ?? null,
+            input.status,
+          ],
+        );
+        const row = result.rows[0];
+
+        if (!row) {
+          continue;
+        }
+
+        const track = toTrack(row);
+        await transaction.query(
+          `
+            INSERT INTO activity_logs (id, workspace_id, actor_user_id, action, entity_type, entity_id, payload)
+            VALUES ($1, $2, $3, 'track.created', 'TRACK', $4, $5::json)
+          `,
+          [
+            `act_${randomUUID().replaceAll("-", "")}`,
+            workspaceId,
+            actorUserId,
+            track.id,
+            JSON.stringify({ status: track.status, title: track.title }),
+          ],
+        );
+
+        return track;
+      }
+
+      throw new Error("Impossible de générer un identifiant unique pour le morceau.");
+    });
   }
 
   async listMedia(workspaceId: string, status?: MediaStatus): Promise<MediaAsset[]> {
@@ -588,8 +706,12 @@ export class DemoDatabase {
         bpm NUMERIC,
         musical_key TEXT,
         release_date DATE,
+        label TEXT,
+        tags JSON NOT NULL DEFAULT '[]'::json,
+        description TEXT,
         status TEXT NOT NULL,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
 
       CREATE TABLE IF NOT EXISTS media_assets (
@@ -664,10 +786,23 @@ export class DemoDatabase {
         status TEXT NOT NULL
       );
 
+      CREATE TABLE IF NOT EXISTS activity_logs (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL REFERENCES workspaces(id),
+        actor_user_id TEXT NOT NULL REFERENCES users(id),
+        action TEXT NOT NULL,
+        entity_type TEXT NOT NULL,
+        entity_id TEXT NOT NULL,
+        payload JSON NOT NULL DEFAULT '{}'::json,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+
       CREATE INDEX IF NOT EXISTS idx_releases_workspace_date
         ON releases (workspace_id, release_date);
       CREATE INDEX IF NOT EXISTS idx_tracks_workspace_status
         ON tracks (workspace_id, status);
+      CREATE INDEX IF NOT EXISTS idx_activity_logs_workspace_created
+        ON activity_logs (workspace_id, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_media_workspace_status
         ON media_assets (workspace_id, status);
       CREATE INDEX IF NOT EXISTS idx_memories_workspace_created
@@ -688,6 +823,14 @@ export class DemoDatabase {
       ALTER TABLE artist_profiles
         ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
       ALTER TABLE artist_profiles
+        ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+      ALTER TABLE tracks
+        ADD COLUMN IF NOT EXISTS label TEXT;
+      ALTER TABLE tracks
+        ADD COLUMN IF NOT EXISTS tags JSON NOT NULL DEFAULT '[]'::json;
+      ALTER TABLE tracks
+        ADD COLUMN IF NOT EXISTS description TEXT;
+      ALTER TABLE tracks
         ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
     `);
   }

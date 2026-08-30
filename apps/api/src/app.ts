@@ -7,12 +7,13 @@ import {
   memorySchema,
   releaseSchema,
   socialPlatformCapabilitySchema,
+  trackCreateSchema,
   trackSchema,
 } from "@ida/contracts";
 import { createModuleRegistry, ToolGateway, ToolPolicyError } from "@ida/domain";
 import Fastify, { type FastifyInstance } from "fastify";
 
-import { type ArtistProfile, DemoDatabase, type DemoDatabaseOptions, mediaStatuses } from "./database.js";
+import { type ArtistProfile, DemoDatabase, type DemoDatabaseOptions, mediaStatuses, type Track } from "./database.js";
 import { demoContext, demoWorkspace } from "./demo-context.js";
 import { CommandInputError, DeterministicIdaCore } from "./ida-core.js";
 
@@ -50,6 +51,15 @@ class ArtistProfileInputError extends Error {
   }
 }
 
+class TrackInputError extends Error {
+  readonly statusCode = 400;
+  readonly code = "INVALID_TRACK";
+
+  constructor() {
+    super("Les champs transmis pour le morceau sont invalides.");
+  }
+}
+
 function toArtistProfileResponse(profile: ArtistProfile) {
   return artistProfileSchema.parse({
     id: profile.id,
@@ -69,12 +79,37 @@ function toArtistProfileResponse(profile: ArtistProfile) {
   });
 }
 
+function toTrackResponse(track: Track) {
+  return trackSchema.parse({
+    id: track.id,
+    workspaceId: demoContext.workspaceId,
+    artistProjectId: track.projectId,
+    releaseId: optionalString(track.releaseId),
+    title: track.title,
+    artistCredit: track.artistCredit,
+    genre: optionalString(track.genre),
+    bpm: track.bpm ?? undefined,
+    musicalKey: optionalString(track.musicalKey),
+    releaseDate: optionalString(track.releaseDate),
+    label: optionalString(track.label),
+    status: track.status,
+    links: [],
+    tags: track.tags,
+    description: optionalString(track.description),
+    createdAt: track.createdAt,
+    updatedAt: track.updatedAt,
+  });
+}
+
 export async function createApp(options: CreateAppOptions = {}): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   const database = await DemoDatabase.open(options);
   const core = new DeterministicIdaCore(database, undefined, options.now);
   const modules = createModuleRegistry();
-  const toolGateway = new ToolGateway();
+  const toolGateway = new ToolGateway(undefined, [
+    { toolKey: "update_artist_profile", moduleKey: "MEMORY", permission: "WRITE" },
+    { toolKey: "create_track", moduleKey: "MUSIC", permission: "WRITE" },
+  ]);
 
   await app.register(cors, {
     origin: "http://127.0.0.1:5173",
@@ -202,31 +237,36 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
 
   app.get("/v1/tracks", async () => {
     const tracks = await database.listTracks(demoContext.workspaceId);
-    const timestamp = "2026-08-30T00:00:00.000Z";
 
     return {
-      data: tracks.map((track) =>
-        trackSchema.parse({
-          id: track.id,
-          workspaceId: demoContext.workspaceId,
-          artistProjectId: "prj_demo_aless",
-          releaseId: optionalString(track.releaseId),
-          title: track.title,
-          artistCredit: track.artistCredit,
-          genre: optionalString(track.genre),
-          bpm: track.bpm ?? undefined,
-          musicalKey: optionalString(track.musicalKey),
-          releaseDate: optionalString(track.releaseDate),
-          label: "Aural Motion",
-          status: track.status,
-          links: [],
-          tags: [],
-          description: undefined,
-          createdAt: timestamp,
-          updatedAt: timestamp,
-        }),
-      ),
+      data: tracks.map(toTrackResponse),
     };
+  });
+
+  app.post("/v1/tracks", async (request, reply) => {
+    const input = trackCreateSchema.safeParse(request.body);
+
+    if (!input.success) {
+      throw new TrackInputError();
+    }
+
+    toolGateway.assertAuthorized({
+      toolKey: "create_track",
+      moduleKey: "MUSIC",
+      permission: "WRITE",
+    });
+
+    // Le client ne transmet aucun scope : workspace, projet et acteur sont
+    // résolus par le contexte serveur local avant l'écriture.
+    const track = await database.createTrack(demoContext.workspaceId, demoContext.userId, input.data);
+
+    if (!track) {
+      return reply.status(404).send({
+        error: { code: "ARTIST_PROJECT_NOT_FOUND", message: "Projet artistique introuvable." },
+      });
+    }
+
+    return reply.status(201).send({ data: toTrackResponse(track) });
   });
 
   app.get("/v1/media", async (request) => {

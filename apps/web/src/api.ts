@@ -12,6 +12,19 @@ export interface DashboardSnapshot {
   mediaAssets: MediaAsset[];
 }
 
+export interface TrackCreateInput {
+  title: string;
+  artistCredit: string;
+  genre?: string;
+  bpm?: number;
+  musicalKey?: string;
+  releaseDate?: string;
+  label?: string;
+  status: Track["status"];
+  tags?: string[];
+  description?: string;
+}
+
 export class IdaApiError extends Error {
   public readonly status?: number;
 
@@ -92,6 +105,15 @@ function extractErrorMessage(payload: unknown, status: number): string {
 }
 
 export async function submitIdaCommand(text: string): Promise<IdaCommandResult> {
+  return extractResult(
+    await postApiJson("/v1/ida/commands", {
+      message: text,
+      source: "web",
+    }),
+  );
+}
+
+async function postApiJson(path: string, body: unknown): Promise<unknown> {
   if (!isApiConfigured) {
     throw new IdaApiError("VITE_IDA_API_URL n’est pas configurée.");
   }
@@ -99,17 +121,14 @@ export async function submitIdaCommand(text: string): Promise<IdaCommandResult> 
   let response: Response;
 
   try {
-    response = await fetch(`${apiBaseUrl}/v1/ida/commands`, {
+    response = await fetch(`${apiBaseUrl}${path}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
         "X-Request-Id": createRequestId(),
       },
-      body: JSON.stringify({
-        message: text,
-        source: "web",
-      }),
+      body: JSON.stringify(body),
     });
   } catch {
     throw new IdaApiError("IDA API est indisponible.");
@@ -121,7 +140,7 @@ export async function submitIdaCommand(text: string): Promise<IdaCommandResult> 
     throw new IdaApiError(extractErrorMessage(payload, response.status), response.status);
   }
 
-  return extractResult(payload);
+  return payload;
 }
 
 async function getApiJson(path: string): Promise<unknown> {
@@ -152,6 +171,10 @@ async function getApiJson(path: string): Promise<unknown> {
 }
 
 async function patchApiJson(path: string, body: unknown): Promise<unknown> {
+  if (!isApiConfigured) {
+    throw new IdaApiError("VITE_IDA_API_URL n’est pas configurée.");
+  }
+
   let response: Response;
 
   try {
@@ -183,6 +206,18 @@ function readDataObject(payload: unknown, endpoint: string): Record<string, unkn
   }
 
   return payload.data;
+}
+
+function readDataObjectOrDirect(payload: unknown, endpoint: string): Record<string, unknown> {
+  if (!isRecord(payload)) {
+    throw new IdaApiError(`La réponse ${endpoint} n’a pas le format attendu.`);
+  }
+
+  if (isRecord(payload.data)) {
+    return payload.data;
+  }
+
+  return payload;
 }
 
 function readDataList(payload: unknown, endpoint: string): Record<string, unknown>[] {
@@ -289,23 +324,29 @@ export async function updateArtistBrain(profile: ArtistBrain): Promise<ArtistBra
   return toArtistBrain(await patchApiJson("/v1/artist-profile", profile));
 }
 
+function toTrack(record: Record<string, unknown>): Track {
+  const status = trackStatus(record.status);
+  const releaseDate = readString(record.releaseDate);
+  const bpm = readNumber(record.bpm);
+
+  return {
+    title: readString(record.title) ?? "Untitled track",
+    project: readString(record.label, record.artistCredit, record.genre) ?? "Artist workspace",
+    status,
+    bpm,
+    key: readString(record.musicalKey) ?? "Key not set",
+    freshness: releaseDate ? `Release ${releaseDate}` : status === "RELEASED" ? "Released catalogue" : "API track",
+  };
+}
+
 function toTracks(payload: unknown): Track[] {
-  const records = readDataList(payload, "/v1/tracks");
+  return readDataList(payload, "/v1/tracks").map(toTrack);
+}
 
-  return records.map((record) => {
-    const status = trackStatus(record.status);
-    const releaseDate = readString(record.releaseDate);
-    const bpm = readNumber(record.bpm);
+export async function createTrack(input: TrackCreateInput): Promise<Track> {
+  const payload = await postApiJson("/v1/tracks", input);
 
-    return {
-      title: readString(record.title) ?? "Untitled track",
-      project: readString(record.label, record.artistCredit, record.genre) ?? "Artist workspace",
-      status,
-      bpm,
-      key: readString(record.musicalKey) ?? "Key not set",
-      freshness: releaseDate ? `Release ${releaseDate}` : status === "RELEASED" ? "Released catalogue" : "API track",
-    };
-  });
+  return toTrack(readDataObjectOrDirect(payload, "/v1/tracks"));
 }
 
 function toMediaAssets(payload: unknown): MediaAsset[] {

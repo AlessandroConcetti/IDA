@@ -21,11 +21,11 @@ Le premier runtime est une API Fastify locale sur `http://127.0.0.1:8787`, conso
 | `GET /v1/me` | Livrée | Identité et workspace de démonstration, marqués `LOCAL_DEMO`. |
 | `GET /v1/modules` | Livrée | Registre des modules visibles du Command Center. |
 | `GET /v1/system/status` | Livrée | États factuels de la tranche locale ; les intégrations absentes sont `WARNING` ou `DISCONNECTED`. |
-| `GET/PATCH /v1/artist-profile`, `/v1/releases`, `/v1/tracks`, `/v1/media`, `/v1/memories` | Livrées | Données de démonstration isolées par workspace côté serveur. L’Artist Brain est modifiable en interne via un outil `WRITE`; `GET /v1/media?status=UNUSED` est supporté. |
+| `GET/PATCH /v1/artist-profile`, `/v1/releases`, `GET/POST /v1/tracks`, `/v1/media`, `/v1/memories` | Livrées | Données de démonstration isolées par workspace côté serveur. L’Artist Brain et la création bornée d’un morceau Music Brain passent par des outils `WRITE` allowlistés ; `GET /v1/media?status=UNUSED` est supporté. |
 | `GET /v1/social/platforms` | Livrée | Capacités déclaratives de démonstration ; aucune connexion sociale n’est créée. |
 | `POST /v1/ida/commands` | Livrée | Corps `{ "message": "…" }` ; commandes déterministes de lecture pour la journée, les contenus inutilisés et l’état système. |
 
-La commande retourne un objet `data` contenant la commande structurée, les outils de lecture autorisés et un résultat. À l’exception de la modification interne de l’Artist Brain décrite ci-dessous, toute mutation, publication, intégration externe ou accès financier est hors de cette tranche et reste refusée par conception.
+La commande retourne un objet `data` contenant la commande structurée, les outils de lecture autorisés et un résultat. À l’exception de la modification interne de l’Artist Brain et de la création Music Brain bornée décrites ci-dessous, toute mutation, publication, intégration externe ou accès financier est hors de cette tranche et reste refusée par conception.
 
 ### Artist Brain local éditable
 
@@ -35,6 +35,15 @@ La commande retourne un objet `data` contenant la commande structurée, les outi
 - L’action passe par l’outil interne allowlisté `update_artist_profile` avec la permission `WRITE`. Elle ne déclenche aucune publication, connexion OAuth, appel IA ou effet externe.
 - La mise à jour est partielle : les champs omis restent inchangés. Le bootstrap PGlite ajoute les colonnes de façon additive et le seed conserve `ON CONFLICT DO NOTHING`, afin de ne jamais remplacer un profil local déjà édité.
 - Les préférences de plateforme sont volontairement bornées à des formats préférés, une cadence hebdomadaire et une note, pour éviter de stocker une configuration externe arbitraire avant l’intégration officielle des plateformes.
+
+### Music Brain : ajout local contrôlé
+
+`POST /v1/tracks` accepte un morceau interne avec les champs requis `title`, `artistCredit` et `status`, ainsi que les champs optionnels `genre`, `bpm`, `musicalKey`, `releaseDate`, `label`, `tags` et `description`.
+
+- Le corps est strict : ni `workspaceId`, ni `artistProjectId`, ni `releaseId`, ni identifiant client ne sont acceptés. Le serveur résout le workspace, le premier projet artistique local et l’acteur avant de créer le morceau ; toute tentative d’injection de scope retourne `400 INVALID_TRACK`.
+- L’écriture passe exclusivement par l’outil interne allowlisté `create_track` (`MUSIC`, `WRITE`). Il n’y a ni upload, ni association à un média, ni effet social ou externe.
+- L’identifiant `trk_…` est généré côté serveur, la clé primaire le protège contre les collisions et une activité append-only `track.created` est ajoutée dans le journal local.
+- Les valeurs sont bornées (BPM strictement positif et au plus 400, 30 tags maximum, description au plus 4 000 caractères). Une création réussie retourne `201 Created` et le morceau est visible uniquement dans `GET /v1/tracks` du workspace imposé par le serveur.
 
 La version machine-lisible de ces routes est disponible dans [`docs/openapi/phase1-local.yaml`](docs/openapi/phase1-local.yaml). Elle décrit uniquement le runtime local existant, pas les endpoints projetés plus bas.
 

@@ -22,4 +22,16 @@ describe("ToolGateway", () => {
       code: "APPROVAL_REQUIRED",
     });
   });
+
+  it("peut limiter explicitement les outils WRITE autorisés", () => {
+    const gateway = new ToolGateway(undefined, [{ toolKey: "create_track", moduleKey: "MUSIC", permission: "WRITE" }]);
+
+    expect(gateway.authorize({ toolKey: "create_track", moduleKey: "MUSIC", permission: "WRITE" })).toMatchObject({
+      allowed: true,
+    });
+    expect(gateway.authorize({ toolKey: "delete_track", moduleKey: "MUSIC", permission: "WRITE" })).toMatchObject({
+      allowed: false,
+      code: "TOOL_NOT_ALLOWED",
+    });
+  });
 });
