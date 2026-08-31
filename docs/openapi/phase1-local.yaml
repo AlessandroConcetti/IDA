@@ -6,7 +6,8 @@ info:
     Contrat du runtime de développement local. Il expose uniquement des données
     de démonstration, des commandes IDA déterministes en lecture seule, une
     modification interne bornée de l’Artist Brain, une création Music Brain
-    strictement contrôlée et un flux de mémoire consentie local.
+    strictement contrôlée, un flux de mémoire consentie local et un Task Center
+    interne contrôlé.
 servers:
   - url: http://127.0.0.1:8787
     description: API locale de développement
@@ -282,6 +283,66 @@ paths:
           $ref: '#/components/responses/MemoryNotFound'
         '409':
           $ref: '#/components/responses/MemoryDecisionFinal'
+  /v1/tasks:
+    get:
+      operationId: listTasks
+      summary: Liste les tâches du workspace local
+      description: Les tâches sans échéance restent visibles ici, mais n'apparaissent pas dans la projection Today.
+      responses:
+        '200':
+          description: Tâches structurées du workspace local
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskListResponse'
+    post:
+      operationId: createTask
+      summary: Crée une tâche interne TODO
+      description: >-
+        Accepte uniquement title, description optionnelle et dueAt optionnel.
+        Le serveur impose l'identifiant, le workspace, l'acteur et l'état TODO.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskCreateRequest'
+      responses:
+        '201':
+          description: Tâche TODO créée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+        '400':
+          $ref: '#/components/responses/InvalidTask'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /v1/tasks/{taskId}/complete:
+    post:
+      operationId: completeTask
+      summary: Finalise une tâche active
+      description: >-
+        Ne reçoit aucun corps. Effectue TODO ou IN_PROGRESS vers DONE dans le
+        workspace serveur. Un retry sur DONE est idempotent et ne produit pas de
+        seconde écriture ni de second audit.
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+      responses:
+        '200':
+          description: Tâche complétée ou résultat idempotent déjà DONE
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+        '400':
+          $ref: '#/components/responses/InvalidTaskCompletion'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/TaskNotFound'
+        '409':
+          $ref: '#/components/responses/TaskNotActionable'
   /v1/social/platforms:
     get:
       operationId: listSocialPlatformCapabilities
@@ -322,6 +383,14 @@ components:
       in: path
       required: true
       description: Identifiant de mémoire résolu dans le workspace serveur.
+      schema:
+        type: string
+        minLength: 1
+    TaskId:
+      name: taskId
+      in: path
+      required: true
+      description: Identifiant de tâche résolu dans le workspace serveur.
       schema:
         type: string
         minLength: 1
@@ -370,6 +439,30 @@ components:
             $ref: '#/components/schemas/ErrorResponse'
     MemoryDecisionFinal:
       description: La mémoire possède déjà un état final immuable
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InvalidTask:
+      description: Corps de tâche invalide ou tentative de définir le scope, l'acteur, l'identifiant ou l'état client
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InvalidTaskCompletion:
+      description: Finalisation de tâche invalide ou corps non vide
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    TaskNotFound:
+      description: Tâche introuvable dans le workspace autorisé
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    TaskNotActionable:
+      description: Tâche dans un état final autre que DONE, non finalisable
       content:
         application/json:
           schema:
@@ -778,6 +871,45 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Memory'
+    TaskStatus:
+      enum: [TODO, IN_PROGRESS, DONE, CANCELLED]
+    Task:
+      type: object
+      required: [id, workspaceId, title, status, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        workspaceId: { type: string }
+        title: { type: string, minLength: 1, maxLength: 240 }
+        description: { type: string, minLength: 1, maxLength: 4000 }
+        status:
+          $ref: '#/components/schemas/TaskStatus'
+        dueAt: { type: string, format: date-time }
+        completedBy: { type: string }
+        completedAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    TaskCreateRequest:
+      type: object
+      required: [title]
+      additionalProperties: false
+      properties:
+        title: { type: string, minLength: 1, maxLength: 240 }
+        description: { type: string, minLength: 1, maxLength: 4000 }
+        dueAt: { type: string, format: date-time }
+    TaskResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/Task'
+    TaskListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Task'
     SocialPlatformCapability:
       type: object
       required: [platform, apiVersion, oauthSupported, draftSupported, scheduleSupported, publishSupported, analyticsSupported, requiresHumanApproval, requiresPlatformReview, notes]

@@ -44,6 +44,23 @@ export interface MemoryRecord {
   updatedAt: string;
 }
 
+export type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE" | "CANCELLED";
+
+export interface TaskRecord {
+  id: string;
+  title: string;
+  description?: string;
+  dueAt?: string;
+  status: TaskStatus;
+  completedAt?: string;
+}
+
+export interface TaskCreateInput {
+  title: string;
+  description?: string;
+  dueAt?: string;
+}
+
 export interface MediaUploadInput {
   file: File;
   description?: string;
@@ -349,6 +366,20 @@ function memoryState(value: unknown): MemoryState {
   throw new IdaApiError("L’état de mémoire retourné par IDA API est invalide.");
 }
 
+function taskStatus(value: unknown): TaskStatus {
+  if (value === "TODO" || value === "IN_PROGRESS" || value === "DONE" || value === "CANCELLED") {
+    return value;
+  }
+
+  // Le contrat historique documente `DONE`; accepter `COMPLETED` permet au
+  // client de rester compatible avec un fournisseur qui emploie ce libellé.
+  if (value === "COMPLETED") {
+    return "DONE";
+  }
+
+  throw new IdaApiError("L’état de tâche retourné par IDA API est invalide.");
+}
+
 function displaySystemName(component: unknown): string {
   const labels: Record<string, string> = {
     AI: "AI",
@@ -441,6 +472,40 @@ export async function rejectMemory(memoryId: string): Promise<MemoryRecord> {
   const payload = await postApiJson(`/v1/memories/${encodeURIComponent(memoryId)}/reject`);
 
   return toMemory(readDataObjectOrDirect(payload, "/v1/memories/:id/reject"));
+}
+
+function toTask(record: Record<string, unknown>): TaskRecord {
+  const id = readString(record.id);
+  const title = readString(record.title);
+
+  if (!id || !title) {
+    throw new IdaApiError("La réponse tâche d’IDA API n’a pas le format attendu.");
+  }
+
+  return {
+    id,
+    title,
+    description: readString(record.description),
+    dueAt: readString(record.dueAt),
+    status: taskStatus(record.status),
+    completedAt: readString(record.completedAt),
+  };
+}
+
+export async function fetchTasks(): Promise<TaskRecord[]> {
+  return readDataList(await getApiJson("/v1/tasks"), "/v1/tasks").map(toTask);
+}
+
+export async function createTask(input: TaskCreateInput): Promise<TaskRecord> {
+  const payload = await postApiJson("/v1/tasks", input);
+
+  return toTask(readDataObjectOrDirect(payload, "/v1/tasks"));
+}
+
+export async function completeTask(taskId: string): Promise<TaskRecord> {
+  const payload = await postApiJson(`/v1/tasks/${encodeURIComponent(taskId)}/complete`);
+
+  return toTask(readDataObjectOrDirect(payload, "/v1/tasks/:taskId/complete"));
 }
 
 function toTrack(record: Record<string, unknown>): Track {

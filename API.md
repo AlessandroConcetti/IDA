@@ -23,10 +23,11 @@ Le premier runtime est une API Fastify locale sur `http://127.0.0.1:8787`, conso
 | `GET /v1/system/status` | Livrée | États factuels de la tranche locale ; les intégrations absentes sont `WARNING` ou `DISCONNECTED`. |
 | `GET/PATCH /v1/artist-profile`, `/v1/releases`, `GET/POST /v1/tracks`, `GET/POST /v1/media`, `GET /v1/memories` | Livrées | Données de démonstration isolées par workspace côté serveur. L’Artist Brain, la création bornée d’un morceau Music Brain et l’import local privé d’un média passent par des outils `WRITE` allowlistés ; `GET /v1/media?status=UNUSED` est supporté. |
 | `POST /v1/memories/proposals`, `POST /v1/memories/:memoryId/confirm`, `POST /v1/memories/:memoryId/reject` | Livrées | Flux de mémoire consentie : une préférence commence forcément à `PENDING` et seule une décision humaine explicite peut la faire passer à `CONFIRMED` ou `REJECTED`. |
+| `GET/POST /v1/tasks`, `POST /v1/tasks/:taskId/complete` | Livrées | Task Center local : création interne en `TODO`, finalisation explicite et idempotente, toujours isolées au workspace serveur. |
 | `GET /v1/social/platforms` | Livrée | Capacités déclaratives de démonstration ; aucune connexion sociale n’est créée. |
 | `POST /v1/ida/commands` | Livrée | Corps `{ "message": "…" }` ; commandes déterministes de lecture pour la journée, les contenus inutilisés et l’état système. |
 
-La commande retourne un objet `data` contenant la commande structurée, les outils de lecture autorisés et un résultat. À l’exception de la modification interne de l’Artist Brain, de la création Music Brain bornée, de l’import local privé et du flux de consentement mémoire décrit ci-dessous, toute mutation, publication, intégration externe ou accès financier est hors de cette tranche et reste refusée par conception.
+La commande retourne un objet `data` contenant la commande structurée, les outils de lecture autorisés et un résultat. À l’exception de la modification interne de l’Artist Brain, de la création Music Brain bornée, de l’import local privé, du flux de consentement mémoire et du Task Center décrits ci-dessous, toute mutation, publication, intégration externe ou accès financier est hors de cette tranche et reste refusée par conception.
 
 ### Artist Brain local éditable
 
@@ -54,6 +55,7 @@ La commande retourne un objet `data` contenant la commande structurée, les outi
 - Un seul fichier est accepté, avec une limite de **25 MiB**. L’API contrôle une whitelist conjointe MIME/extension : JPEG, PNG, WebP, GIF, MP4, MOV, WebM, MP3, WAV, FLAC, OGG, AAC, M4A et PDF. Aucun contenu n’est publié, envoyé à une IA ou transmis à un service tiers.
 - Le serveur calcule SHA-256 puis vérifie le couple `(workspace_id, sha256)` avant l’écriture. Un doublon exact répond `409 DUPLICATE_MEDIA` et ne crée ni second asset ni second fichier.
 - Le fichier est enregistré hors de toute URL publique dans un stockage privé à clé générée côté serveur. La clé, le chemin local et toute URL de stockage restent absents des réponses et des journaux. L’asset démarre à `UNUSED`, ses tags sont associés localement et l’activité append-only `media.imported` est écrite.
+- Une réussite retourne `201 Created` avec le contrat `MediaAsset`, et l’asset est ensuite visible uniquement dans `GET /v1/media` du workspace imposé.
 
 ### Mémoire consentie : préférences explicites
 
@@ -64,7 +66,15 @@ La commande retourne un objet `data` contenant la commande structurée, les outi
 - La transition est atomique : seulement `PENDING → CONFIRMED` ou `PENDING → REJECTED`. Un état final est immuable et toute nouvelle décision retourne `409 MEMORY_DECISION_FINAL`.
 - Le `memoryId` est toujours recherché dans le workspace imposé par le serveur. Une mémoire hors workspace répond comme absente avec `404 MEMORY_NOT_FOUND`, sans révéler son existence. `GET /v1/memories` renvoie les vrais `createdAt` et `updatedAt` persistés ; une confirmation expose aussi `confirmedBy` et `confirmedAt`.
 - Les actions écrivent uniquement des événements d’audit append-only `memory.proposed`, `memory.confirmed` et `memory.rejected`. Le contenu libre de la préférence est volontairement absent du payload d’audit.
-- Une réussite retourne `201 Created` avec le contrat `MediaAsset`, et l’asset est ensuite visible uniquement dans `GET /v1/media` du workspace imposé.
+
+### Task Center : finalisation contrôlée
+
+`POST /v1/tasks` accepte strictement `{ "title": "…", "description"?: "…", "dueAt"?: "…" }`. Le serveur crée un identifiant, résout le workspace et l’acteur, et force l’état initial à `TODO`.
+
+- Les champs `id`, `workspaceId`, `actorUserId`, `status`, les dates de finalisation et toute propriété inconnue sont refusés avec `400 INVALID_TASK`. `dueAt` est un timestamp UTC optionnel : une tâche sans échéance reste visible dans `GET /v1/tasks`, mais est délibérément exclue du résumé `Today`.
+- `POST /v1/tasks/:taskId/complete` ne reçoit aucun corps et accepte seulement `TODO → DONE` ou `IN_PROGRESS → DONE`. La tâche est recherchée dans le workspace serveur ; une tâche étrangère ou absente retourne `404 TASK_NOT_FOUND` sans révéler son existence.
+- La route est idempotente pour `DONE` : un retry retourne `200` avec la tâche existante, sans modifier `updatedAt`, `completedAt` ni ajouter un second audit. Un autre état final, tel que `CANCELLED`, répond `409 TASK_NOT_ACTIONABLE`.
+- Les outils `create_task` et `complete_task` sont allowlistés sous `TASKS` / `WRITE`. Les événements `task.created` et `task.completed` sont append-only et leurs payloads ne contiennent ni titre ni description.
 
 La version machine-lisible de ces routes est disponible dans [`docs/openapi/phase1-local.yaml`](docs/openapi/phase1-local.yaml). Elle décrit uniquement le runtime local existant, pas les endpoints projetés plus bas.
 
@@ -277,7 +287,7 @@ PATCH  /v1/calendar-events/:eventId
 
 GET    /v1/tasks
 POST   /v1/tasks
-PATCH  /v1/tasks/:taskId
+POST   /v1/tasks/:taskId/complete
 ```
 
 `approve` est une action humaine authentifiée. Elle enregistre le payload final, l’auteur et l’instant de décision. `schedule` ne peut pas transformer une proposition non approuvée en action publique. Tant qu’aucun adapter social n’est livré, une publication programmée reste un élément de planning interne.

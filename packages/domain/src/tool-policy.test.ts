@@ -30,6 +30,8 @@ describe("ToolGateway", () => {
       { toolKey: "propose_preference_memory", moduleKey: "MEMORY", permission: "WRITE" },
       { toolKey: "confirm_memory", moduleKey: "MEMORY", permission: "WRITE" },
       { toolKey: "reject_memory", moduleKey: "MEMORY", permission: "WRITE" },
+      { toolKey: "create_task", moduleKey: "TASKS", permission: "WRITE" },
+      { toolKey: "complete_task", moduleKey: "TASKS", permission: "WRITE" },
     ]);
 
     expect(gateway.authorize({ toolKey: "create_track", moduleKey: "MUSIC", permission: "WRITE" })).toMatchObject({
@@ -45,6 +47,12 @@ describe("ToolGateway", () => {
       allowed: true,
     });
     expect(gateway.authorize({ toolKey: "reject_memory", moduleKey: "MEMORY", permission: "WRITE" })).toMatchObject({
+      allowed: true,
+    });
+    expect(gateway.authorize({ toolKey: "create_task", moduleKey: "TASKS", permission: "WRITE" })).toMatchObject({
+      allowed: true,
+    });
+    expect(gateway.authorize({ toolKey: "complete_task", moduleKey: "TASKS", permission: "WRITE" })).toMatchObject({
       allowed: true,
     });
     expect(gateway.authorize({ toolKey: "delete_track", moduleKey: "MUSIC", permission: "WRITE" })).toMatchObject({

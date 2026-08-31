@@ -1,17 +1,22 @@
 import { type DragEvent, type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
+  completeTask,
   confirmMemory,
+  createTask,
   createTrack,
   type DashboardSnapshot,
   fetchArtistBrain,
   fetchDashboardSnapshot,
   fetchMemories,
+  fetchTasks,
   IdaApiError,
   isApiConfigured,
   type MemoryRecord,
   proposePreferenceMemory,
   rejectMemory,
   submitIdaCommand,
+  type TaskCreateInput,
+  type TaskRecord,
   type TrackCreateInput,
   updateArtistBrain,
   uploadMediaAsset,
@@ -915,30 +920,341 @@ function AnalyticsView() {
   );
 }
 
+type TaskForm = {
+  title: string;
+  description: string;
+  dueAt: string;
+};
+
+const emptyTaskForm: TaskForm = {
+  title: "",
+  description: "",
+  dueAt: "",
+};
+
+function optionalTaskValue(value: string): string | undefined {
+  const trimmed = value.trim();
+
+  return trimmed || undefined;
+}
+
+function taskFormToInput(form: TaskForm): TaskCreateInput | undefined {
+  const dueAtInput = optionalTaskValue(form.dueAt);
+
+  if (!dueAtInput) {
+    return {
+      title: form.title.trim(),
+      description: optionalTaskValue(form.description),
+    };
+  }
+
+  const dueDate = new Date(dueAtInput);
+
+  if (Number.isNaN(dueDate.valueOf())) {
+    return undefined;
+  }
+
+  return {
+    title: form.title.trim(),
+    description: optionalTaskValue(form.description),
+    dueAt: dueDate.toISOString(),
+  };
+}
+
+function formatTaskDate(value: string | undefined, fallback: string): string {
+  if (!value) {
+    return fallback;
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.valueOf())) {
+    return fallback;
+  }
+
+  return new Intl.DateTimeFormat("fr-FR", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function taskStatusLabel(status: TaskRecord["status"]): string {
+  const labels: Record<TaskRecord["status"], string> = {
+    TODO: "TODO",
+    IN_PROGRESS: "IN PROGRESS",
+    DONE: "DONE",
+    CANCELLED: "CANCELLED",
+  };
+
+  return labels[status];
+}
+
+function isClosedTask(task: TaskRecord): boolean {
+  return task.status === "DONE" || task.status === "CANCELLED";
+}
+
 function TasksView() {
-  const tasks = ["Valider trois propositions", "Finaliser les piliers de campagne", "Tagger les rushes studio"];
+  const [tasks, setTasks] = useState<TaskRecord[]>([]);
+  const [form, setForm] = useState<TaskForm>(emptyTaskForm);
+  const [source, setSource] = useState<"loading" | "api" | "unavailable">(isApiConfigured ? "loading" : "unavailable");
+  const [notice, setNotice] = useState(
+    isApiConfigured ? "Chargement des tâches de ton workspace…" : "Les tâches nécessitent la connexion à IDA API.",
+  );
+  const [noticeState, setNoticeState] = useState<"default" | "success" | "error">("default");
+  const [isCreating, setIsCreating] = useState(false);
+  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    if (!isApiConfigured) {
+      return () => {
+        isCurrent = false;
+      };
+    }
+
+    void fetchTasks()
+      .then((nextTasks) => {
+        if (!isCurrent) {
+          return;
+        }
+
+        setTasks(nextTasks);
+        setSource("api");
+        setNotice("Tâches synchronisées depuis ton workspace IDA.");
+      })
+      .catch((error: unknown) => {
+        if (!isCurrent) {
+          return;
+        }
+
+        const reason = error instanceof IdaApiError ? error.message : "IDA API est indisponible.";
+        setSource("unavailable");
+        setNotice(`Les tâches sont indisponibles : ${reason}`);
+        setNoticeState("error");
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, []);
+
+  function updateField(field: keyof TaskForm, value: string) {
+    setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  async function handleCreate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const title = form.title.trim();
+    const input = taskFormToInput(form);
+
+    if (!title) {
+      setNotice("Un titre est nécessaire pour créer une tâche.");
+      setNoticeState("error");
+      return;
+    }
+
+    if (!input) {
+      setNotice("L’échéance doit être une date et une heure valides.");
+      setNoticeState("error");
+      return;
+    }
+
+    setIsCreating(true);
+
+    try {
+      const created = await createTask(input);
+      setTasks((current) => [created, ...current]);
+      setForm(emptyTaskForm);
+      setSource("api");
+      setNotice(`« ${created.title} » a été ajoutée à ta liste ouverte.`);
+      setNoticeState("success");
+    } catch (error: unknown) {
+      const reason = error instanceof IdaApiError ? error.message : "IDA API est indisponible.";
+      setNotice(`La tâche n’a pas été créée : ${reason}`);
+      setNoticeState("error");
+    } finally {
+      setIsCreating(false);
+    }
+  }
+
+  async function handleComplete(task: TaskRecord) {
+    if (isClosedTask(task) || activeTaskId) {
+      return;
+    }
+
+    setActiveTaskId(task.id);
+
+    try {
+      const completed = await completeTask(task.id);
+      setTasks((current) => current.map((candidate) => (candidate.id === completed.id ? completed : candidate)));
+      setSource("api");
+      setNotice(`« ${completed.title} » est terminée.`);
+      setNoticeState("success");
+    } catch (error: unknown) {
+      const reason = error instanceof IdaApiError ? error.message : "IDA API est indisponible.";
+
+      if (error instanceof IdaApiError && error.status === 409) {
+        try {
+          const nextTasks = await fetchTasks();
+          setTasks(nextTasks);
+          setSource("api");
+          setNotice("Cette tâche a déjà été clôturée. La liste a été actualisée.");
+        } catch (refreshError: unknown) {
+          const refreshReason =
+            refreshError instanceof IdaApiError ? refreshError.message : "IDA API est indisponible.";
+          setNotice(`La tâche a déjà changé d’état, mais la liste n’a pas pu être actualisée : ${refreshReason}`);
+        }
+      } else {
+        setNotice(`La tâche n’a pas été terminée : ${reason}`);
+      }
+
+      setNoticeState("error");
+    } finally {
+      setActiveTaskId(null);
+    }
+  }
+
+  const openTasks = tasks.filter((task) => !isClosedTask(task));
+  const completedTasks = tasks.filter((task) => isClosedTask(task));
+  const canManage = source === "api" && !isCreating && !activeTaskId;
 
   return (
-    <section className="panel wide-panel task-card">
-      <div className="panel-heading">
-        <div>
-          <p className="eyebrow">TODAY'S FOCUS</p>
-          <h2>Three meaningful moves.</h2>
-        </div>
-        <span className="quiet-label">Local preview</span>
+    <>
+      <div className="page-grid tasks-view">
+        <section className="panel task-card" aria-labelledby="open-tasks-title">
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">TASKS</p>
+              <h2 id="open-tasks-title">What moves forward.</h2>
+            </div>
+            <span className="quiet-label">{source === "api" ? "Workspace data" : "API required"}</span>
+          </div>
+          <p className={`task-notice ${noticeState}`} role="status">
+            <span aria-hidden="true" />
+            {notice}
+          </p>
+          {source === "loading" ? <p className="task-empty-state">Chargement des tâches ouvertes…</p> : null}
+          {source === "api" && openTasks.length === 0 ? (
+            <p className="task-empty-state">Aucune tâche ouverte. Tu peux créer le prochain mouvement utile.</p>
+          ) : null}
+          <ol className="task-list task-open-list">
+            {openTasks.map((task, index) => {
+              const isActive = activeTaskId === task.id;
+
+              return (
+                <li className="task-item" key={task.id}>
+                  <span className="task-number">{String(index + 1).padStart(2, "0")}</span>
+                  <div className="task-copy">
+                    <div className="task-title-line">
+                      <h3>{task.title}</h3>
+                      <span className={`task-status-tag ${task.status.toLocaleLowerCase("en-US")}`}>
+                        {taskStatusLabel(task.status)}
+                      </span>
+                    </div>
+                    {task.description ? <p>{task.description}</p> : null}
+                    <time dateTime={task.dueAt}>{formatTaskDate(task.dueAt, "Sans échéance")}</time>
+                  </div>
+                  <button
+                    className="task-complete-button"
+                    type="button"
+                    onClick={() => void handleComplete(task)}
+                    disabled={!canManage}
+                    aria-label={`Marquer « ${task.title} » comme terminée`}
+                  >
+                    {isActive ? "COMPLETING…" : "COMPLETE"}
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+        </section>
+
+        <section className="panel task-create-card" aria-labelledby="task-create-title">
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">NEW TASK</p>
+              <h2 id="task-create-title">Make it explicit.</h2>
+            </div>
+            <span className="status-tag demo">NO AUTOMATION</span>
+          </div>
+          <p className="task-create-intro">
+            Crée une tâche interne. Une échéance organise le contexte ; elle ne programme ni notification ni action.
+          </p>
+          <form className="task-create-form" noValidate onSubmit={handleCreate}>
+            <label className="task-create-field">
+              <span>Titre</span>
+              <input
+                value={form.title}
+                onChange={(event) => updateField("title", event.target.value)}
+                placeholder="Ex. Relire les captions de la semaine"
+                maxLength={240}
+                required
+                disabled={!canManage}
+              />
+            </label>
+            <label className="task-create-field">
+              <span>Description</span>
+              <textarea
+                value={form.description}
+                onChange={(event) => updateField("description", event.target.value)}
+                placeholder="Contexte facultatif…"
+                rows={3}
+                maxLength={4000}
+                disabled={!canManage}
+              />
+            </label>
+            <label className="task-create-field">
+              <span>Échéance</span>
+              <input
+                type="datetime-local"
+                value={form.dueAt}
+                onChange={(event) => updateField("dueAt", event.target.value)}
+                disabled={!canManage}
+              />
+            </label>
+            <div className="task-create-actions">
+              <p>La tâche est créée dans ton workspace actuel, jamais dans un calendrier externe.</p>
+              <button className="send-button" type="submit" disabled={!canManage}>
+                {isCreating ? "Création…" : "Create task"}
+                <span aria-hidden="true">↗</span>
+              </button>
+            </div>
+          </form>
+        </section>
       </div>
-      <ol className="task-list">
-        {tasks.map((task, index) => (
-          <li key={task}>
-            <span>0{index + 1}</span>
-            {task}
-            <button type="button" aria-label={`Marquer « ${task} » comme terminé`}>
-              ○
-            </button>
-          </li>
-        ))}
-      </ol>
-    </section>
+
+      <section className="panel wide-panel task-completed-card" aria-labelledby="completed-tasks-title">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">COMPLETED</p>
+            <h2 id="completed-tasks-title">Closed with intent.</h2>
+          </div>
+          <span className="quiet-label">{completedTasks.length} closed</span>
+        </div>
+        {source === "api" && completedTasks.length === 0 ? (
+          <p className="task-empty-state">Les tâches terminées apparaîtront ici.</p>
+        ) : null}
+        <div className="task-completed-list">
+          {completedTasks.map((task) => (
+            <article className="task-completed-item" key={task.id}>
+              <span className={`task-status-tag ${task.status.toLocaleLowerCase("en-US")}`}>
+                {taskStatusLabel(task.status)}
+              </span>
+              <div>
+                <h3>{task.title}</h3>
+                {task.description ? <p>{task.description}</p> : null}
+                <time dateTime={task.completedAt ?? task.dueAt}>
+                  {formatTaskDate(task.completedAt ?? task.dueAt, "Clôturée sans date")}
+                </time>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+    </>
   );
 }
 

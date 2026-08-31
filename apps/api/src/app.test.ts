@@ -90,6 +90,7 @@ describe("IDA API — première tranche Phase 1", () => {
       "/v1/tracks",
       "/v1/media",
       "/v1/memories",
+      "/v1/tasks",
       "/v1/social/platforms",
     ];
 
@@ -618,6 +619,149 @@ describe("IDA API — première tranche Phase 1", () => {
     });
     expect(otherWorkspace.statusCode).toBe(404);
     expect(otherWorkspace.json()).toMatchObject({ error: { code: "MEMORY_NOT_FOUND" } });
+  });
+
+  it("crée une tâche TODO strictement scoped, y compris sans échéance", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/tasks",
+      payload: {
+        title: "Préparer la sélection de la semaine",
+        description: "Choisir trois extraits studio encore inédits.",
+        dueAt: "2026-09-01T16:00:00.000Z",
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    const body = response.json() as {
+      data: {
+        id: string;
+        workspaceId: string;
+        title: string;
+        description?: string;
+        status: string;
+        dueAt?: string;
+        createdAt: string;
+        updatedAt: string;
+      };
+    };
+
+    expect(body.data).toMatchObject({
+      id: expect.stringMatching(/^task_[a-f0-9]{32}$/),
+      workspaceId: "wsp_demo_aless",
+      title: "Préparer la sélection de la semaine",
+      description: "Choisir trois extraits studio encore inédits.",
+      status: "TODO",
+      dueAt: "2026-09-01T16:00:00.000Z",
+    });
+    expect(Number.isNaN(Date.parse(body.data.createdAt))).toBe(false);
+    expect(Number.isNaN(Date.parse(body.data.updatedAt))).toBe(false);
+
+    const withoutDueAt = await app.inject({
+      method: "POST",
+      url: "/v1/tasks",
+      payload: { title: "Noter une idée de teaser" },
+    });
+    expect(withoutDueAt.statusCode).toBe(201);
+    const taskWithoutDueAt = (withoutDueAt.json() as { data: { id: string } }).data.id;
+    expect((withoutDueAt.json() as { data: Record<string, unknown> }).data).not.toHaveProperty("dueAt");
+
+    const tasks = await app.inject({ method: "GET", url: "/v1/tasks" });
+    expect(tasks.statusCode).toBe(200);
+    expect((tasks.json() as { data: Array<{ id: string; status: string }> }).data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: body.data.id, status: "TODO" }),
+        expect.objectContaining({ id: taskWithoutDueAt, status: "TODO" }),
+      ]),
+    );
+
+    const today = await app.inject({
+      method: "POST",
+      url: "/v1/ida/commands",
+      payload: { message: "IDA, prépare ma journée." },
+    });
+    expect(today.statusCode).toBe(200);
+    expect(
+      (today.json() as { data: { result: { items: Array<{ id: string }> } } }).data.result.items.map((item) => item.id),
+    ).not.toContain(taskWithoutDueAt);
+  });
+
+  it("complète une tâche de façon idempotente sans réécrire ses timestamps", async () => {
+    const completion = await app.inject({
+      method: "POST",
+      url: "/v1/tasks/task_caption_review/complete",
+    });
+
+    expect(completion.statusCode).toBe(200);
+    const completed = (
+      completion.json() as {
+        data: { id: string; status: string; completedBy?: string; completedAt?: string; updatedAt: string };
+      }
+    ).data;
+    expect(completed).toMatchObject({
+      id: "task_caption_review",
+      status: "DONE",
+      completedBy: "usr_demo_aless",
+      completedAt: expect.any(String),
+    });
+
+    const retry = await app.inject({ method: "POST", url: "/v1/tasks/task_caption_review/complete" });
+    expect(retry.statusCode).toBe(200);
+    expect(retry.json()).toMatchObject({
+      data: {
+        id: "task_caption_review",
+        status: "DONE",
+        completedAt: completed.completedAt,
+        updatedAt: completed.updatedAt,
+      },
+    });
+
+    const inProgress = await app.inject({ method: "POST", url: "/v1/tasks/task_campaign_review/complete" });
+    expect(inProgress.statusCode).toBe(200);
+    expect(inProgress.json()).toMatchObject({ data: { id: "task_campaign_review", status: "DONE" } });
+  });
+
+  it("refuse les champs client, les états non actionnables et les tâches hors workspace", async () => {
+    const invalidTask = await app.inject({
+      method: "POST",
+      url: "/v1/tasks",
+      payload: {
+        id: "task_client",
+        workspaceId: "wsp_other",
+        actorUserId: "usr_other",
+        status: "DONE",
+        title: "Tentative hors périmètre",
+      },
+    });
+    expect(invalidTask.statusCode).toBe(400);
+    expect(invalidTask.json()).toMatchObject({ error: { code: "INVALID_TASK" } });
+
+    const invalidComplete = await app.inject({
+      method: "POST",
+      url: "/v1/tasks/task_caption_review/complete",
+      payload: { status: "DONE", workspaceId: "wsp_other", actorUserId: "usr_other" },
+    });
+    expect(invalidComplete.statusCode).toBe(400);
+    expect(invalidComplete.json()).toMatchObject({ error: { code: "INVALID_TASK_COMPLETION" } });
+
+    const cancelled = await app.inject({ method: "POST", url: "/v1/tasks/task_cancelled/complete" });
+    expect(cancelled.statusCode).toBe(409);
+    expect(cancelled.json()).toMatchObject({ error: { code: "TASK_NOT_ACTIONABLE" } });
+
+    const otherWorkspace = await app.inject({
+      method: "POST",
+      url: "/v1/tasks/task_other_workspace/complete",
+    });
+    expect(otherWorkspace.statusCode).toBe(404);
+    expect(otherWorkspace.json()).toMatchObject({ error: { code: "TASK_NOT_FOUND" } });
+
+    const listing = await app.inject({ method: "GET", url: "/v1/tasks?workspaceId=wsp_other" });
+    expect(listing.statusCode).toBe(200);
+    expect(
+      (listing.json() as { data: Array<{ id: string; workspaceId: string }> }).data.every(
+        (task) => task.workspaceId === "wsp_demo_aless" && task.id !== "task_other_workspace",
+      ),
+    ).toBe(true);
   });
 
   it("traite une commande de contenus inutilisés uniquement avec un outil READ", async () => {

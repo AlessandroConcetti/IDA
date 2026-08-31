@@ -7,6 +7,7 @@ import type {
   ArtistProfileUpdate,
   MediaImport,
   MemoryProposalCreate,
+  TaskCreate,
   TrackCreate,
 } from "@ida/contracts";
 
@@ -119,6 +120,24 @@ export type MemoryDecisionResult =
   | { kind: "updated"; memory: Memory }
   | { kind: "not-found" }
   | { kind: "already-decided"; state: string };
+
+export type Task = {
+  id: string;
+  title: string;
+  description: string | null;
+  status: string;
+  dueAt: string | null;
+  completedBy: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type TaskCompletionResult =
+  | { kind: "completed"; task: Task }
+  | { kind: "already-completed"; task: Task }
+  | { kind: "not-found" }
+  | { kind: "not-actionable"; status: string };
 
 export type TodayItem = {
   id: string;
@@ -274,6 +293,20 @@ function toMemory(row: ScalarRow): Memory {
     state: asString(row.state),
     confirmedBy: asNullableString(row.confirmedBy),
     confirmedAt: asTimestamp(row.confirmedAt),
+    createdAt: asTimestamp(row.createdAt) ?? "1970-01-01T00:00:00.000Z",
+    updatedAt: asTimestamp(row.updatedAt) ?? "1970-01-01T00:00:00.000Z",
+  };
+}
+
+function toTask(row: ScalarRow): Task {
+  return {
+    id: asString(row.id),
+    title: asString(row.title),
+    description: asNullableString(row.description),
+    status: asString(row.status),
+    dueAt: asTimestamp(row.dueAt),
+    completedBy: asNullableString(row.completedBy),
+    completedAt: asTimestamp(row.completedAt),
     createdAt: asTimestamp(row.createdAt) ?? "1970-01-01T00:00:00.000Z",
     updatedAt: asTimestamp(row.updatedAt) ?? "1970-01-01T00:00:00.000Z",
   };
@@ -915,6 +948,170 @@ export class DemoDatabase {
     });
   }
 
+  async listTasks(workspaceId: string): Promise<Task[]> {
+    const result = await this.pglite.query<ScalarRow>(
+      `
+        SELECT
+          id,
+          title,
+          description,
+          status,
+          due_at AS "dueAt",
+          completed_by AS "completedBy",
+          completed_at AS "completedAt",
+          created_at AS "createdAt",
+          updated_at AS "updatedAt"
+        FROM tasks
+        WHERE workspace_id = $1
+        ORDER BY
+          CASE WHEN status IN ('DONE', 'CANCELLED') THEN 1 ELSE 0 END,
+          due_at ASC NULLS LAST,
+          created_at DESC,
+          id ASC
+      `,
+      [workspaceId],
+    );
+
+    return result.rows.map(toTask);
+  }
+
+  async createTask(workspaceId: string, actorUserId: string, input: TaskCreate): Promise<Task> {
+    return this.pglite.transaction(async (transaction) => {
+      // L'identifiant, le workspace et l'état TODO sont imposés par cette
+      // méthode. Le client ne peut créer ni une tâche terminée, ni une tâche
+      // dans le périmètre d'un autre workspace.
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const taskId = `task_${randomUUID().replaceAll("-", "")}`;
+        const result = await transaction.query<ScalarRow>(
+          `
+            INSERT INTO tasks (id, workspace_id, title, description, due_at, status)
+            VALUES ($1, $2, $3, $4, $5, 'TODO')
+            ON CONFLICT (id) DO NOTHING
+            RETURNING
+              id,
+              title,
+              description,
+              status,
+              due_at AS "dueAt",
+              completed_by AS "completedBy",
+              completed_at AS "completedAt",
+              created_at AS "createdAt",
+              updated_at AS "updatedAt"
+          `,
+          [taskId, workspaceId, input.title, input.description ?? null, input.dueAt ?? null],
+        );
+        const row = result.rows[0];
+
+        if (!row) {
+          continue;
+        }
+
+        const task = toTask(row);
+        await transaction.query(
+          `
+            INSERT INTO activity_logs (id, workspace_id, actor_user_id, action, entity_type, entity_id, payload)
+            VALUES ($1, $2, $3, 'task.created', 'TASK', $4, $5::json)
+          `,
+          [
+            `act_${randomUUID().replaceAll("-", "")}`,
+            workspaceId,
+            actorUserId,
+            task.id,
+            JSON.stringify({ status: task.status, hasDueAt: task.dueAt !== null }),
+          ],
+        );
+
+        return task;
+      }
+
+      throw new Error("Impossible de générer un identifiant unique pour la tâche.");
+    });
+  }
+
+  async completeTask(workspaceId: string, actorUserId: string, taskId: string): Promise<TaskCompletionResult> {
+    return this.pglite.transaction(async (transaction) => {
+      // Seules les tâches actives peuvent devenir DONE. La transition est
+      // atomique ; un retry sur DONE ne réécrit ni la tâche ni son audit.
+      const update = await transaction.query<ScalarRow>(
+        `
+          UPDATE tasks
+          SET
+            status = 'DONE',
+            completed_by = $3,
+            completed_at = CURRENT_TIMESTAMP,
+            updated_at = CURRENT_TIMESTAMP
+          WHERE id = $1
+            AND workspace_id = $2
+            AND status IN ('TODO', 'IN_PROGRESS')
+          RETURNING
+            id,
+            title,
+            description,
+            status,
+            due_at AS "dueAt",
+            completed_by AS "completedBy",
+            completed_at AS "completedAt",
+            created_at AS "createdAt",
+            updated_at AS "updatedAt"
+        `,
+        [taskId, workspaceId, actorUserId],
+      );
+      const row = update.rows[0];
+
+      if (row) {
+        const task = toTask(row);
+        await transaction.query(
+          `
+            INSERT INTO activity_logs (id, workspace_id, actor_user_id, action, entity_type, entity_id, payload)
+            VALUES ($1, $2, $3, 'task.completed', 'TASK', $4, $5::json)
+          `,
+          [
+            `act_${randomUUID().replaceAll("-", "")}`,
+            workspaceId,
+            actorUserId,
+            task.id,
+            JSON.stringify({ status: task.status }),
+          ],
+        );
+
+        return { kind: "completed", task };
+      }
+
+      // Ne sélectionner qu'à l'intérieur du scope serveur permet de renvoyer
+      // 404 pour une tâche étrangère, 200 idempotent pour DONE et 409 pour un
+      // autre état final visible (comme CANCELLED).
+      const existing = await transaction.query<ScalarRow>(
+        `
+          SELECT
+            id,
+            title,
+            description,
+            status,
+            due_at AS "dueAt",
+            completed_by AS "completedBy",
+            completed_at AS "completedAt",
+            created_at AS "createdAt",
+            updated_at AS "updatedAt"
+          FROM tasks
+          WHERE id = $1
+            AND workspace_id = $2
+        `,
+        [taskId, workspaceId],
+      );
+      const existingTask = existing.rows[0];
+
+      if (!existingTask) {
+        return { kind: "not-found" };
+      }
+
+      if (asString(existingTask.status) === "DONE") {
+        return { kind: "already-completed", task: toTask(existingTask) };
+      }
+
+      return { kind: "not-actionable", status: asString(existingTask.status) };
+    });
+  }
+
   async listToday(workspaceId: string): Promise<TodayItem[]> {
     const result = await this.pglite.query<ScalarRow>(
       `
@@ -922,6 +1119,7 @@ export class DemoDatabase {
         FROM tasks
         WHERE workspace_id = $1
           AND status IN ('TODO', 'IN_PROGRESS')
+          AND due_at IS NOT NULL
         UNION ALL
         SELECT id, 'SCHEDULED_POST' AS kind, title, scheduled_at AS "dueAt", status
         FROM scheduled_posts
@@ -933,13 +1131,26 @@ export class DemoDatabase {
       [workspaceId],
     );
 
-    return result.rows.map((row) => ({
-      id: asString(row.id),
-      kind: asString(row.kind) as TodayItem["kind"],
-      title: asString(row.title),
-      dueAt: asTimestamp(row.dueAt) ?? "",
-      status: asString(row.status),
-    }));
+    return result.rows.flatMap((row) => {
+      const dueAt = asTimestamp(row.dueAt);
+
+      // La projection Today ne tolère pas d'échéance absente. Les tâches sans
+      // due_at sont déjà filtrées par SQL ; ce garde-fou évite aussi un faux
+      // timestamp si une donnée historique reste incomplète.
+      if (!dueAt) {
+        return [];
+      }
+
+      return [
+        {
+          id: asString(row.id),
+          kind: asString(row.kind) as TodayItem["kind"],
+          title: asString(row.title),
+          dueAt,
+          status: asString(row.status),
+        },
+      ];
+    });
   }
 
   async listSocialPlatforms(): Promise<SocialPlatform[]> {
@@ -1123,8 +1334,14 @@ export class DemoDatabase {
         id TEXT PRIMARY KEY,
         workspace_id TEXT NOT NULL REFERENCES workspaces(id),
         title TEXT NOT NULL,
-        due_at TIMESTAMPTZ NOT NULL,
-        status TEXT NOT NULL
+        description TEXT,
+        due_at TIMESTAMPTZ,
+        status TEXT NOT NULL,
+        completed_by TEXT REFERENCES users(id),
+        completed_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT tasks_status_check CHECK (status IN ('TODO', 'IN_PROGRESS', 'DONE', 'CANCELLED'))
       );
 
       CREATE TABLE IF NOT EXISTS scheduled_posts (
@@ -1158,6 +1375,8 @@ export class DemoDatabase {
         ON memories (workspace_id, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_memories_workspace_state_created
         ON memories (workspace_id, state, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_tasks_workspace_status_due
+        ON tasks (workspace_id, status, due_at);
     `);
 
     // Cette migration additive garde un Artist Brain local déjà modifié intact.
@@ -1196,6 +1415,30 @@ export class DemoDatabase {
       ALTER TABLE memories
         ALTER COLUMN updated_at SET DEFAULT CURRENT_TIMESTAMP;
       ALTER TABLE memories
+        ALTER COLUMN updated_at SET NOT NULL;
+      ALTER TABLE tasks
+        ADD COLUMN IF NOT EXISTS description TEXT;
+      ALTER TABLE tasks
+        ADD COLUMN IF NOT EXISTS completed_by TEXT REFERENCES users(id);
+      ALTER TABLE tasks
+        ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ;
+      ALTER TABLE tasks
+        ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ;
+      ALTER TABLE tasks
+        ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;
+      ALTER TABLE tasks
+        ALTER COLUMN due_at DROP NOT NULL;
+      UPDATE tasks
+        SET created_at = COALESCE(created_at, due_at, CURRENT_TIMESTAMP);
+      UPDATE tasks
+        SET updated_at = COALESCE(updated_at, completed_at, created_at);
+      ALTER TABLE tasks
+        ALTER COLUMN created_at SET DEFAULT CURRENT_TIMESTAMP;
+      ALTER TABLE tasks
+        ALTER COLUMN created_at SET NOT NULL;
+      ALTER TABLE tasks
+        ALTER COLUMN updated_at SET DEFAULT CURRENT_TIMESTAMP;
+      ALTER TABLE tasks
         ALTER COLUMN updated_at SET NOT NULL;
     `);
   }
@@ -1375,11 +1618,30 @@ export class DemoDatabase {
       );
       await transaction.query(
         `
-          INSERT INTO tasks (id, workspace_id, title, due_at, status)
+          INSERT INTO tasks (
+            id, workspace_id, title, description, due_at, status, completed_by, completed_at, created_at, updated_at
+          )
           VALUES
-            ('task_caption_review', $1, 'Valider la caption de Lumière Noire', '2026-08-30T10:00:00Z', 'TODO'),
-            ('task_campaign_review', $1, 'Finaliser le brief de campagne', '2026-08-30T14:00:00Z', 'IN_PROGRESS'),
-            ('task_other_workspace', 'wsp_other', 'Tâche privée autre workspace', '2026-08-30T12:00:00Z', 'TODO')
+            (
+              'task_caption_review', $1, 'Valider la caption de Lumière Noire',
+              'Relire la caption de la prochaine release.', '2026-08-30T10:00:00Z',
+              'TODO', NULL, NULL, '2026-08-29T10:00:00Z', '2026-08-29T10:00:00Z'
+            ),
+            (
+              'task_campaign_review', $1, 'Finaliser le brief de campagne',
+              'Valider les axes et les contenus de campagne.', '2026-08-30T14:00:00Z',
+              'IN_PROGRESS', NULL, NULL, '2026-08-29T11:00:00Z', '2026-08-29T11:00:00Z'
+            ),
+            (
+              'task_cancelled', $1, 'Ancienne idée de teaser',
+              'Tâche annulée : ne doit plus être réactivée par le MVP.', NULL,
+              'CANCELLED', NULL, NULL, '2026-08-28T11:00:00Z', '2026-08-28T12:00:00Z'
+            ),
+            (
+              'task_other_workspace', 'wsp_other', 'Tâche privée autre workspace',
+              'Cette tâche ne doit jamais être révélée au workspace démo.', '2026-08-30T12:00:00Z',
+              'TODO', NULL, NULL, '2026-08-29T12:00:00Z', '2026-08-29T12:00:00Z'
+            )
           ON CONFLICT (id) DO NOTHING
         `,
         [demoWorkspace.id],

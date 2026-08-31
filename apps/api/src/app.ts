@@ -16,6 +16,10 @@ import {
   memorySchema,
   releaseSchema,
   socialPlatformCapabilitySchema,
+  taskCompleteParamsSchema,
+  taskCompleteRequestSchema,
+  taskCreateSchema,
+  taskSchema,
   trackCreateSchema,
   trackSchema,
 } from "@ida/contracts";
@@ -30,6 +34,7 @@ import {
   type Memory,
   type MemoryDecision,
   mediaStatuses,
+  type Task,
   type Track,
 } from "./database.js";
 import { demoContext, demoWorkspace } from "./demo-context.js";
@@ -148,6 +153,24 @@ class MemoryDecisionInputError extends Error {
 
   constructor() {
     super("La décision de mémoire est invalide.");
+  }
+}
+
+class TaskInputError extends Error {
+  readonly statusCode = 400;
+  readonly code = "INVALID_TASK";
+
+  constructor() {
+    super("Les champs transmis pour la tâche sont invalides.");
+  }
+}
+
+class TaskCompletionInputError extends Error {
+  readonly statusCode = 400;
+  readonly code = "INVALID_TASK_COMPLETION";
+
+  constructor() {
+    super("La finalisation de la tâche est invalide.");
   }
 }
 
@@ -410,6 +433,21 @@ function toMemoryResponse(memory: Memory) {
   });
 }
 
+function toTaskResponse(task: Task) {
+  return taskSchema.parse({
+    id: task.id,
+    workspaceId: demoContext.workspaceId,
+    title: task.title,
+    description: optionalString(task.description),
+    status: task.status,
+    dueAt: task.dueAt ?? undefined,
+    completedBy: optionalString(task.completedBy),
+    completedAt: task.completedAt ?? undefined,
+    createdAt: task.createdAt,
+    updatedAt: task.updatedAt,
+  });
+}
+
 export async function createApp(options: CreateAppOptions = {}): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   const database = await DemoDatabase.open(options);
@@ -421,6 +459,8 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     { toolKey: "propose_preference_memory", moduleKey: "MEMORY", permission: "WRITE" },
     { toolKey: "confirm_memory", moduleKey: "MEMORY", permission: "WRITE" },
     { toolKey: "reject_memory", moduleKey: "MEMORY", permission: "WRITE" },
+    { toolKey: "create_task", moduleKey: "TASKS", permission: "WRITE" },
+    { toolKey: "complete_task", moduleKey: "TASKS", permission: "WRITE" },
     { toolKey: "create_track", moduleKey: "MUSIC", permission: "WRITE" },
     { toolKey: "import_media", moduleKey: "CONTENT", permission: "WRITE" },
   ]);
@@ -452,6 +492,12 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     }
 
     if (error instanceof MemoryProposalInputError || error instanceof MemoryDecisionInputError) {
+      return reply.status(error.statusCode).send({
+        error: { code: error.code, message: error.message },
+      });
+    }
+
+    if (error instanceof TaskInputError || error instanceof TaskCompletionInputError) {
       return reply.status(error.statusCode).send({
         error: { code: error.code, message: error.message },
       });
@@ -524,6 +570,46 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     }
 
     return { data: toMemoryResponse(result.memory) };
+  };
+
+  const completeTask = async (request: FastifyRequest, reply: FastifyReply) => {
+    const params = taskCompleteParamsSchema.safeParse(request.params);
+    // Une requête sans corps est autorisée ; tout corps JSON, y compris null,
+    // est invalide afin que la route /complete reste l'unique transition.
+    const body = taskCompleteRequestSchema.safeParse(request.body === undefined ? {} : request.body);
+
+    if (!params.success || !body.success) {
+      throw new TaskCompletionInputError();
+    }
+
+    toolGateway.assertAuthorized({
+      toolKey: "complete_task",
+      moduleKey: "TASKS",
+      permission: "WRITE",
+    });
+
+    const result = await database.completeTask(demoContext.workspaceId, demoContext.userId, params.data.taskId);
+
+    if (result.kind === "not-found") {
+      return reply.status(404).send({
+        error: { code: "TASK_NOT_FOUND", message: "Tâche introuvable dans ce workspace." },
+      });
+    }
+
+    if (result.kind === "already-completed") {
+      return { data: toTaskResponse(result.task) };
+    }
+
+    if (result.kind === "not-actionable") {
+      return reply.status(409).send({
+        error: {
+          code: "TASK_NOT_ACTIONABLE",
+          message: "Cette tâche possède un état final qui ne peut pas être complété.",
+        },
+      });
+    }
+
+    return { data: toTaskResponse(result.task) };
   };
 
   app.get("/health", async () => ({
@@ -750,6 +836,34 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   app.post("/v1/memories/:memoryId/confirm", async (request, reply) => decideMemory(request, reply, "CONFIRMED"));
 
   app.post("/v1/memories/:memoryId/reject", async (request, reply) => decideMemory(request, reply, "REJECTED"));
+
+  app.get("/v1/tasks", async () => {
+    const tasks = await database.listTasks(demoContext.workspaceId);
+
+    return { data: tasks.map(toTaskResponse) };
+  });
+
+  app.post("/v1/tasks", async (request, reply) => {
+    const input = taskCreateSchema.safeParse(request.body);
+
+    if (!input.success) {
+      throw new TaskInputError();
+    }
+
+    toolGateway.assertAuthorized({
+      toolKey: "create_task",
+      moduleKey: "TASKS",
+      permission: "WRITE",
+    });
+
+    // Le serveur impose l'ID, le workspace, l'acteur et TODO : le client ne
+    // peut pas créer une tâche déjà finalisée ou dans un autre périmètre.
+    const task = await database.createTask(demoContext.workspaceId, demoContext.userId, input.data);
+
+    return reply.status(201).send({ data: toTaskResponse(task) });
+  });
+
+  app.post("/v1/tasks/:taskId/complete", async (request, reply) => completeTask(request, reply));
 
   app.get("/v1/social/platforms", async () => {
     const platforms = await database.listSocialPlatforms();

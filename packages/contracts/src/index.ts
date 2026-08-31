@@ -302,6 +302,49 @@ export const memoryDecisionParamsSchema = z
   })
   .strict();
 
+export const taskStatusSchema = z.enum(["TODO", "IN_PROGRESS", "DONE", "CANCELLED"]);
+export type TaskStatus = z.infer<typeof taskStatusSchema>;
+
+const taskTitleSchema = z.string().trim().min(1).max(240);
+const taskDescriptionSchema = z.string().trim().min(1).max(4_000);
+
+export const taskSchema = z.object({
+  id: entityIdSchema,
+  workspaceId: entityIdSchema,
+  title: taskTitleSchema,
+  description: taskDescriptionSchema.optional(),
+  status: taskStatusSchema,
+  dueAt: timestampSchema.optional(),
+  completedBy: entityIdSchema.optional(),
+  completedAt: timestampSchema.optional(),
+  createdAt: timestampSchema,
+  updatedAt: timestampSchema,
+});
+
+export type Task = z.infer<typeof taskSchema>;
+
+// Le client ne crée qu'une intention de tâche. Son périmètre, son état initial
+// et son acteur restent décidés par le serveur.
+export const taskCreateSchema = z
+  .object({
+    title: taskTitleSchema,
+    description: taskDescriptionSchema.optional(),
+    dueAt: timestampSchema.optional(),
+  })
+  .strict();
+
+export type TaskCreate = z.infer<typeof taskCreateSchema>;
+
+// La route /complete porte elle-même la transition. Un corps reste interdit
+// pour empêcher l'injection d'un état, d'un workspace ou d'un acteur.
+export const taskCompleteRequestSchema = z.object({}).strict();
+
+export const taskCompleteParamsSchema = z
+  .object({
+    taskId: entityIdSchema,
+  })
+  .strict();
+
 export const socialPlatformSchema = z.enum(["INSTAGRAM", "TIKTOK", "YOUTUBE", "FACEBOOK"]);
 export type SocialPlatform = z.infer<typeof socialPlatformSchema>;
 

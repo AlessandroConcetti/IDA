@@ -149,6 +149,8 @@ Journaliser notamment : connexion/révocation, changement de rôle, connexion so
 
 La mémoire permanente reste opt-in : IDA demande confirmation avant de stocker une préférence durable. Le flux local crée uniquement une proposition `PENDING`, puis accepte seulement `PENDING → CONFIRMED` ou `PENDING → REJECTED` via deux routes sans corps. Toute décision finale est immuable, et l’identifiant est recherché dans le workspace serveur avant la transition afin de ne pas révéler les mémoires d’un autre périmètre. Les actions sont allowlistées en `MEMORY` / `WRITE` et écrivent `memory.proposed`, `memory.confirmed` ou `memory.rejected` dans l’audit sans recopier le contenu de la préférence. L’utilisateur doit pouvoir consulter, corriger et supprimer sa mémoire. Les données servant au contexte IA sont minimisées et filtrées par workspace.
 
+Le Task Center local applique les mêmes bornes : création strictement `TODO`, scope et acteur résolus côté serveur, et finalisation sans corps uniquement via `TODO|IN_PROGRESS → DONE`. Un retry de finalisation sur `DONE` est idempotent et ne réécrit ni données ni audit ; les autres états finaux sont non actionnables. Les outils `TASKS` / `WRITE` sont allowlistés, une tâche hors workspace répond comme absente, et les audits `task.created` / `task.completed` n’embarquent ni titre ni description.
+
 ## 10. Exploitation, sauvegardes et environnements
 
 ### Environnements
