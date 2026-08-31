@@ -23,6 +23,28 @@ describe("ToolGateway", () => {
     });
   });
 
+  it("autorise APPROVAL_REQUIRED seulement avec une preuve explicite conforme", () => {
+    const gateway = new ToolGateway(undefined, [
+      { toolKey: "decide_post_variant", moduleKey: "CONTENT", permission: "APPROVAL_REQUIRED" },
+    ]);
+
+    expect(
+      gateway.authorize({ toolKey: "decide_post_variant", moduleKey: "CONTENT", permission: "APPROVAL_REQUIRED" }),
+    ).toMatchObject({ allowed: false, code: "APPROVAL_REQUIRED" });
+    expect(
+      gateway.authorize({
+        toolKey: "decide_post_variant",
+        moduleKey: "CONTENT",
+        permission: "APPROVAL_REQUIRED",
+        explicitApproval: {
+          approvalId: "human_server_action",
+          approvedBy: "usr_demo_aless",
+          approvedAt: "2026-08-30T09:00:00.000Z",
+        },
+      }),
+    ).toMatchObject({ allowed: true });
+  });
+
   it("peut limiter explicitement les outils WRITE autorisés", () => {
     const gateway = new ToolGateway(undefined, [
       { toolKey: "create_track", moduleKey: "MUSIC", permission: "WRITE" },
@@ -32,6 +54,7 @@ describe("ToolGateway", () => {
       { toolKey: "reject_memory", moduleKey: "MEMORY", permission: "WRITE" },
       { toolKey: "create_task", moduleKey: "TASKS", permission: "WRITE" },
       { toolKey: "complete_task", moduleKey: "TASKS", permission: "WRITE" },
+      { toolKey: "decide_post_variant", moduleKey: "CONTENT", permission: "APPROVAL_REQUIRED" },
     ]);
 
     expect(gateway.authorize({ toolKey: "create_track", moduleKey: "MUSIC", permission: "WRITE" })).toMatchObject({
@@ -55,6 +78,18 @@ describe("ToolGateway", () => {
     expect(gateway.authorize({ toolKey: "complete_task", moduleKey: "TASKS", permission: "WRITE" })).toMatchObject({
       allowed: true,
     });
+    expect(
+      gateway.authorize({
+        toolKey: "decide_post_variant",
+        moduleKey: "CONTENT",
+        permission: "APPROVAL_REQUIRED",
+        explicitApproval: {
+          approvalId: "human_server_action",
+          approvedBy: "usr_demo_aless",
+          approvedAt: "2026-08-30T09:00:00.000Z",
+        },
+      }),
+    ).toMatchObject({ allowed: true });
     expect(gateway.authorize({ toolKey: "delete_track", moduleKey: "MUSIC", permission: "WRITE" })).toMatchObject({
       allowed: false,
       code: "TOOL_NOT_ALLOWED",

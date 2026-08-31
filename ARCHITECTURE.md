@@ -148,8 +148,9 @@ La première tranche conserve volontairement un périmètre réduit et vérifiab
 - La Content Library accepte désormais l’import local privé d’un fichier : limites, whitelist MIME/extension, hash SHA-256, déduplication par workspace, stockage à clé générée, tags normalisés et audit `media.imported`. Aucun chemin, URL publique, upload cloud ou analyse IA n’est exposé ; scan de signature, quarantaine et dérivés restent des prérequis de production.
 - Le Memory Consent Center crée des préférences uniquement sous forme de propositions `PENDING`. Seule une décision humaine explicite peut les confirmer ou les refuser ; la transition est atomique, finale et auditée sans recopier le contenu libre de la préférence.
 - Le Task Center crée des tâches internes `TODO` avec échéance facultative et permet une clôture explicite `TODO|IN_PROGRESS → DONE`. Les actions passent par `TASKS` / `WRITE`, sont auditables, isolées par workspace et idempotentes lorsqu’une clôture est rejouée.
+- L’Approval Center affiche uniquement les propositions `REQUESTED` du workspace et décide une version éditoriale liée à un hash SHA-256. La route résout la précondition et l’acteur côté serveur, passe par `CONTENT` / `APPROVAL_REQUIRED` et audite la décision sans recopier caption, hashtags ni métadonnées privées. Cette décision conserve `delivery_state = NOT_CONFIGURED` : elle ne touche ni `scheduled_posts`, ni les médias, ni un connecteur social.
 - PGlite est employé uniquement comme base locale de développement et de tests. PostgreSQL centralisé, migrations de production, stockage objet et fournisseur d’identité restent des décisions de la suite de Phase 1.
-- Les écrans Social et System rendent visibles les capacités et indisponibilités actuelles. Aucun OAuth, token, scraping, appel social, upload ou publication n’est présent dans cette tranche.
+- Les écrans Social et System rendent visibles les capacités et indisponibilités actuelles. Aucun OAuth, token, scraping, appel social ou publication n’est présent dans cette tranche.
 
 Cette implémentation prouve le flux partagé web → API → contrat → données. Elle n’est pas encore une bêta avec données personnelles.
 

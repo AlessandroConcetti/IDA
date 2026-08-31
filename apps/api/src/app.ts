@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
 import {
+  approvalQueueItemSchema,
   artistProfileSchema,
   artistProfileUpdateSchema,
   mediaAssetSchema,
@@ -14,6 +15,9 @@ import {
   memoryDecisionRequestSchema,
   memoryProposalCreateSchema,
   memorySchema,
+  postVariantDecisionParamsSchema,
+  postVariantDecisionRequestSchema,
+  postVariantDecisionSchema,
   releaseSchema,
   socialPlatformCapabilitySchema,
   taskCompleteParamsSchema,
@@ -27,6 +31,8 @@ import { createModuleRegistry, ToolGateway, ToolPolicyError } from "@ida/domain"
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 
 import {
+  type ApprovalDecision,
+  type ApprovalQueueItem,
   type ArtistProfile,
   DemoDatabase,
   type DemoDatabaseOptions,
@@ -34,6 +40,7 @@ import {
   type Memory,
   type MemoryDecision,
   mediaStatuses,
+  type PostVariantDecision,
   type Task,
   type Track,
 } from "./database.js";
@@ -171,6 +178,15 @@ class TaskCompletionInputError extends Error {
 
   constructor() {
     super("La finalisation de la tâche est invalide.");
+  }
+}
+
+class ApprovalDecisionInputError extends Error {
+  readonly statusCode = 400;
+  readonly code = "INVALID_APPROVAL_DECISION";
+
+  constructor() {
+    super("La décision d'approbation est invalide.");
   }
 }
 
@@ -448,11 +464,50 @@ function toTaskResponse(task: Task) {
   });
 }
 
+function toApprovalQueueItemResponse(item: ApprovalQueueItem) {
+  return approvalQueueItemSchema.parse({
+    approvalId: item.approvalId,
+    variantId: item.variantId,
+    postId: item.postId,
+    postTitle: item.postTitle,
+    platform: item.platform,
+    media: item.media.map((media) => ({
+      id: media.id,
+      filename: media.filename,
+      type: media.type,
+      status: media.status,
+    })),
+    caption: item.caption,
+    hashtags: item.hashtags,
+    cta: optionalString(item.cta),
+    objective: item.objective,
+    rationale: optionalString(item.rationale),
+    plannedAt: item.plannedAt ?? undefined,
+    timezone: item.timezone,
+    payloadHash: item.payloadHash,
+    approvalState: item.approvalState,
+    deliveryState: item.deliveryState,
+    requestedAt: item.requestedAt,
+  });
+}
+
+function toPostVariantDecisionResponse(decision: PostVariantDecision) {
+  return postVariantDecisionSchema.parse({
+    approvalId: decision.approvalId,
+    variantId: decision.variantId,
+    approvalState: decision.approvalState,
+    deliveryState: decision.deliveryState,
+    payloadHash: decision.payloadHash,
+    decidedAt: decision.decidedAt,
+  });
+}
+
 export async function createApp(options: CreateAppOptions = {}): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   const database = await DemoDatabase.open(options);
   const storageDir = options.storageDir ?? defaultStorageDir;
-  const core = new DeterministicIdaCore(database, undefined, options.now);
+  const serverNow = options.now ?? (() => new Date());
+  const core = new DeterministicIdaCore(database, undefined, serverNow);
   const modules = createModuleRegistry();
   const toolGateway = new ToolGateway(undefined, [
     { toolKey: "update_artist_profile", moduleKey: "MEMORY", permission: "WRITE" },
@@ -463,6 +518,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     { toolKey: "complete_task", moduleKey: "TASKS", permission: "WRITE" },
     { toolKey: "create_track", moduleKey: "MUSIC", permission: "WRITE" },
     { toolKey: "import_media", moduleKey: "CONTENT", permission: "WRITE" },
+    { toolKey: "decide_post_variant", moduleKey: "CONTENT", permission: "APPROVAL_REQUIRED" },
   ]);
 
   await app.register(cors, {
@@ -498,6 +554,12 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     }
 
     if (error instanceof TaskInputError || error instanceof TaskCompletionInputError) {
+      return reply.status(error.statusCode).send({
+        error: { code: error.code, message: error.message },
+      });
+    }
+
+    if (error instanceof ApprovalDecisionInputError) {
       return reply.status(error.statusCode).send({
         error: { code: error.code, message: error.message },
       });
@@ -610,6 +672,104 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     }
 
     return { data: toTaskResponse(result.task) };
+  };
+
+  const decidePostVariant = async (request: FastifyRequest, reply: FastifyReply, decision: ApprovalDecision) => {
+    const params = postVariantDecisionParamsSchema.safeParse(request.params);
+    const body = postVariantDecisionRequestSchema.safeParse(request.body);
+
+    if (!params.success || !body.success) {
+      throw new ApprovalDecisionInputError();
+    }
+
+    // Résoudre d'abord la précondition dans le scope serveur. Cela vérifie que
+    // l'approvalId et le hash désignent encore la version courante avant de
+    // construire une preuve humaine ; aucun champ du client ne devient preuve.
+    const precondition = await database.preparePostVariantDecision(
+      demoContext.workspaceId,
+      params.data.variantId,
+      body.data.approvalId,
+      body.data.expectedPayloadHash,
+      decision,
+    );
+
+    if (precondition.kind === "not-found") {
+      return reply.status(404).send({
+        error: { code: "POST_VARIANT_NOT_FOUND", message: "Variante introuvable dans ce workspace." },
+      });
+    }
+
+    if (precondition.kind === "stale") {
+      return reply.status(409).send({
+        error: {
+          code: "APPROVAL_STALE_PAYLOAD",
+          message: "L'approbation ou le contenu à valider ne correspond plus à la version courante.",
+        },
+      });
+    }
+
+    if (precondition.kind === "opposite-decision") {
+      return reply.status(409).send({
+        error: {
+          code: "APPROVAL_DECISION_FINAL",
+          message: "Cette variante possède déjà une décision finale immuable.",
+        },
+      });
+    }
+
+    if (precondition.kind === "already-decided") {
+      return { data: toPostVariantDecisionResponse(precondition.decision) };
+    }
+
+    // La preuve remise au ToolGateway est ensuite construite à partir de
+    // l'approbation *résolue côté serveur*, du contexte serveur et d'un instant
+    // serveur. Le runtime LOCAL_DEMO ne prétend pas encore fournir une
+    // authentification de production.
+    toolGateway.assertAuthorized({
+      toolKey: "decide_post_variant",
+      moduleKey: "CONTENT",
+      permission: "APPROVAL_REQUIRED",
+      explicitApproval: {
+        approvalId: precondition.approvalId,
+        approvedBy: demoContext.userId,
+        approvedAt: serverNow().toISOString(),
+      },
+    });
+
+    const result = await database.decidePostVariant(
+      demoContext.workspaceId,
+      demoContext.userId,
+      params.data.variantId,
+      body.data.approvalId,
+      body.data.expectedPayloadHash,
+      decision,
+    );
+
+    if (result.kind === "not-found") {
+      return reply.status(404).send({
+        error: { code: "POST_VARIANT_NOT_FOUND", message: "Variante introuvable dans ce workspace." },
+      });
+    }
+
+    if (result.kind === "stale") {
+      return reply.status(409).send({
+        error: {
+          code: "APPROVAL_STALE_PAYLOAD",
+          message: "L'approbation ou le contenu à valider ne correspond plus à la version courante.",
+        },
+      });
+    }
+
+    if (result.kind === "opposite-decision") {
+      return reply.status(409).send({
+        error: {
+          code: "APPROVAL_DECISION_FINAL",
+          message: "Cette variante possède déjà une décision finale immuable.",
+        },
+      });
+    }
+
+    return { data: toPostVariantDecisionResponse(result.decision) };
   };
 
   app.get("/health", async () => ({
@@ -836,6 +996,20 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   app.post("/v1/memories/:memoryId/confirm", async (request, reply) => decideMemory(request, reply, "CONFIRMED"));
 
   app.post("/v1/memories/:memoryId/reject", async (request, reply) => decideMemory(request, reply, "REJECTED"));
+
+  app.get("/v1/approvals/queue", async () => {
+    const approvals = await database.listApprovalQueue(demoContext.workspaceId);
+
+    return { data: approvals.map(toApprovalQueueItemResponse) };
+  });
+
+  app.post("/v1/post-variants/:variantId/approve", async (request, reply) =>
+    decidePostVariant(request, reply, "APPROVED"),
+  );
+
+  app.post("/v1/post-variants/:variantId/reject", async (request, reply) =>
+    decidePostVariant(request, reply, "REJECTED"),
+  );
 
   app.get("/v1/tasks", async () => {
     const tasks = await database.listTasks(demoContext.workspaceId);

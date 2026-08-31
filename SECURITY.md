@@ -46,7 +46,7 @@ L’IA n’obtient ni accès direct à la base de données, ni clé de productio
 - L’identité et le workspace de démonstration sont fixés uniquement côté serveur ; un header, un query string ou le corps d’une requête ne peut pas choisir un autre workspace.
 - PGlite est conservé dans un dossier local ignoré par Git. Il ne contient que des métadonnées de démonstration, aucun secret, token ou identifiant bancaire. Les fichiers importés localement résident séparément dans un stockage privé ignoré par Git ; cette solution de développement ne remplace pas le stockage objet, le scan et la quarantaine de production.
 - L’API locale n’accepte que l’origine du Command Center de développement et n’utilise pas de cookies de session tant que l’authentification réelle n’est pas livrée.
-- Les outils réellement exposés sont les lectures contrôlées et trois écritures internes allowlistées : `update_artist_profile`, `create_track` et `import_media`. Elles sont validées par schéma, limitées au workspace serveur, journalisées et n’ont aucun effet externe. `import_media` limite un fichier à 25 MiB et valide actuellement son couple MIME/extension, mais ne remplace pas le contrôle de signature binaire et la quarantaine requis avant toute donnée personnelle réelle. Les autres chemins `WRITE`, ainsi que `APPROVAL_REQUIRED`, `PUBLISH` et `SYSTEM`, restent inaccessibles depuis la commande web.
+- Les outils réellement exposés sont les lectures contrôlées et des écritures internes allowlistées : `update_artist_profile`, `create_track`, `import_media`, les transitions de mémoire consentie, les opérations Task Center et `decide_post_variant`. Toutes sont validées par schéma, limitées au workspace serveur, journalisées et sans effet externe. `decide_post_variant` est le seul outil local en `CONTENT` / `APPROVAL_REQUIRED` : la route résout d’abord une approbation et son hash dans le workspace, puis construit la preuve `explicitApproval` côté serveur ; elle n’accepte jamais une preuve, un acteur ou un état fourni par le client. `import_media` limite un fichier à 25 MiB et valide actuellement son couple MIME/extension, mais ne remplace pas le contrôle de signature binaire et la quarantaine requis avant toute donnée personnelle réelle. `PUBLISH` et `SYSTEM` restent inaccessibles depuis le runtime local.
 - Ce runtime n’est pas éligible à une bêta avec données personnelles. Avant cela, les exigences de la section 12 restent obligatoires.
 
 ## 4. Identité, appareils et autorisation
@@ -99,6 +99,12 @@ DRAFT → PROPOSED → APPROVED → SCHEDULED → DISPATCHING → PUBLISHED | FA
 
 Les contenus importés, les commentaires sociaux et les pages web sont des **données non fiables**. Ils ne peuvent pas modifier les instructions système ni élargir les permissions d’un outil. Chaque appel d’outil doit passer par une liste blanche, un schéma de paramètres, une politique d’autorisation et un journal d’audit.
 
+### Limite explicite de l’Approval Center local
+
+Le runtime local ne livre qu’une décision interne sur une variante seedée. La file expose seulement les demandes `REQUESTED` appartenant au workspace serveur et des métadonnées média sûres (`id`, nom, type, statut), jamais une clé de stockage, un chemin ou une URL. Les routes `approve` / `reject` exigent `approvalId` et `expectedPayloadHash`, recalculent le hash canonique de la version courante (titre, objectif, rationale éventuelle, plateforme, texte, hashtags ordonnés, CTA, date/fuseau et médias ordonnés) avant toute mutation et traitent toute divergence comme une précondition obsolète. Une décision terminale est immuable ; le retry identique ne crée ni nouvelle date ni audit, tandis qu’une décision opposée est refusée.
+
+La preuve transmise au `ToolGateway` est construite après cette résolution avec l’approbation serveur, l’acteur serveur et l’instant serveur. En `LOCAL_DEMO`, l’acteur est fixe : ce mécanisme établit la frontière applicative et ne constitue pas encore une authentification humaine de production. Une décision conserve strictement `NOT_CONFIGURED` comme état de livraison. Elle n’écrit ni `scheduled_posts`, ni médias, jobs, tokens, OAuth, comptes sociaux ou adaptateur réseau.
+
 ## 6. OAuth, secrets et connecteurs
 
 - Séparer `SocialAccount` (identité et état public du compte) de `SocialCredential` (jetons chiffrés et métadonnées d’expiration).
@@ -150,6 +156,8 @@ Journaliser notamment : connexion/révocation, changement de rôle, connexion so
 La mémoire permanente reste opt-in : IDA demande confirmation avant de stocker une préférence durable. Le flux local crée uniquement une proposition `PENDING`, puis accepte seulement `PENDING → CONFIRMED` ou `PENDING → REJECTED` via deux routes sans corps. Toute décision finale est immuable, et l’identifiant est recherché dans le workspace serveur avant la transition afin de ne pas révéler les mémoires d’un autre périmètre. Les actions sont allowlistées en `MEMORY` / `WRITE` et écrivent `memory.proposed`, `memory.confirmed` ou `memory.rejected` dans l’audit sans recopier le contenu de la préférence. L’utilisateur doit pouvoir consulter, corriger et supprimer sa mémoire. Les données servant au contexte IA sont minimisées et filtrées par workspace.
 
 Le Task Center local applique les mêmes bornes : création strictement `TODO`, scope et acteur résolus côté serveur, et finalisation sans corps uniquement via `TODO|IN_PROGRESS → DONE`. Un retry de finalisation sur `DONE` est idempotent et ne réécrit ni données ni audit ; les autres états finaux sont non actionnables. Les outils `TASKS` / `WRITE` sont allowlistés, une tâche hors workspace répond comme absente, et les audits `task.created` / `task.completed` n’embarquent ni titre ni description.
+
+L’Approval Center local ajoute seulement `post_variant.approved` et `post_variant.rejected` au journal append-only. Leurs payloads redacted contiennent les IDs, les états et le hash, jamais caption, hashtags, rationale, clé de stockage, chemin ou média privé. Une variante ou une approbation hors workspace répond comme absente ; une précondition erronée n’inscrit aucun audit.
 
 ## 10. Exploitation, sauvegardes et environnements
 

@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createApp } from "./app.js";
+import { DemoDatabase } from "./database.js";
 
 type MultipartTestPart =
   | { name: string; value: string }
@@ -90,6 +91,7 @@ describe("IDA API — première tranche Phase 1", () => {
       "/v1/tracks",
       "/v1/media",
       "/v1/memories",
+      "/v1/approvals/queue",
       "/v1/tasks",
       "/v1/social/platforms",
     ];
@@ -619,6 +621,279 @@ describe("IDA API — première tranche Phase 1", () => {
     });
     expect(otherWorkspace.statusCode).toBe(404);
     expect(otherWorkspace.json()).toMatchObject({ error: { code: "MEMORY_NOT_FOUND" } });
+  });
+
+  it("liste une Approval Queue stable, limitée aux demandes du workspace et aux métadonnées média sûres", async () => {
+    const response = await app.inject({ method: "GET", url: "/v1/approvals/queue?workspaceId=wsp_other" });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      data: Array<{
+        approvalId: string;
+        variantId: string;
+        postId: string;
+        postTitle: string;
+        platform: string;
+        media: Array<Record<string, unknown>>;
+        caption: string;
+        hashtags: string[];
+        objective: string;
+        rationale?: string;
+        plannedAt?: string;
+        timezone: string;
+        payloadHash: string;
+        approvalState: string;
+        deliveryState: string;
+        requestedAt: string;
+      }>;
+    };
+
+    expect(body.data.map((item) => item.variantId)).toEqual(["variant_lumiere_instagram", "variant_lumiere_tiktok"]);
+    expect(body.data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          approvalId: "approval_lumiere_instagram",
+          variantId: "variant_lumiere_instagram",
+          postId: "post_lumiere_studio",
+          postTitle: "Teaser studio — Lumière Noire",
+          platform: "INSTAGRAM",
+          approvalState: "REQUESTED",
+          deliveryState: "NOT_CONFIGURED",
+          payloadHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+          plannedAt: "2026-09-01T18:00:00.000Z",
+          timezone: "Europe/Paris",
+          requestedAt: expect.any(String),
+        }),
+      ]),
+    );
+    expect(body.data.some((item) => item.variantId === "variant_other_instagram")).toBe(false);
+    expect(body.data.some((item) => item.approvalState !== "REQUESTED")).toBe(false);
+    expect(body.data[0]?.media).toEqual([
+      expect.objectContaining({
+        id: "med_studio_light",
+        filename: "studio-lumiere-noire-take-04.mp4",
+        type: "VIDEO",
+        status: "UNUSED",
+      }),
+    ]);
+    expect(body.data[0]?.media[0]).not.toHaveProperty("storageKey");
+    expect(body.data[0]?.media[0]).not.toHaveProperty("path");
+    expect(body.data[0]?.media[0]).not.toHaveProperty("url");
+  });
+
+  it("refuse un corps de décision imprécis ou qui tente d'injecter un acteur, un état ou un scope", async () => {
+    const queue = await app.inject({ method: "GET", url: "/v1/approvals/queue" });
+    const proposal = (queue.json() as { data: Array<{ approvalId: string; variantId: string; payloadHash: string }> })
+      .data[0];
+
+    expect(proposal).toBeDefined();
+    const injected = await app.inject({
+      method: "POST",
+      url: `/v1/post-variants/${proposal?.variantId}/approve`,
+      payload: {
+        approvalId: proposal?.approvalId,
+        expectedPayloadHash: proposal?.payloadHash,
+        workspaceId: "wsp_other",
+        approvedBy: "usr_other",
+        approvalState: "APPROVED",
+        deliveryState: "SCHEDULED",
+        caption: "Tentative d'injection.",
+      },
+    });
+    expect(injected.statusCode).toBe(400);
+    expect(injected.json()).toMatchObject({ error: { code: "INVALID_APPROVAL_DECISION" } });
+
+    const nullBody = await app.inject({
+      method: "POST",
+      url: `/v1/post-variants/${proposal?.variantId}/approve`,
+      headers: { "content-type": "application/json" },
+      payload: "null",
+    });
+    expect(nullBody.statusCode).toBe(400);
+    expect(nullBody.json()).toMatchObject({ error: { code: "INVALID_APPROVAL_DECISION" } });
+
+    const unchanged = await app.inject({ method: "GET", url: "/v1/approvals/queue" });
+    expect((unchanged.json() as { data: Array<{ variantId: string }> }).data.map((item) => item.variantId)).toContain(
+      proposal?.variantId,
+    );
+  });
+
+  it("applique une décision après les préconditions exactes, sans programmer de publication", async () => {
+    const queue = await app.inject({ method: "GET", url: "/v1/approvals/queue" });
+    const proposal = (queue.json() as { data: Array<{ approvalId: string; variantId: string; payloadHash: string }> })
+      .data[0];
+    const beforeToday = await app.inject({
+      method: "POST",
+      url: "/v1/ida/commands",
+      payload: { message: "IDA, prépare ma journée." },
+    });
+    const beforeTodayIds = (
+      beforeToday.json() as { data: { result: { items: Array<{ id: string }> } } }
+    ).data.result.items.map((item) => item.id);
+
+    const approved = await app.inject({
+      method: "POST",
+      url: `/v1/post-variants/${proposal?.variantId}/approve`,
+      payload: { approvalId: proposal?.approvalId, expectedPayloadHash: proposal?.payloadHash },
+    });
+    expect(approved.statusCode).toBe(200);
+    const approvedData = (
+      approved.json() as {
+        data: {
+          approvalId: string;
+          variantId: string;
+          approvalState: string;
+          deliveryState: string;
+          payloadHash: string;
+          decidedAt: string;
+        };
+      }
+    ).data;
+    expect(approvedData).toMatchObject({
+      approvalId: proposal?.approvalId,
+      variantId: proposal?.variantId,
+      approvalState: "APPROVED",
+      deliveryState: "NOT_CONFIGURED",
+      payloadHash: proposal?.payloadHash,
+      decidedAt: expect.any(String),
+    });
+
+    const afterQueue = await app.inject({ method: "GET", url: "/v1/approvals/queue" });
+    expect(
+      (afterQueue.json() as { data: Array<{ variantId: string }> }).data.map((item) => item.variantId),
+    ).not.toContain(proposal?.variantId);
+    const afterToday = await app.inject({
+      method: "POST",
+      url: "/v1/ida/commands",
+      payload: { message: "IDA, prépare ma journée." },
+    });
+    const afterTodayIds = (
+      afterToday.json() as { data: { result: { items: Array<{ id: string }> } } }
+    ).data.result.items.map((item) => item.id);
+    expect(afterTodayIds).toEqual(beforeTodayIds);
+    expect(afterTodayIds).not.toContain(proposal?.variantId);
+  });
+
+  it("rend un retry de même décision idempotent et bloque une décision opposée", async () => {
+    const queue = await app.inject({ method: "GET", url: "/v1/approvals/queue" });
+    const proposal = (queue.json() as { data: Array<{ approvalId: string; variantId: string; payloadHash: string }> })
+      .data[0];
+    const payload = { approvalId: proposal?.approvalId, expectedPayloadHash: proposal?.payloadHash };
+
+    const first = await app.inject({
+      method: "POST",
+      url: `/v1/post-variants/${proposal?.variantId}/approve`,
+      payload,
+    });
+    expect(first.statusCode).toBe(200);
+    const firstData = (first.json() as { data: { decidedAt: string; payloadHash: string } }).data;
+
+    const retry = await app.inject({
+      method: "POST",
+      url: `/v1/post-variants/${proposal?.variantId}/approve`,
+      payload,
+    });
+    expect(retry.statusCode).toBe(200);
+    expect(retry.json()).toMatchObject({
+      data: { decidedAt: firstData.decidedAt, payloadHash: firstData.payloadHash },
+    });
+
+    const opposite = await app.inject({
+      method: "POST",
+      url: `/v1/post-variants/${proposal?.variantId}/reject`,
+      payload,
+    });
+    expect(opposite.statusCode).toBe(409);
+    expect(opposite.json()).toMatchObject({ error: { code: "APPROVAL_DECISION_FINAL" } });
+  });
+
+  it("rejette les préconditions obsolètes et masque toute variante d'un autre workspace", async () => {
+    const queue = await app.inject({ method: "GET", url: "/v1/approvals/queue" });
+    const proposal = (queue.json() as { data: Array<{ approvalId: string; variantId: string; payloadHash: string }> })
+      .data[0];
+
+    const staleHash = await app.inject({
+      method: "POST",
+      url: `/v1/post-variants/${proposal?.variantId}/approve`,
+      payload: { approvalId: proposal?.approvalId, expectedPayloadHash: `sha256:${"0".repeat(64)}` },
+    });
+    expect(staleHash.statusCode).toBe(409);
+    expect(staleHash.json()).toMatchObject({ error: { code: "APPROVAL_STALE_PAYLOAD" } });
+
+    const staleApproval = await app.inject({
+      method: "POST",
+      url: `/v1/post-variants/${proposal?.variantId}/approve`,
+      payload: { approvalId: "approval_not_the_current_one", expectedPayloadHash: proposal?.payloadHash },
+    });
+    expect(staleApproval.statusCode).toBe(409);
+    expect(staleApproval.json()).toMatchObject({ error: { code: "APPROVAL_STALE_PAYLOAD" } });
+
+    const otherWorkspace = await app.inject({
+      method: "POST",
+      url: "/v1/post-variants/variant_other_instagram/approve",
+      payload: { approvalId: "approval_other_instagram", expectedPayloadHash: `sha256:${"a".repeat(64)}` },
+    });
+    expect(otherWorkspace.statusCode).toBe(404);
+    expect(otherWorkspace.json()).toMatchObject({ error: { code: "POST_VARIANT_NOT_FOUND" } });
+
+    const unchanged = await app.inject({ method: "GET", url: "/v1/approvals/queue" });
+    expect((unchanged.json() as { data: Array<{ variantId: string }> }).data.map((item) => item.variantId)).toContain(
+      proposal?.variantId,
+    );
+  });
+
+  it("répare au redémarrage le hash REQUESTED d'un seed local plus ancien", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "ida-approval-hash-upgrade-"));
+    const legacyHash = `sha256:${"f".repeat(64)}`;
+    let seededDatabase: DemoDatabase | undefined;
+    let upgradedApp: Awaited<ReturnType<typeof createApp>> | undefined;
+
+    try {
+      seededDatabase = await DemoDatabase.open({ dataDir });
+      await seededDatabase.pglite.query(
+        `
+          UPDATE post_variants
+          SET payload_hash = $1
+          WHERE id = 'variant_lumiere_instagram'
+            AND approval_state = 'REQUESTED';
+        `,
+        [legacyHash],
+      );
+      await seededDatabase.pglite.query(
+        `
+          UPDATE approvals
+          SET payload_hash = $1
+          WHERE id = 'approval_lumiere_instagram'
+            AND state = 'REQUESTED';
+        `,
+        [legacyHash],
+      );
+      await seededDatabase.close();
+      seededDatabase = undefined;
+
+      upgradedApp = await createApp({ dataDir });
+      const queue = await upgradedApp.inject({ method: "GET", url: "/v1/approvals/queue" });
+      expect(queue.statusCode).toBe(200);
+      const proposal = (
+        queue.json() as { data: Array<{ approvalId: string; variantId: string; payloadHash: string }> }
+      ).data.find((item) => item.variantId === "variant_lumiere_instagram");
+
+      expect(proposal?.payloadHash).toMatch(/^sha256:[a-f0-9]{64}$/);
+      expect(proposal?.payloadHash).not.toBe(legacyHash);
+      const approved = await upgradedApp.inject({
+        method: "POST",
+        url: "/v1/post-variants/variant_lumiere_instagram/approve",
+        payload: { approvalId: proposal?.approvalId, expectedPayloadHash: proposal?.payloadHash },
+      });
+      expect(approved.statusCode).toBe(200);
+      expect(approved.json()).toMatchObject({
+        data: { approvalState: "APPROVED", deliveryState: "NOT_CONFIGURED" },
+      });
+    } finally {
+      await seededDatabase?.close();
+      await upgradedApp?.close();
+      await rm(dataDir, { recursive: true, force: true });
+    }
   });
 
   it("crée une tâche TODO strictement scoped, y compris sans échéance", async () => {

@@ -23,11 +23,12 @@ Le premier runtime est une API Fastify locale sur `http://127.0.0.1:8787`, conso
 | `GET /v1/system/status` | Livrée | États factuels de la tranche locale ; les intégrations absentes sont `WARNING` ou `DISCONNECTED`. |
 | `GET/PATCH /v1/artist-profile`, `/v1/releases`, `GET/POST /v1/tracks`, `GET/POST /v1/media`, `GET /v1/memories` | Livrées | Données de démonstration isolées par workspace côté serveur. L’Artist Brain, la création bornée d’un morceau Music Brain et l’import local privé d’un média passent par des outils `WRITE` allowlistés ; `GET /v1/media?status=UNUSED` est supporté. |
 | `POST /v1/memories/proposals`, `POST /v1/memories/:memoryId/confirm`, `POST /v1/memories/:memoryId/reject` | Livrées | Flux de mémoire consentie : une préférence commence forcément à `PENDING` et seule une décision humaine explicite peut la faire passer à `CONFIRMED` ou `REJECTED`. |
+| `GET /v1/approvals/queue`, `POST /v1/post-variants/:variantId/approve`, `POST /v1/post-variants/:variantId/reject` | Livrées | Approval Center local : propositions seedées en `REQUESTED`, préconditionnées par un hash de payload et décidées humainement ; aucune programmation ni publication n’en découle. |
 | `GET/POST /v1/tasks`, `POST /v1/tasks/:taskId/complete` | Livrées | Task Center local : création interne en `TODO`, finalisation explicite et idempotente, toujours isolées au workspace serveur. |
 | `GET /v1/social/platforms` | Livrée | Capacités déclaratives de démonstration ; aucune connexion sociale n’est créée. |
 | `POST /v1/ida/commands` | Livrée | Corps `{ "message": "…" }` ; commandes déterministes de lecture pour la journée, les contenus inutilisés et l’état système. |
 
-La commande retourne un objet `data` contenant la commande structurée, les outils de lecture autorisés et un résultat. À l’exception de la modification interne de l’Artist Brain, de la création Music Brain bornée, de l’import local privé, du flux de consentement mémoire et du Task Center décrits ci-dessous, toute mutation, publication, intégration externe ou accès financier est hors de cette tranche et reste refusée par conception.
+La commande retourne un objet `data` contenant la commande structurée, les outils de lecture autorisés et un résultat. À l’exception de la modification interne de l’Artist Brain, de la création Music Brain bornée, de l’import local privé, du flux de consentement mémoire, de l’Approval Center et du Task Center décrits ci-dessous, toute mutation, publication, intégration externe ou accès financier est hors de cette tranche et reste refusée par conception.
 
 ### Artist Brain local éditable
 
@@ -66,6 +67,26 @@ La commande retourne un objet `data` contenant la commande structurée, les outi
 - La transition est atomique : seulement `PENDING → CONFIRMED` ou `PENDING → REJECTED`. Un état final est immuable et toute nouvelle décision retourne `409 MEMORY_DECISION_FINAL`.
 - Le `memoryId` est toujours recherché dans le workspace imposé par le serveur. Une mémoire hors workspace répond comme absente avec `404 MEMORY_NOT_FOUND`, sans révéler son existence. `GET /v1/memories` renvoie les vrais `createdAt` et `updatedAt` persistés ; une confirmation expose aussi `confirmedBy` et `confirmedAt`.
 - Les actions écrivent uniquement des événements d’audit append-only `memory.proposed`, `memory.confirmed` et `memory.rejected`. Le contenu libre de la préférence est volontairement absent du payload d’audit.
+
+### Approval Center : décision humaine sur un payload immuable
+
+`GET /v1/approvals/queue` renvoie uniquement les approbations `REQUESTED` du workspace imposé par le serveur, dans un ordre stable par date proposée puis demande. Une proposition contient l’identifiant d’approbation, la variante, le post, le payload éditorial et un `payloadHash` SHA-256. Les métadonnées de média sont volontairement limitées à `id`, `filename`, `type` et `status` : ni clé de stockage, ni chemin privé, ni URL signée ne sort de l’API.
+
+`POST /v1/post-variants/:variantId/approve` et `POST /v1/post-variants/:variantId/reject` acceptent strictement :
+
+```json
+{
+  "approvalId": "approval_…",
+  "expectedPayloadHash": "sha256:…"
+}
+```
+
+- Ces deux champs sont des **préconditions**, pas une permission. `workspaceId`, acteur, état, caption, médias, plateforme, horaire ou livraison client sont refusés par `400 INVALID_APPROVAL_DECISION`.
+- Avant toute autorisation, le serveur résout la variante et l’approbation dans le workspace courant, recalcule le hash canonique (`postTitle`, objectif, rationale éventuelle, plateforme, texte, hashtags ordonnés, CTA, date proposée, fuseau et médias ordonnés) puis refuse toute valeur obsolète avec `409 APPROVAL_STALE_PAYLOAD`. Une variante étrangère répond `404 POST_VARIANT_NOT_FOUND` sans révéler son existence.
+- Après cette vérification, la route construit côté serveur la preuve remise à l’outil allowlisté `decide_post_variant` (`CONTENT` / `APPROVAL_REQUIRED`) avec l’approbation résolue, l’acteur serveur et l’instant serveur. Elle ne copie jamais une prétendue preuve du corps. En `LOCAL_DEMO`, l’acteur reste le contexte de démonstration ; ce mécanisme ne prétend pas remplacer l’authentification réelle.
+- La transition atomique est `REQUESTED → APPROVED` ou `REQUESTED → REJECTED`. Une même décision est idempotente : elle retourne `200` sans nouvelle date ni nouvel audit. Une décision opposée est finale et répond `409 APPROVAL_DECISION_FINAL`.
+- Une décision laisse toujours `deliveryState` à `NOT_CONFIGURED`. Elle ne touche ni `scheduled_posts`, ni les statuts/compteurs des médias, ni jobs, OAuth, compte social, adaptateur ou réseau externe. `plannedAt`, lorsqu’il existe, est uniquement une date proposée.
+- Un audit append-only `post_variant.approved` ou `post_variant.rejected` contient seulement les identifiants, l’état et le hash ; il ne recopie ni caption, ni hashtags, ni rationale, ni donnée de stockage.
 
 ### Task Center : finalisation contrôlée
 

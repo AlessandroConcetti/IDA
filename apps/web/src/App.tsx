@@ -1,10 +1,13 @@
 import { type DragEvent, type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
+  type ApprovalQueueItem,
+  approvePostVariant,
   completeTask,
   confirmMemory,
   createTask,
   createTrack,
   type DashboardSnapshot,
+  fetchApprovalQueue,
   fetchArtistBrain,
   fetchDashboardSnapshot,
   fetchMemories,
@@ -14,6 +17,7 @@ import {
   type MemoryRecord,
   proposePreferenceMemory,
   rejectMemory,
+  rejectPostVariant,
   submitIdaCommand,
   type TaskCreateInput,
   type TaskRecord,
@@ -744,6 +748,7 @@ function ContentView({
         </div>
         <MediaGrid assets={dashboard.mediaAssets} />
       </section>
+      <ApprovalCenter />
       <section className="panel content-import-card" aria-labelledby="content-import-title">
         <div className="panel-heading">
           <div>
@@ -840,6 +845,307 @@ function ContentView({
         <p>Les scores deviendront factuels une fois les usages synchronisés avec l’API.</p>
       </section>
     </div>
+  );
+}
+
+function approvalPlatformLabel(platform: string): string {
+  const labels: Record<string, string> = {
+    FACEBOOK: "Facebook",
+    INSTAGRAM: "Instagram",
+    TIKTOK: "TikTok",
+    YOUTUBE: "YouTube",
+  };
+
+  return labels[platform] ?? platform.replaceAll("_", " ");
+}
+
+function formatApprovalPlan(value: string | undefined, timezone: string): string {
+  if (!value) {
+    return `Date proposée à préciser · ${timezone}`;
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.valueOf())) {
+    return `Date proposée à préciser · ${timezone}`;
+  }
+
+  try {
+    return `${new Intl.DateTimeFormat("fr-FR", {
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      month: "short",
+      timeZone: timezone,
+    }).format(date)} · ${timezone}`;
+  } catch {
+    return `${new Intl.DateTimeFormat("fr-FR", {
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      month: "short",
+    }).format(date)} · ${timezone}`;
+  }
+}
+
+function formatApprovalRequestDate(value: string): string {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.valueOf())) {
+    return "Date de demande indisponible";
+  }
+
+  return new Intl.DateTimeFormat("fr-FR", {
+    day: "numeric",
+    month: "short",
+  }).format(date);
+}
+
+function approvalQueueHeading(source: "loading" | "api" | "unavailable", count: number): string {
+  if (source === "loading") {
+    return "Chargement…";
+  }
+
+  if (source === "unavailable") {
+    return "File indisponible.";
+  }
+
+  return count ? `${count} à décider` : "Nothing waiting.";
+}
+
+function ApprovalCenter() {
+  const [approvals, setApprovals] = useState<ApprovalQueueItem[]>([]);
+  const [source, setSource] = useState<"loading" | "api" | "unavailable">(isApiConfigured ? "loading" : "unavailable");
+  const [notice, setNotice] = useState(
+    isApiConfigured ? "Chargement des propositions à valider…" : "L’Approval Center nécessite la connexion à IDA API.",
+  );
+  const [noticeState, setNoticeState] = useState<"default" | "success" | "error">("default");
+  const [activeApprovalId, setActiveApprovalId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    if (!isApiConfigured) {
+      return () => {
+        isCurrent = false;
+      };
+    }
+
+    void fetchApprovalQueue()
+      .then((nextApprovals) => {
+        if (!isCurrent) {
+          return;
+        }
+
+        setApprovals(nextApprovals);
+        setSource("api");
+        setNotice(
+          "Chaque proposition exige une décision humaine. Aucune publication ni planification n’est déclenchée ici.",
+        );
+      })
+      .catch((error: unknown) => {
+        if (!isCurrent) {
+          return;
+        }
+
+        const reason = error instanceof IdaApiError ? error.message : "IDA API est indisponible.";
+        setSource("unavailable");
+        setNotice(`L’Approval Center est indisponible : ${reason}`);
+        setNoticeState("error");
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, []);
+
+  async function refreshAfterConflict() {
+    const nextApprovals = await fetchApprovalQueue();
+
+    setApprovals(nextApprovals);
+    setSource("api");
+  }
+
+  async function handleDecision(approval: ApprovalQueueItem, decision: "approve" | "reject") {
+    if (approval.approvalState !== "REQUESTED" || activeApprovalId) {
+      return;
+    }
+
+    setActiveApprovalId(approval.approvalId);
+
+    try {
+      if (decision === "approve") {
+        await approvePostVariant(approval.variantId, approval.approvalId, approval.payloadHash);
+      } else {
+        await rejectPostVariant(approval.variantId, approval.approvalId, approval.payloadHash);
+      }
+
+      setApprovals((current) => current.filter((candidate) => candidate.approvalId !== approval.approvalId));
+      setSource("api");
+      setNotice(
+        decision === "approve"
+          ? `« ${approval.postTitle} » est approuvée — date toujours proposée, pas de publication ni planification.`
+          : `« ${approval.postTitle} » est rejetée — date toujours proposée, pas de publication ni planification.`,
+      );
+      setNoticeState("success");
+    } catch (error: unknown) {
+      const reason = error instanceof IdaApiError ? error.message : "IDA API est indisponible.";
+
+      if (error instanceof IdaApiError && error.status === 409) {
+        try {
+          await refreshAfterConflict();
+          setNotice("Cette proposition a changé ou a déjà été traitée. La file a été actualisée.");
+        } catch (refreshError: unknown) {
+          const refreshReason =
+            refreshError instanceof IdaApiError ? refreshError.message : "IDA API est indisponible.";
+          setSource("unavailable");
+          setNotice(`La proposition a changé d’état, mais la file est indisponible : ${refreshReason}`);
+        }
+      } else {
+        setNotice(`La décision n’a pas été enregistrée : ${reason}`);
+      }
+
+      setNoticeState("error");
+    } finally {
+      setActiveApprovalId(null);
+    }
+  }
+
+  const canDecide = source === "api" && activeApprovalId === null;
+
+  return (
+    <section className="panel wide-panel approval-center-card" aria-labelledby="approval-center-title">
+      <div className="panel-heading">
+        <div>
+          <p className="eyebrow">IDA APPROVAL CENTER</p>
+          <h2 id="approval-center-title">Review before anything moves.</h2>
+        </div>
+        <span className="status-tag approval">HUMAN DECISION</span>
+      </div>
+      <p className="approval-center-intro">
+        IDA prépare les propositions ; tu décides. Cette étape ne publie et ne programme aucun contenu.
+      </p>
+      <p className={`approval-center-notice ${noticeState}`} role="status">
+        <span aria-hidden="true" />
+        {notice}
+      </p>
+
+      <div className="approval-center-divider" />
+
+      <div className="approval-section-heading">
+        <div>
+          <p className="eyebrow">REQUESTED APPROVALS</p>
+          <h3>{approvalQueueHeading(source, approvals.length)}</h3>
+        </div>
+        <span className="quiet-label">No delivery configured</span>
+      </div>
+
+      {source === "loading" ? <p className="approval-empty-state">Chargement des propositions…</p> : null}
+      {source === "api" && approvals.length === 0 ? (
+        <p className="approval-empty-state">Aucune proposition à valider. Les prochaines demandes apparaîtront ici.</p>
+      ) : null}
+      {source === "unavailable" ? (
+        <p className="approval-empty-state">La file ne peut pas être consultée tant que l’API reste indisponible.</p>
+      ) : null}
+
+      <div className="approval-proposal-list" aria-live="polite">
+        {approvals.map((approval) => {
+          const isActive = activeApprovalId === approval.approvalId;
+
+          return (
+            <article className="approval-proposal" key={approval.approvalId} aria-busy={isActive}>
+              <div className="approval-proposal-heading">
+                <div>
+                  <div className="approval-proposal-meta">
+                    <span>{approvalPlatformLabel(approval.platform)}</span>
+                    <span>·</span>
+                    <time dateTime={approval.requestedAt}>
+                      Demandée {formatApprovalRequestDate(approval.requestedAt)}
+                    </time>
+                  </div>
+                  <h3>{approval.postTitle}</h3>
+                </div>
+                <div className="approval-state-stack">
+                  <span className="approval-state-tag requested">{approval.approvalState}</span>
+                  <span className="approval-delivery-tag">{approval.deliveryState.replaceAll("_", " ")}</span>
+                </div>
+              </div>
+
+              <div className="approval-plan-line">
+                <span className="approval-plan-label">DATE PROPOSÉE</span>
+                <time dateTime={approval.plannedAt}>{formatApprovalPlan(approval.plannedAt, approval.timezone)}</time>
+              </div>
+
+              <div className="approval-detail-grid">
+                <div className="approval-detail approval-detail-wide">
+                  <span>MEDIA</span>
+                  <div className="approval-media-names">
+                    {approval.media.length > 0 ? (
+                      approval.media.map((media, index) => <p key={`${media.filename}-${index}`}>{media.filename}</p>)
+                    ) : (
+                      <p>Aucun média attaché.</p>
+                    )}
+                  </div>
+                </div>
+                <div className="approval-detail approval-detail-wide">
+                  <span>CAPTION</span>
+                  <p className="approval-caption">{approval.caption}</p>
+                </div>
+                <div className="approval-detail">
+                  <span>HASHTAGS</span>
+                  {approval.hashtags.length > 0 ? (
+                    <div className="approval-hashtags">
+                      {approval.hashtags.map((hashtag) => (
+                        <span key={hashtag}>{hashtag}</span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p>Aucun hashtag.</p>
+                  )}
+                </div>
+                <div className="approval-detail">
+                  <span>CTA</span>
+                  <p>{approval.cta ?? "Non renseigné."}</p>
+                </div>
+                <div className="approval-detail">
+                  <span>OBJECTIVE</span>
+                  <p>{approval.objective}</p>
+                </div>
+                <div className="approval-detail">
+                  <span>AI REASONING</span>
+                  <p>{approval.rationale ?? "Rationale non renseignée."}</p>
+                </div>
+              </div>
+
+              <p className="approval-next-step">
+                EDIT et REGENERATE seront ajoutés dans une prochaine tranche contrôlée.
+              </p>
+
+              <div className="approval-actions">
+                <button
+                  className="approval-action-button approve"
+                  type="button"
+                  onClick={() => void handleDecision(approval, "approve")}
+                  disabled={!canDecide}
+                  aria-label={`Approuver « ${approval.postTitle} » sans publier ni planifier`}
+                >
+                  {isActive ? "DECIDING…" : "APPROVE"}
+                </button>
+                <button
+                  className="approval-action-button reject"
+                  type="button"
+                  onClick={() => void handleDecision(approval, "reject")}
+                  disabled={!canDecide}
+                  aria-label={`Rejeter « ${approval.postTitle} » sans publier ni planifier`}
+                >
+                  {isActive ? "DECIDING…" : "REJECT"}
+                </button>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 

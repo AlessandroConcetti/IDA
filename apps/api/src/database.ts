@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { PGlite } from "@electric-sql/pglite";
@@ -139,6 +139,58 @@ export type TaskCompletionResult =
   | { kind: "not-found" }
   | { kind: "not-actionable"; status: string };
 
+export type ApprovalMedia = {
+  id: string;
+  filename: string;
+  type: string;
+  status: MediaStatus;
+};
+
+export type ApprovalQueueItem = {
+  approvalId: string;
+  variantId: string;
+  postId: string;
+  postTitle: string;
+  platform: string;
+  media: ApprovalMedia[];
+  caption: string;
+  hashtags: string[];
+  cta: string | null;
+  objective: string;
+  rationale: string | null;
+  plannedAt: string | null;
+  timezone: string;
+  payloadHash: string;
+  approvalState: "REQUESTED";
+  deliveryState: "NOT_CONFIGURED";
+  requestedAt: string;
+};
+
+export type ApprovalDecision = "APPROVED" | "REJECTED";
+
+export type PostVariantDecision = {
+  approvalId: string;
+  variantId: string;
+  approvalState: ApprovalDecision;
+  deliveryState: "NOT_CONFIGURED";
+  payloadHash: string;
+  decidedAt: string;
+};
+
+export type ApprovalDecisionResult =
+  | { kind: "decided"; decision: PostVariantDecision }
+  | { kind: "already-decided"; decision: PostVariantDecision }
+  | { kind: "not-found" }
+  | { kind: "stale" }
+  | { kind: "opposite-decision" };
+
+export type ApprovalDecisionPreconditionResult =
+  | { kind: "ready"; approvalId: string; payloadHash: string }
+  | { kind: "already-decided"; decision: PostVariantDecision }
+  | { kind: "not-found" }
+  | { kind: "stale" }
+  | { kind: "opposite-decision" };
+
 export type TodayItem = {
   id: string;
   kind: "TASK" | "SCHEDULED_POST";
@@ -221,6 +273,20 @@ function asStringArray(value: unknown): string[] {
   }
 
   return [];
+}
+
+function asRecordArray(value: unknown): ScalarRow[] {
+  if (typeof value === "string") {
+    try {
+      return asRecordArray(JSON.parse(value));
+    } catch {
+      return [];
+    }
+  }
+
+  return Array.isArray(value)
+    ? value.filter((item): item is ScalarRow => typeof item === "object" && item !== null && !Array.isArray(item))
+    : [];
 }
 
 function asPlatformPreferences(value: unknown): ArtistProfileContract["platformPreferences"] {
@@ -310,6 +376,89 @@ function toTask(row: ScalarRow): Task {
     createdAt: asTimestamp(row.createdAt) ?? "1970-01-01T00:00:00.000Z",
     updatedAt: asTimestamp(row.updatedAt) ?? "1970-01-01T00:00:00.000Z",
   };
+}
+
+function toApprovalMedia(row: ScalarRow): ApprovalMedia {
+  return {
+    id: asString(row.id),
+    filename: asString(row.filename),
+    type: asString(row.type),
+    status: asString(row.status) as MediaStatus,
+  };
+}
+
+function toApprovalQueueItem(row: ScalarRow): ApprovalQueueItem {
+  return {
+    approvalId: asString(row.approvalId),
+    variantId: asString(row.variantId),
+    postId: asString(row.postId),
+    postTitle: asString(row.postTitle),
+    platform: asString(row.platform),
+    media: asRecordArray(row.media).map(toApprovalMedia),
+    caption: asString(row.caption),
+    hashtags: asStringArray(row.hashtags),
+    cta: asNullableString(row.cta),
+    objective: asString(row.objective),
+    rationale: asNullableString(row.rationale),
+    plannedAt: asTimestamp(row.plannedAt),
+    timezone: asString(row.timezone),
+    payloadHash: asString(row.payloadHash),
+    approvalState: "REQUESTED",
+    deliveryState: "NOT_CONFIGURED",
+    requestedAt: asTimestamp(row.requestedAt) ?? "1970-01-01T00:00:00.000Z",
+  };
+}
+
+function toPostVariantDecision(row: ScalarRow): PostVariantDecision {
+  return {
+    approvalId: asString(row.approvalId),
+    variantId: asString(row.variantId),
+    approvalState: asString(row.approvalState) as ApprovalDecision,
+    deliveryState: "NOT_CONFIGURED",
+    payloadHash: asString(row.payloadHash),
+    decidedAt: asTimestamp(row.decidedAt) ?? "1970-01-01T00:00:00.000Z",
+  };
+}
+
+function normalizeApprovalPayloadText(value: string): string {
+  return value.normalize("NFKC").trim();
+}
+
+function calculatePostVariantPayloadHash(input: {
+  postTitle: string;
+  objective: string;
+  rationale: string | null;
+  platform: string;
+  caption: string;
+  hashtags: string[];
+  cta: string | null;
+  plannedAt: string | null;
+  timezone: string;
+  media: ApprovalMedia[];
+}): string {
+  // La sérialisation est volontairement explicite et ordonnée. Elle relie la
+  // décision à tous les champs exposés dans la file, sans contenir de clé de
+  // stockage, URL privée ou autre donnée sensible.
+  const canonicalPayload = JSON.stringify({
+    version: 1,
+    postTitle: normalizeApprovalPayloadText(input.postTitle),
+    objective: normalizeApprovalPayloadText(input.objective),
+    rationale: input.rationale === null ? null : normalizeApprovalPayloadText(input.rationale),
+    platform: normalizeApprovalPayloadText(input.platform),
+    caption: normalizeApprovalPayloadText(input.caption),
+    hashtags: input.hashtags.map(normalizeApprovalPayloadText),
+    cta: input.cta === null ? null : normalizeApprovalPayloadText(input.cta),
+    plannedAt: input.plannedAt,
+    timezone: normalizeApprovalPayloadText(input.timezone),
+    media: input.media.map((media) => ({
+      id: media.id,
+      filename: normalizeApprovalPayloadText(media.filename),
+      type: media.type,
+      status: media.status,
+    })),
+  });
+
+  return `sha256:${createHash("sha256").update(canonicalPayload).digest("hex")}`;
 }
 
 function normalizeMediaTag(value: string): string {
@@ -948,6 +1097,439 @@ export class DemoDatabase {
     });
   }
 
+  async listApprovalQueue(workspaceId: string): Promise<ApprovalQueueItem[]> {
+    const result = await this.pglite.query<ScalarRow>(
+      `
+        SELECT
+          approval.id AS "approvalId",
+          variant.id AS "variantId",
+          post.id AS "postId",
+          post.title AS "postTitle",
+          platform.key AS platform,
+          variant.caption,
+          variant.hashtags AS hashtags,
+          variant.cta,
+          post.objective,
+          post.rationale,
+          variant.planned_at AS "plannedAt",
+          variant.timezone,
+          variant.payload_hash AS "payloadHash",
+          approval.requested_at AS "requestedAt",
+          COALESCE(
+            (
+              SELECT json_agg(
+                json_build_object(
+                  'id', media.id,
+                  'filename', media.filename,
+                  'type', media.media_type,
+                  'status', media.status
+                )
+                ORDER BY link.sort_order ASC, media.id ASC
+              )
+              FROM post_variant_media link
+              INNER JOIN media_assets media ON media.id = link.media_asset_id
+              WHERE link.post_variant_id = variant.id
+                AND link.workspace_id = variant.workspace_id
+                AND media.workspace_id = variant.workspace_id
+            ),
+            '[]'::json
+          ) AS media
+        FROM approvals approval
+        INNER JOIN post_variants variant ON variant.id = approval.post_variant_id
+          AND variant.workspace_id = approval.workspace_id
+        INNER JOIN posts post ON post.id = variant.post_id
+          AND post.workspace_id = variant.workspace_id
+        INNER JOIN social_platforms platform ON platform.id = variant.platform_id
+        WHERE post.workspace_id = $1
+          AND variant.workspace_id = $1
+          AND approval.workspace_id = $1
+          AND approval.state = 'REQUESTED'
+          AND approval.payload_hash = variant.payload_hash
+          AND variant.approval_state = 'REQUESTED'
+          AND variant.delivery_state = 'NOT_CONFIGURED'
+        ORDER BY variant.planned_at ASC NULLS LAST, approval.requested_at ASC, variant.id ASC
+      `,
+      [workspaceId],
+    );
+
+    return result.rows.map(toApprovalQueueItem);
+  }
+
+  async preparePostVariantDecision(
+    workspaceId: string,
+    variantId: string,
+    approvalId: string,
+    expectedPayloadHash: string,
+    decision: ApprovalDecision,
+  ): Promise<ApprovalDecisionPreconditionResult> {
+    // Cette lecture précède le ToolGateway : elle transforme les deux valeurs
+    // de précondition client en une approbation effectivement résolue dans le
+    // workspace serveur. La mutation atomique les revérifie ensuite pour
+    // couvrir toute course entre cette étape et l'écriture.
+    const scopedVariant = await this.pglite.query<ScalarRow>(
+      `
+        SELECT variant.id
+        FROM post_variants variant
+        INNER JOIN posts post ON post.id = variant.post_id
+          AND post.workspace_id = variant.workspace_id
+        WHERE variant.id = $1
+          AND variant.workspace_id = $2
+          AND post.workspace_id = $2
+      `,
+      [variantId, workspaceId],
+    );
+
+    if (!scopedVariant.rows[0]) {
+      return { kind: "not-found" };
+    }
+
+    const current = await this.pglite.query<ScalarRow>(
+      `
+        SELECT
+          approval.id AS "approvalId",
+          approval.state AS "approvalState",
+          approval.payload_hash AS "approvalPayloadHash",
+          approval.payload_hash AS "payloadHash",
+          approval.decided_at AS "decidedAt",
+          variant.id AS "variantId",
+          variant.approval_state AS "variantApprovalState",
+          variant.delivery_state AS "deliveryState",
+          variant.payload_hash AS "variantPayloadHash",
+          post.title AS "postTitle",
+          post.objective,
+          post.rationale,
+          platform.key AS platform,
+          variant.caption,
+          variant.hashtags AS hashtags,
+          variant.cta,
+          variant.planned_at AS "plannedAt",
+          variant.timezone,
+          COALESCE(
+            (
+              SELECT json_agg(
+                json_build_object(
+                  'id', media.id,
+                  'filename', media.filename,
+                  'type', media.media_type,
+                  'status', media.status
+                )
+                ORDER BY link.sort_order ASC, media.id ASC
+              )
+              FROM post_variant_media link
+              INNER JOIN media_assets media ON media.id = link.media_asset_id
+              WHERE link.post_variant_id = variant.id
+                AND link.workspace_id = variant.workspace_id
+                AND media.workspace_id = variant.workspace_id
+            ),
+            '[]'::json
+          ) AS media
+        FROM approvals approval
+        INNER JOIN post_variants variant ON variant.id = approval.post_variant_id
+          AND variant.workspace_id = approval.workspace_id
+        INNER JOIN posts post ON post.id = variant.post_id
+          AND post.workspace_id = variant.workspace_id
+        INNER JOIN social_platforms platform ON platform.id = variant.platform_id
+        WHERE approval.id = $1
+          AND approval.post_variant_id = $2
+          AND approval.workspace_id = $3
+          AND variant.workspace_id = $3
+          AND post.workspace_id = $3
+        LIMIT 1
+      `,
+      [approvalId, variantId, workspaceId],
+    );
+    const row = current.rows[0];
+
+    if (!row) {
+      return { kind: "stale" };
+    }
+
+    const currentPayloadHash = calculatePostVariantPayloadHash({
+      postTitle: asString(row.postTitle),
+      objective: asString(row.objective),
+      rationale: asNullableString(row.rationale),
+      platform: asString(row.platform),
+      caption: asString(row.caption),
+      hashtags: asStringArray(row.hashtags),
+      cta: asNullableString(row.cta),
+      plannedAt: asTimestamp(row.plannedAt),
+      timezone: asString(row.timezone),
+      media: asRecordArray(row.media).map(toApprovalMedia),
+    });
+    const approvalState = asString(row.approvalState);
+    const variantApprovalState = asString(row.variantApprovalState);
+    const storedApprovalHash = asString(row.approvalPayloadHash);
+    const storedVariantHash = asString(row.variantPayloadHash);
+
+    if (
+      currentPayloadHash !== storedVariantHash ||
+      storedApprovalHash !== storedVariantHash ||
+      expectedPayloadHash !== storedVariantHash
+    ) {
+      return { kind: "stale" };
+    }
+
+    if (approvalState === decision && variantApprovalState === decision) {
+      return { kind: "already-decided", decision: toPostVariantDecision(row) };
+    }
+
+    if (approvalState !== "REQUESTED" || variantApprovalState !== "REQUESTED") {
+      return { kind: "opposite-decision" };
+    }
+
+    return {
+      kind: "ready",
+      approvalId: asString(row.approvalId),
+      payloadHash: storedVariantHash,
+    };
+  }
+
+  async decidePostVariant(
+    workspaceId: string,
+    actorUserId: string,
+    variantId: string,
+    approvalId: string,
+    expectedPayloadHash: string,
+    decision: ApprovalDecision,
+  ): Promise<ApprovalDecisionResult> {
+    return this.pglite.transaction(async (transaction) => {
+      // Vérifier d'abord l'existence de la variante exclusivement dans le
+      // workspace du serveur. Ainsi un identifiant étranger ne révèle ni son
+      // approbation ni son contenu.
+      const scopedVariant = await transaction.query<ScalarRow>(
+        `
+          SELECT variant.id
+          FROM post_variants variant
+          INNER JOIN posts post ON post.id = variant.post_id
+            AND post.workspace_id = variant.workspace_id
+          WHERE variant.id = $1
+            AND variant.workspace_id = $2
+            AND post.workspace_id = $2
+        `,
+        [variantId, workspaceId],
+      );
+
+      if (!scopedVariant.rows[0]) {
+        return { kind: "not-found" };
+      }
+
+      const current = await transaction.query<ScalarRow>(
+        `
+          SELECT
+            approval.id AS "approvalId",
+            approval.state AS "approvalState",
+            approval.payload_hash AS "approvalPayloadHash",
+            approval.payload_hash AS "payloadHash",
+            approval.decided_at AS "decidedAt",
+            variant.id AS "variantId",
+            variant.approval_state AS "variantApprovalState",
+            variant.delivery_state AS "deliveryState",
+            variant.payload_hash AS "variantPayloadHash",
+            post.title AS "postTitle",
+            post.objective,
+            post.rationale,
+            platform.key AS platform,
+            variant.caption,
+            variant.hashtags AS hashtags,
+            variant.cta,
+            variant.planned_at AS "plannedAt",
+            variant.timezone,
+            COALESCE(
+              (
+                SELECT json_agg(
+                  json_build_object(
+                    'id', media.id,
+                    'filename', media.filename,
+                    'type', media.media_type,
+                    'status', media.status
+                  )
+                  ORDER BY link.sort_order ASC, media.id ASC
+                )
+                FROM post_variant_media link
+                INNER JOIN media_assets media ON media.id = link.media_asset_id
+                WHERE link.post_variant_id = variant.id
+                  AND link.workspace_id = variant.workspace_id
+                  AND media.workspace_id = variant.workspace_id
+              ),
+              '[]'::json
+            ) AS media
+          FROM approvals approval
+          INNER JOIN post_variants variant ON variant.id = approval.post_variant_id
+            AND variant.workspace_id = approval.workspace_id
+          INNER JOIN posts post ON post.id = variant.post_id
+            AND post.workspace_id = variant.workspace_id
+          INNER JOIN social_platforms platform ON platform.id = variant.platform_id
+          WHERE approval.id = $1
+            AND approval.post_variant_id = $2
+            AND approval.workspace_id = $3
+            AND variant.workspace_id = $3
+            AND post.workspace_id = $3
+          LIMIT 1
+        `,
+        [approvalId, variantId, workspaceId],
+      );
+      const row = current.rows[0];
+
+      // Une approbation absente, appartenant à une autre variante ou qui ne
+      // correspond plus au hash courant est une précondition obsolète. Ce
+      // chemin n'écrit rien, même si la variante elle-même est visible.
+      if (!row) {
+        return { kind: "stale" };
+      }
+
+      const currentPayloadHash = calculatePostVariantPayloadHash({
+        postTitle: asString(row.postTitle),
+        objective: asString(row.objective),
+        rationale: asNullableString(row.rationale),
+        platform: asString(row.platform),
+        caption: asString(row.caption),
+        hashtags: asStringArray(row.hashtags),
+        cta: asNullableString(row.cta),
+        plannedAt: asTimestamp(row.plannedAt),
+        timezone: asString(row.timezone),
+        media: asRecordArray(row.media).map(toApprovalMedia),
+      });
+      const approvalState = asString(row.approvalState);
+      const variantApprovalState = asString(row.variantApprovalState);
+      const storedApprovalHash = asString(row.approvalPayloadHash);
+      const storedVariantHash = asString(row.variantPayloadHash);
+
+      if (
+        currentPayloadHash !== storedVariantHash ||
+        storedApprovalHash !== storedVariantHash ||
+        expectedPayloadHash !== storedVariantHash
+      ) {
+        return { kind: "stale" };
+      }
+
+      if (approvalState === decision && variantApprovalState === decision) {
+        return { kind: "already-decided", decision: toPostVariantDecision(row) };
+      }
+
+      if (approvalState !== "REQUESTED" || variantApprovalState !== "REQUESTED") {
+        return { kind: "opposite-decision" };
+      }
+
+      // L'état REQUESTED et le hash sont répétés dans le WHERE : deux
+      // décisions concurrentes ne pourront donc pas inscrire deux audits.
+      const updatedApproval = await transaction.query<ScalarRow>(
+        `
+          UPDATE approvals approval
+          SET
+            state = $4,
+            decided_at = CURRENT_TIMESTAMP,
+            decided_by = $5
+          FROM post_variants variant, posts post
+          WHERE approval.id = $1
+            AND approval.post_variant_id = $2
+            AND approval.workspace_id = $3
+            AND approval.state = 'REQUESTED'
+            AND approval.payload_hash = $6
+            AND variant.id = $2
+            AND variant.workspace_id = $3
+            AND variant.post_id = post.id
+            AND post.workspace_id = $3
+            AND variant.approval_state = 'REQUESTED'
+            AND variant.payload_hash = $6
+            AND variant.delivery_state = 'NOT_CONFIGURED'
+          RETURNING
+            approval.id AS "approvalId",
+            approval.post_variant_id AS "variantId",
+            approval.state AS "approvalState",
+            variant.delivery_state AS "deliveryState",
+            approval.payload_hash AS "payloadHash",
+            approval.decided_at AS "decidedAt"
+        `,
+        [approvalId, variantId, workspaceId, decision, actorUserId, expectedPayloadHash],
+      );
+      const updatedRow = updatedApproval.rows[0];
+
+      if (!updatedRow) {
+        // Une transaction concurrente a pu décider entre la lecture et le
+        // UPDATE. Relire l'état final donne la même sémantique idempotente que
+        // les retries HTTP, sans jamais réécrire les données.
+        const finalState = await transaction.query<ScalarRow>(
+          `
+            SELECT
+              approval.id AS "approvalId",
+              approval.post_variant_id AS "variantId",
+              approval.state AS "approvalState",
+              variant.delivery_state AS "deliveryState",
+              approval.payload_hash AS "payloadHash",
+              approval.decided_at AS "decidedAt"
+            FROM approvals approval
+            INNER JOIN post_variants variant ON variant.id = approval.post_variant_id
+              AND variant.workspace_id = approval.workspace_id
+            INNER JOIN posts post ON post.id = variant.post_id
+              AND post.workspace_id = variant.workspace_id
+            WHERE approval.id = $1
+              AND approval.post_variant_id = $2
+              AND approval.workspace_id = $3
+              AND post.workspace_id = $3
+            LIMIT 1
+          `,
+          [approvalId, variantId, workspaceId],
+        );
+        const finalRow = finalState.rows[0];
+
+        if (!finalRow || asString(finalRow.payloadHash) !== expectedPayloadHash) {
+          return { kind: "stale" };
+        }
+
+        if (asString(finalRow.approvalState) === decision) {
+          return { kind: "already-decided", decision: toPostVariantDecision(finalRow) };
+        }
+
+        return { kind: "opposite-decision" };
+      }
+
+      const updatedVariant = await transaction.query<ScalarRow>(
+        `
+          UPDATE post_variants
+          SET approval_state = $4, updated_at = CURRENT_TIMESTAMP
+          WHERE id = $1
+            AND workspace_id = $2
+            AND approval_state = 'REQUESTED'
+            AND payload_hash = $3
+            AND delivery_state = 'NOT_CONFIGURED'
+          RETURNING id
+        `,
+        [variantId, workspaceId, expectedPayloadHash, decision],
+      );
+
+      if (!updatedVariant.rows[0]) {
+        throw new Error("La transition d'approbation n'a pas pu être appliquée à sa variante.");
+      }
+
+      const postVariantDecision = toPostVariantDecision(updatedRow);
+      const action = decision === "APPROVED" ? "post_variant.approved" : "post_variant.rejected";
+
+      await transaction.query(
+        `
+          INSERT INTO activity_logs (id, workspace_id, actor_user_id, action, entity_type, entity_id, payload)
+          VALUES ($1, $2, $3, $4, 'POST_VARIANT', $5, $6::json)
+        `,
+        [
+          `act_${randomUUID().replaceAll("-", "")}`,
+          workspaceId,
+          actorUserId,
+          action,
+          variantId,
+          // Audit volontairement redacted : ni caption, ni hashtags, ni
+          // rationale, ni nom/clé de média ne quittent l'état métier.
+          JSON.stringify({
+            approvalId: postVariantDecision.approvalId,
+            payloadHash: postVariantDecision.payloadHash,
+            approvalState: postVariantDecision.approvalState,
+            deliveryState: postVariantDecision.deliveryState,
+          }),
+        ],
+      );
+
+      return { kind: "decided", decision: postVariantDecision };
+    });
+  }
+
   async listTasks(workspaceId: string): Promise<Task[]> {
     const result = await this.pglite.query<ScalarRow>(
       `
@@ -1330,6 +1912,73 @@ export class DemoDatabase {
         is_active BOOLEAN NOT NULL DEFAULT TRUE
       );
 
+      -- Approval Center local : ces tables sont distinctes de
+      -- scheduled_posts, qui reste la seule projection de démonstration pour
+      -- Today. Une date proposée n'est pas une programmation.
+      CREATE TABLE IF NOT EXISTS posts (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL REFERENCES workspaces(id),
+        artist_project_id TEXT REFERENCES artist_projects(id),
+        title TEXT NOT NULL,
+        objective TEXT NOT NULL,
+        rationale TEXT,
+        status TEXT NOT NULL DEFAULT 'PROPOSED',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT posts_status_check CHECK (status IN ('DRAFT', 'PROPOSED', 'APPROVED', 'CHANGES_REQUESTED', 'REJECTED'))
+      );
+
+      CREATE TABLE IF NOT EXISTS post_variants (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL REFERENCES workspaces(id),
+        post_id TEXT NOT NULL REFERENCES posts(id),
+        platform_id TEXT NOT NULL REFERENCES social_platforms(id),
+        caption TEXT NOT NULL,
+        hashtags JSON NOT NULL DEFAULT '[]'::json,
+        cta TEXT,
+        planned_at TIMESTAMPTZ,
+        timezone TEXT NOT NULL,
+        approval_state TEXT NOT NULL DEFAULT 'REQUESTED',
+        delivery_state TEXT NOT NULL DEFAULT 'NOT_CONFIGURED',
+        payload_hash TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (post_id, platform_id),
+        CONSTRAINT post_variants_approval_state_check
+          CHECK (approval_state IN ('REQUESTED', 'APPROVED', 'REJECTED', 'INVALIDATED')),
+        -- Aucune livraison n'existe dans cette tranche. La contrainte évite
+        -- qu'un code futur réutilise par erreur cette route comme scheduler.
+        CONSTRAINT post_variants_delivery_state_check CHECK (delivery_state = 'NOT_CONFIGURED')
+      );
+
+      CREATE TABLE IF NOT EXISTS post_variant_media (
+        post_variant_id TEXT NOT NULL REFERENCES post_variants(id),
+        media_asset_id TEXT NOT NULL REFERENCES media_assets(id),
+        workspace_id TEXT NOT NULL REFERENCES workspaces(id),
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (post_variant_id, media_asset_id),
+        UNIQUE (post_variant_id, sort_order),
+        CONSTRAINT post_variant_media_sort_order_check CHECK (sort_order >= 0)
+      );
+
+      CREATE TABLE IF NOT EXISTS approvals (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL REFERENCES workspaces(id),
+        post_variant_id TEXT NOT NULL REFERENCES post_variants(id),
+        state TEXT NOT NULL DEFAULT 'REQUESTED',
+        requested_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        decided_at TIMESTAMPTZ,
+        decided_by TEXT REFERENCES users(id),
+        payload_hash TEXT NOT NULL,
+        comment TEXT,
+        CONSTRAINT approvals_state_check CHECK (state IN ('REQUESTED', 'APPROVED', 'REJECTED', 'INVALIDATED')),
+        CONSTRAINT approvals_decision_fields_check CHECK (
+          (state = 'REQUESTED' AND decided_at IS NULL AND decided_by IS NULL)
+          OR (state IN ('APPROVED', 'REJECTED') AND decided_at IS NOT NULL AND decided_by IS NOT NULL)
+          OR state = 'INVALIDATED'
+        )
+      );
+
       CREATE TABLE IF NOT EXISTS tasks (
         id TEXT PRIMARY KEY,
         workspace_id TEXT NOT NULL REFERENCES workspaces(id),
@@ -1377,6 +2026,18 @@ export class DemoDatabase {
         ON memories (workspace_id, state, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_tasks_workspace_status_due
         ON tasks (workspace_id, status, due_at);
+      CREATE INDEX IF NOT EXISTS idx_posts_workspace_created
+        ON posts (workspace_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_post_variants_workspace_approval_planned
+        ON post_variants (workspace_id, approval_state, planned_at);
+      CREATE INDEX IF NOT EXISTS idx_approvals_workspace_state_requested
+        ON approvals (workspace_id, state, requested_at);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_approvals_requested_variant_hash
+        ON approvals (post_variant_id, payload_hash)
+        WHERE state = 'REQUESTED';
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_approvals_one_requested_per_variant
+        ON approvals (post_variant_id)
+        WHERE state = 'REQUESTED';
     `);
 
     // Cette migration additive garde un Artist Brain local déjà modifié intact.
@@ -1441,6 +2102,105 @@ export class DemoDatabase {
       ALTER TABLE tasks
         ALTER COLUMN updated_at SET NOT NULL;
     `);
+
+    await this.migrateRequestedApprovalPayloadHashes();
+  }
+
+  private async migrateRequestedApprovalPayloadHashes(): Promise<void> {
+    // Compatibilité additive du hash canonique : un runtime déjà démarré peut
+    // contenir les seeds REQUESTED d'une version antérieure du payload. On ne
+    // touche jamais aux décisions terminales ; pour les seules demandes encore
+    // actives, variante et approbation reçoivent le même hash recalculé dans
+    // une transaction, sans changer leur timestamp métier ni écrire d'audit.
+    await this.pglite.transaction(async (transaction) => {
+      const requested = await transaction.query<ScalarRow>(
+        `
+          SELECT
+            approval.id AS "approvalId",
+            approval.workspace_id AS "workspaceId",
+            variant.id AS "variantId",
+            post.title AS "postTitle",
+            post.objective,
+            post.rationale,
+            platform.key AS platform,
+            variant.caption,
+            variant.hashtags AS hashtags,
+            variant.cta,
+            variant.planned_at AS "plannedAt",
+            variant.timezone,
+            variant.payload_hash AS "variantPayloadHash",
+            approval.payload_hash AS "approvalPayloadHash",
+            COALESCE(
+              (
+                SELECT json_agg(
+                  json_build_object(
+                    'id', media.id,
+                    'filename', media.filename,
+                    'type', media.media_type,
+                    'status', media.status
+                  )
+                  ORDER BY link.sort_order ASC, media.id ASC
+                )
+                FROM post_variant_media link
+                INNER JOIN media_assets media ON media.id = link.media_asset_id
+                WHERE link.post_variant_id = variant.id
+                  AND link.workspace_id = variant.workspace_id
+                  AND media.workspace_id = variant.workspace_id
+              ),
+              '[]'::json
+            ) AS media
+          FROM approvals approval
+          INNER JOIN post_variants variant ON variant.id = approval.post_variant_id
+            AND variant.workspace_id = approval.workspace_id
+          INNER JOIN posts post ON post.id = variant.post_id
+            AND post.workspace_id = variant.workspace_id
+          INNER JOIN social_platforms platform ON platform.id = variant.platform_id
+          WHERE approval.state = 'REQUESTED'
+            AND variant.approval_state = 'REQUESTED'
+            AND variant.delivery_state = 'NOT_CONFIGURED'
+        `,
+      );
+
+      for (const row of requested.rows) {
+        const payloadHash = calculatePostVariantPayloadHash({
+          postTitle: asString(row.postTitle),
+          objective: asString(row.objective),
+          rationale: asNullableString(row.rationale),
+          platform: asString(row.platform),
+          caption: asString(row.caption),
+          hashtags: asStringArray(row.hashtags),
+          cta: asNullableString(row.cta),
+          plannedAt: asTimestamp(row.plannedAt),
+          timezone: asString(row.timezone),
+          media: asRecordArray(row.media).map(toApprovalMedia),
+        });
+
+        if (payloadHash === asString(row.variantPayloadHash) && payloadHash === asString(row.approvalPayloadHash)) {
+          continue;
+        }
+
+        await transaction.query(
+          `
+            UPDATE post_variants
+            SET payload_hash = $3
+            WHERE id = $1
+              AND workspace_id = $2
+              AND approval_state = 'REQUESTED'
+          `,
+          [asString(row.variantId), asString(row.workspaceId), payloadHash],
+        );
+        await transaction.query(
+          `
+            UPDATE approvals
+            SET payload_hash = $3
+            WHERE id = $1
+              AND workspace_id = $2
+              AND state = 'REQUESTED'
+          `,
+          [asString(row.approvalId), asString(row.workspaceId), payloadHash],
+        );
+      }
+    });
   }
 
   private async seed(): Promise<void> {
@@ -1615,6 +2375,285 @@ export class DemoDatabase {
             ('platform_youtube', 'YOUTUBE', 'YouTube', TRUE, TRUE, TRUE, TRUE, TRUE, '2026-08-30')
           ON CONFLICT (id) DO NOTHING
         `,
+      );
+      // Les propositions sont uniquement des seeds locaux : aucune génération
+      // IA, programmation, job ou intégration sociale n'est déclenchée ici.
+      // Les hashes sont calculés sur le payload canonique que la file expose.
+      const studioInstagramPayload = {
+        postTitle: "Teaser studio — Lumière Noire",
+        objective: "Créer de l'attente autour de la prochaine release.",
+        rationale:
+          "Le plan vertical montre une étape concrète de production et reste cohérent avec le ton direct de l'Artist Brain.",
+        platform: "INSTAGRAM",
+        caption: "Lumière Noire prend forme dans le studio. Pré-save disponible bientôt.",
+        hashtags: ["#LumiereNoire", "#MelodicTechno", "#Studio"],
+        cta: "Pré-save bientôt.",
+        plannedAt: "2026-09-01T18:00:00.000Z",
+        timezone: "Europe/Paris",
+        media: [
+          {
+            id: "med_studio_light",
+            filename: "studio-lumiere-noire-take-04.mp4",
+            type: "VIDEO",
+            status: "UNUSED" as MediaStatus,
+          },
+        ],
+      };
+      const nightDriveTiktokPayload = {
+        postTitle: "Hook nocturne — Lumière Noire",
+        objective: "Tester un angle conversationnel avant la sortie.",
+        rationale: "Le preview court permet de demander un retour sans répéter la vidéo studio.",
+        platform: "TIKTOK",
+        caption: "Le hook arrive juste avant le break. Tu le gardes pour le set ?",
+        hashtags: ["#LumiereNoire", "#TechnoTok", "#ProducerLife"],
+        cta: "Réponds en commentaire.",
+        plannedAt: "2026-09-03T17:30:00.000Z",
+        timezone: "Europe/Paris",
+        media: [
+          {
+            id: "med_night-drive",
+            filename: "night-drive-preview.mp4",
+            type: "VIDEO",
+            status: "UNUSED" as MediaStatus,
+          },
+        ],
+      };
+      const afterimageYoutubePayload = {
+        postTitle: "Afterimage live recap",
+        objective: "Prolonger la visibilité de l'EP publié.",
+        rationale: "Extrait live déjà validé dans un contexte historique de démonstration.",
+        platform: "YOUTUBE",
+        caption: "Afterimage en live : un extrait du dernier set.",
+        hashtags: ["#Afterimage", "#LiveSet"],
+        cta: null,
+        plannedAt: "2026-08-29T19:00:00.000Z",
+        timezone: "Europe/Paris",
+        media: [
+          {
+            id: "med_live",
+            filename: "afterimage-live-clip.mp4",
+            type: "VIDEO",
+            status: "SCHEDULED" as MediaStatus,
+          },
+        ],
+      };
+      const otherWorkspacePayload = {
+        postTitle: "Proposition privée autre workspace",
+        objective: "Donnée de test isolée.",
+        rationale: "Ne doit jamais sortir du workspace propriétaire.",
+        platform: "INSTAGRAM",
+        caption: "Contenu privé d'un autre workspace.",
+        hashtags: ["#Private"],
+        cta: null,
+        plannedAt: "2026-09-02T18:00:00.000Z",
+        timezone: "Europe/Paris",
+        media: [
+          {
+            id: "med_other_workspace",
+            filename: "private-other-video.mp4",
+            type: "VIDEO",
+            status: "UNUSED" as MediaStatus,
+          },
+        ],
+      };
+      const studioInstagramHash = calculatePostVariantPayloadHash(studioInstagramPayload);
+      const nightDriveTiktokHash = calculatePostVariantPayloadHash(nightDriveTiktokPayload);
+      const afterimageYoutubeHash = calculatePostVariantPayloadHash(afterimageYoutubePayload);
+      const otherWorkspaceHash = calculatePostVariantPayloadHash(otherWorkspacePayload);
+
+      await transaction.query(
+        `
+          INSERT INTO posts (
+            id, workspace_id, artist_project_id, title, objective, rationale, status, created_at, updated_at
+          )
+          VALUES
+            (
+              'post_lumiere_studio', $1, 'prj_demo_aless', 'Teaser studio — Lumière Noire',
+              'Créer de l''attente autour de la prochaine release.',
+              'Le plan vertical montre une étape concrète de production et reste cohérent avec le ton direct de l''Artist Brain.',
+              'PROPOSED', '2026-08-30T08:30:00Z', '2026-08-30T08:30:00Z'
+            ),
+            (
+              'post_lumiere_hook', $1, 'prj_demo_aless', 'Hook nocturne — Lumière Noire',
+              'Tester un angle conversationnel avant la sortie.',
+              'Le preview court permet de demander un retour sans répéter la vidéo studio.',
+              'PROPOSED', '2026-08-30T08:35:00Z', '2026-08-30T08:35:00Z'
+            ),
+            (
+              'post_afterimage_live', $1, 'prj_demo_aless', 'Afterimage live recap',
+              'Prolonger la visibilité de l''EP publié.',
+              'Extrait live déjà validé dans un contexte historique de démonstration.',
+              'PROPOSED', '2026-08-24T08:35:00Z', '2026-08-24T08:35:00Z'
+            ),
+            (
+              'post_other_workspace', 'wsp_other', 'prj_other_workspace', 'Proposition privée autre workspace',
+              'Donnée de test isolée.', 'Ne doit jamais sortir du workspace propriétaire.',
+              'PROPOSED', '2026-08-30T08:40:00Z', '2026-08-30T08:40:00Z'
+            )
+          ON CONFLICT (id) DO NOTHING
+        `,
+        [demoWorkspace.id],
+      );
+      await transaction.query(
+        `
+          INSERT INTO post_variants (
+            id, workspace_id, post_id, platform_id, caption, hashtags, cta, planned_at, timezone,
+            approval_state, delivery_state, payload_hash, created_at, updated_at
+          )
+          VALUES
+            (
+              'variant_lumiere_instagram', $1, 'post_lumiere_studio', 'platform_instagram',
+              $2, $3::json, $4, $5, $6, 'REQUESTED', 'NOT_CONFIGURED', $7,
+              '2026-08-30T08:30:00Z', '2026-08-30T08:30:00Z'
+            ),
+            (
+              'variant_lumiere_tiktok', $1, 'post_lumiere_hook', 'platform_tiktok',
+              $8, $9::json, $10, $11, $12, 'REQUESTED', 'NOT_CONFIGURED', $13,
+              '2026-08-30T08:35:00Z', '2026-08-30T08:35:00Z'
+            ),
+            (
+              'variant_afterimage_youtube', $1, 'post_afterimage_live', 'platform_youtube',
+              $14, $15::json, $16, $17, $18, 'APPROVED', 'NOT_CONFIGURED', $19,
+              '2026-08-24T08:35:00Z', '2026-08-24T09:00:00Z'
+            ),
+            (
+              'variant_other_instagram', 'wsp_other', 'post_other_workspace', 'platform_instagram',
+              $20, $21::json, $22, $23, $24, 'REQUESTED', 'NOT_CONFIGURED', $25,
+              '2026-08-30T08:40:00Z', '2026-08-30T08:40:00Z'
+            )
+          ON CONFLICT (id) DO NOTHING
+        `,
+        [
+          demoWorkspace.id,
+          studioInstagramPayload.caption,
+          JSON.stringify(studioInstagramPayload.hashtags),
+          studioInstagramPayload.cta,
+          studioInstagramPayload.plannedAt,
+          studioInstagramPayload.timezone,
+          studioInstagramHash,
+          nightDriveTiktokPayload.caption,
+          JSON.stringify(nightDriveTiktokPayload.hashtags),
+          nightDriveTiktokPayload.cta,
+          nightDriveTiktokPayload.plannedAt,
+          nightDriveTiktokPayload.timezone,
+          nightDriveTiktokHash,
+          afterimageYoutubePayload.caption,
+          JSON.stringify(afterimageYoutubePayload.hashtags),
+          afterimageYoutubePayload.cta,
+          afterimageYoutubePayload.plannedAt,
+          afterimageYoutubePayload.timezone,
+          afterimageYoutubeHash,
+          otherWorkspacePayload.caption,
+          JSON.stringify(otherWorkspacePayload.hashtags),
+          otherWorkspacePayload.cta,
+          otherWorkspacePayload.plannedAt,
+          otherWorkspacePayload.timezone,
+          otherWorkspaceHash,
+        ],
+      );
+      // Cette forme INSERT…SELECT refuse le lien si l'asset et la variante ne
+      // partagent pas le workspace. Aucune route de cette tranche ne permet de
+      // créer un lien média directement depuis le client.
+      await transaction.query(
+        `
+          INSERT INTO post_variant_media (post_variant_id, media_asset_id, workspace_id, sort_order)
+          SELECT $1, $2, $3, $4
+          WHERE EXISTS (
+            SELECT 1
+            FROM post_variants variant
+            INNER JOIN posts post ON post.id = variant.post_id
+              AND post.workspace_id = variant.workspace_id
+            WHERE variant.id = $1
+              AND variant.workspace_id = $3
+              AND post.workspace_id = $3
+          )
+            AND EXISTS (
+              SELECT 1 FROM media_assets media WHERE media.id = $2 AND media.workspace_id = $3
+            )
+          ON CONFLICT (post_variant_id, media_asset_id) DO NOTHING
+        `,
+        ["variant_lumiere_instagram", "med_studio_light", demoWorkspace.id, 0],
+      );
+      await transaction.query(
+        `
+          INSERT INTO post_variant_media (post_variant_id, media_asset_id, workspace_id, sort_order)
+          SELECT $1, $2, $3, $4
+          WHERE EXISTS (
+            SELECT 1
+            FROM post_variants variant
+            INNER JOIN posts post ON post.id = variant.post_id
+              AND post.workspace_id = variant.workspace_id
+            WHERE variant.id = $1
+              AND variant.workspace_id = $3
+              AND post.workspace_id = $3
+          )
+            AND EXISTS (
+              SELECT 1 FROM media_assets media WHERE media.id = $2 AND media.workspace_id = $3
+            )
+          ON CONFLICT (post_variant_id, media_asset_id) DO NOTHING
+        `,
+        ["variant_lumiere_tiktok", "med_night-drive", demoWorkspace.id, 0],
+      );
+      await transaction.query(
+        `
+          INSERT INTO post_variant_media (post_variant_id, media_asset_id, workspace_id, sort_order)
+          SELECT $1, $2, $3, $4
+          WHERE EXISTS (
+            SELECT 1
+            FROM post_variants variant
+            INNER JOIN posts post ON post.id = variant.post_id
+              AND post.workspace_id = variant.workspace_id
+            WHERE variant.id = $1
+              AND variant.workspace_id = $3
+              AND post.workspace_id = $3
+          )
+            AND EXISTS (
+              SELECT 1 FROM media_assets media WHERE media.id = $2 AND media.workspace_id = $3
+            )
+          ON CONFLICT (post_variant_id, media_asset_id) DO NOTHING
+        `,
+        ["variant_afterimage_youtube", "med_live", demoWorkspace.id, 0],
+      );
+      await transaction.query(
+        `
+          INSERT INTO post_variant_media (post_variant_id, media_asset_id, workspace_id, sort_order)
+          SELECT $1, $2, $3, $4
+          WHERE EXISTS (
+            SELECT 1
+            FROM post_variants variant
+            INNER JOIN posts post ON post.id = variant.post_id
+              AND post.workspace_id = variant.workspace_id
+            WHERE variant.id = $1
+              AND variant.workspace_id = $3
+              AND post.workspace_id = $3
+          )
+            AND EXISTS (
+              SELECT 1 FROM media_assets media WHERE media.id = $2 AND media.workspace_id = $3
+            )
+          ON CONFLICT (post_variant_id, media_asset_id) DO NOTHING
+        `,
+        ["variant_other_instagram", "med_other_workspace", "wsp_other", 0],
+      );
+      await transaction.query(
+        `
+          INSERT INTO approvals (
+            id, workspace_id, post_variant_id, state, requested_at, decided_at, decided_by, payload_hash
+          )
+          VALUES
+            ('approval_lumiere_instagram', $1, 'variant_lumiere_instagram', 'REQUESTED', '2026-08-30T08:30:00Z', NULL, NULL, $2),
+            ('approval_lumiere_tiktok', $1, 'variant_lumiere_tiktok', 'REQUESTED', '2026-08-30T08:35:00Z', NULL, NULL, $3),
+            ('approval_afterimage_youtube', $1, 'variant_afterimage_youtube', 'APPROVED', '2026-08-24T08:35:00Z', '2026-08-24T09:00:00Z', $4, $5),
+            ('approval_other_instagram', 'wsp_other', 'variant_other_instagram', 'REQUESTED', '2026-08-30T08:40:00Z', NULL, NULL, $6)
+          ON CONFLICT (id) DO NOTHING
+        `,
+        [
+          demoWorkspace.id,
+          studioInstagramHash,
+          nightDriveTiktokHash,
+          demoContext.userId,
+          afterimageYoutubeHash,
+          otherWorkspaceHash,
+        ],
       );
       await transaction.query(
         `

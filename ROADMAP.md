@@ -69,9 +69,10 @@ Créer le premier produit réellement utilisable : un Command Center responsive 
 - Content Library : import local privé d’un média avec limites, hash SHA-256, détection de doublon, tags normalisés, stockage à clé générée et audit append-only ;
 - Memory Consent Center : proposition de préférence en `PENDING`, décision humaine explicite et finale, scope serveur, timestamps persistés et audit sans contenu libre ;
 - Task Center : création locale contrôlée, échéance facultative, finalisation explicite idempotente, scope serveur et audit append-only sans contenu libre ;
+- Approval Center : file locale de propositions `REQUESTED`, hash de payload exact, décision humaine contrôlée via `CONTENT` / `APPROVAL_REQUIRED`, audit redacted et aucun effet de programmation ou publication ;
 - PGlite uniquement pour le développement/test local ; aucun compte social, aucun token, aucune publication et aucune donnée personnelle réelle.
 
-La tranche suivante de Phase 1 remplace le contexte de démonstration par une vraie identité/workspace, puis ajoute la recherche et les filtres média, les prévisualisations/traitements sécurisés, l’historique de commandes et la consultation du journal d’activité. Elle ne débloque pas encore la publication sociale.
+La tranche suivante de Phase 1 remplace le contexte de démonstration par une vraie identité/workspace, puis ajoute la recherche et les filtres média, les prévisualisations/traitements sécurisés, l’historique de commandes et la consultation du journal d’activité. Le calendrier et la planification interne ne viendront qu’après une détection de conflits dédiée ; aucune de ces étapes ne débloque encore la publication sociale.
 
 ### Périmètre
 

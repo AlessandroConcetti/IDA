@@ -61,6 +61,34 @@ export interface TaskCreateInput {
   dueAt?: string;
 }
 
+export type ApprovalRequestState = "REQUESTED";
+
+export type ApprovalDeliveryState = "NOT_CONFIGURED";
+
+export interface ApprovalMedia {
+  filename: string;
+}
+
+export interface ApprovalQueueItem {
+  approvalId: string;
+  variantId: string;
+  postId: string;
+  postTitle: string;
+  platform: string;
+  media: ApprovalMedia[];
+  caption: string;
+  hashtags: string[];
+  cta?: string;
+  objective: string;
+  rationale?: string;
+  plannedAt?: string;
+  timezone: string;
+  payloadHash: string;
+  requestedAt: string;
+  approvalState: ApprovalRequestState;
+  deliveryState: ApprovalDeliveryState;
+}
+
 export interface MediaUploadInput {
   file: File;
   description?: string;
@@ -380,6 +408,22 @@ function taskStatus(value: unknown): TaskStatus {
   throw new IdaApiError("L’état de tâche retourné par IDA API est invalide.");
 }
 
+function approvalRequestState(value: unknown): ApprovalRequestState {
+  if (value === "REQUESTED") {
+    return "REQUESTED";
+  }
+
+  throw new IdaApiError("L’état d’approbation retourné par IDA API est invalide.");
+}
+
+function approvalDeliveryState(value: unknown): ApprovalDeliveryState {
+  if (value === "NOT_CONFIGURED") {
+    return value;
+  }
+
+  throw new IdaApiError("L’état de livraison retourné par IDA API est invalide.");
+}
+
 function displaySystemName(component: unknown): string {
   const labels: Record<string, string> = {
     AI: "AI",
@@ -506,6 +550,118 @@ export async function completeTask(taskId: string): Promise<TaskRecord> {
   const payload = await postApiJson(`/v1/tasks/${encodeURIComponent(taskId)}/complete`);
 
   return toTask(readDataObjectOrDirect(payload, "/v1/tasks/:taskId/complete"));
+}
+
+function approvalHashtags(value: unknown): string[] {
+  if (typeof value === "string") {
+    return value
+      .split(/[,\n]/u)
+      .map((hashtag) => hashtag.trim())
+      .filter(Boolean);
+  }
+
+  return readStringArray(value);
+}
+
+function approvalMedia(value: unknown): ApprovalMedia[] {
+  if (!Array.isArray(value)) {
+    throw new IdaApiError("Les médias retournés par l’Approval Center sont invalides.");
+  }
+
+  return value.map((item) => {
+    if (typeof item === "string") {
+      const filename = readString(item);
+
+      if (!filename) {
+        throw new IdaApiError("Un média retourné par l’Approval Center n’a pas de nom sûr.");
+      }
+
+      return { filename };
+    }
+
+    const media = readRecord(item);
+    const filename = readString(media.filename, media.name);
+
+    if (!filename) {
+      throw new IdaApiError("Un média retourné par l’Approval Center n’a pas de nom sûr.");
+    }
+
+    return { filename };
+  });
+}
+
+function toApprovalQueueItem(record: Record<string, unknown>): ApprovalQueueItem {
+  const approvalId = readString(record.approvalId);
+  const variantId = readString(record.variantId);
+  const postId = readString(record.postId);
+  const postTitle = readString(record.postTitle);
+  const platform = readString(record.platform);
+  const caption = readString(record.caption);
+  const objective = readString(record.objective);
+  const timezone = readString(record.timezone);
+  const payloadHash = readString(record.payloadHash);
+  const requestedAt = readString(record.requestedAt);
+
+  if (
+    !approvalId ||
+    !variantId ||
+    !postId ||
+    !postTitle ||
+    !platform ||
+    !caption ||
+    !objective ||
+    !timezone ||
+    !payloadHash ||
+    !requestedAt
+  ) {
+    throw new IdaApiError("La réponse Approval Center d’IDA API n’a pas le format attendu.");
+  }
+
+  return {
+    approvalId,
+    variantId,
+    postId,
+    postTitle,
+    platform,
+    media: approvalMedia(record.media),
+    caption,
+    hashtags: approvalHashtags(record.hashtags),
+    cta: readString(record.cta),
+    objective,
+    rationale: readString(record.rationale),
+    plannedAt: readString(record.plannedAt),
+    timezone,
+    payloadHash,
+    requestedAt,
+    approvalState: approvalRequestState(record.approvalState),
+    deliveryState: approvalDeliveryState(record.deliveryState),
+  };
+}
+
+export async function fetchApprovalQueue(): Promise<ApprovalQueueItem[]> {
+  return readDataList(await getApiJson("/v1/approvals/queue"), "/v1/approvals/queue").map(toApprovalQueueItem);
+}
+
+export async function approvePostVariant(
+  variantId: string,
+  approvalId: string,
+  expectedPayloadHash: string,
+): Promise<void> {
+  await postApiJson(`/v1/post-variants/${encodeURIComponent(variantId)}/approve`, {
+    approvalId,
+    expectedPayloadHash,
+  });
+}
+
+export async function rejectPostVariant(
+  variantId: string,
+  approvalId: string,
+  expectedPayloadHash: string,
+): Promise<void> {
+  await postApiJson(`/v1/post-variants/${encodeURIComponent(variantId)}/reject`, {
+    approvalId,
+    expectedPayloadHash,
+  });
 }
 
 function toTrack(record: Record<string, unknown>): Track {

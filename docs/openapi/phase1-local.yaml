@@ -6,8 +6,8 @@ info:
     Contrat du runtime de développement local. Il expose uniquement des données
     de démonstration, des commandes IDA déterministes en lecture seule, une
     modification interne bornée de l’Artist Brain, une création Music Brain
-    strictement contrôlée, un flux de mémoire consentie local et un Task Center
-    interne contrôlé.
+    strictement contrôlée, un flux de mémoire consentie local, un Approval
+    Center interne sans livraison et un Task Center interne contrôlé.
 servers:
   - url: http://127.0.0.1:8787
     description: API locale de développement
@@ -283,6 +283,93 @@ paths:
           $ref: '#/components/responses/MemoryNotFound'
         '409':
           $ref: '#/components/responses/MemoryDecisionFinal'
+  /v1/approvals/queue:
+    get:
+      operationId: listApprovalQueue
+      summary: Liste les propositions REQUESTED à valider
+      description: >-
+        Retourne uniquement les demandes d'approbation du workspace résolu côté
+        serveur. La date éventuelle est une date proposée, pas une publication
+        programmée. Le hash couvre également titre, objectif, rationale
+        éventuelle, texte et médias ordonnés. Les médias n'exposent que id,
+        filename, type et status.
+      responses:
+        '200':
+          description: File d'approbations internes dans un ordre stable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalQueueResponse'
+  /v1/post-variants/{variantId}/approve:
+    post:
+      operationId: approvePostVariant
+      summary: Approuve humainement une version exacte de variante
+      description: >-
+        Vérifie approvalId et expectedPayloadHash dans le workspace serveur,
+        construit ensuite la preuve humaine côté serveur et applique REQUESTED
+        vers APPROVED. Ne programme ni ne publie aucun contenu.
+      parameters:
+        - $ref: '#/components/parameters/PostVariantId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PostVariantDecisionRequest'
+      responses:
+        '200':
+          description: Décision APPROVED ou retry idempotent de la même décision
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostVariantDecisionResponse'
+        '400':
+          $ref: '#/components/responses/InvalidApprovalDecision'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/PostVariantNotFound'
+        '409':
+          description: Payload obsolète ou décision finale opposée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v1/post-variants/{variantId}/reject:
+    post:
+      operationId: rejectPostVariant
+      summary: Refuse humainement une version exacte de variante
+      description: >-
+        Vérifie approvalId et expectedPayloadHash dans le workspace serveur,
+        construit ensuite la preuve humaine côté serveur et applique REQUESTED
+        vers REJECTED. Ne programme ni ne publie aucun contenu.
+      parameters:
+        - $ref: '#/components/parameters/PostVariantId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PostVariantDecisionRequest'
+      responses:
+        '200':
+          description: Décision REJECTED ou retry idempotent de la même décision
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostVariantDecisionResponse'
+        '400':
+          $ref: '#/components/responses/InvalidApprovalDecision'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/PostVariantNotFound'
+        '409':
+          description: Payload obsolète ou décision finale opposée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /v1/tasks:
     get:
       operationId: listTasks
@@ -386,6 +473,14 @@ components:
       schema:
         type: string
         minLength: 1
+    PostVariantId:
+      name: variantId
+      in: path
+      required: true
+      description: Identifiant de variante résolu dans le workspace serveur.
+      schema:
+        type: string
+        minLength: 1
     TaskId:
       name: taskId
       in: path
@@ -439,6 +534,30 @@ components:
             $ref: '#/components/schemas/ErrorResponse'
     MemoryDecisionFinal:
       description: La mémoire possède déjà un état final immuable
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InvalidApprovalDecision:
+      description: Corps d'approbation invalide ou tentative d'injecter un acteur, un état ou un scope client
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    PostVariantNotFound:
+      description: Variante introuvable dans le workspace autorisé
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ApprovalStalePayload:
+      description: approvalId ou hash ne correspond plus à la version courante
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ApprovalDecisionFinal:
+      description: Une décision terminale opposée est déjà enregistrée
       content:
         application/json:
           schema:
@@ -871,6 +990,98 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Memory'
+    ApprovalState:
+      enum: [REQUESTED, APPROVED, REJECTED, INVALIDATED]
+    ApprovalMediaSummary:
+      type: object
+      additionalProperties: false
+      required: [id, filename, type, status]
+      properties:
+        id: { type: string, minLength: 1 }
+        filename: { type: string, minLength: 1, maxLength: 255 }
+        type: { enum: [IMAGE, VIDEO, AUDIO, DOCUMENT, OTHER] }
+        status: { enum: [UNUSED, USED, SCHEDULED, PUBLISHED, ARCHIVED] }
+    ApprovalQueueItem:
+      type: object
+      additionalProperties: false
+      required:
+        - approvalId
+        - variantId
+        - postId
+        - postTitle
+        - platform
+        - media
+        - caption
+        - hashtags
+        - objective
+        - timezone
+        - payloadHash
+        - approvalState
+        - deliveryState
+        - requestedAt
+      properties:
+        approvalId: { type: string, minLength: 1 }
+        variantId: { type: string, minLength: 1 }
+        postId: { type: string, minLength: 1 }
+        postTitle: { type: string, minLength: 1, maxLength: 240 }
+        platform: { enum: [INSTAGRAM, TIKTOK, YOUTUBE, FACEBOOK] }
+        media:
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/ApprovalMediaSummary'
+        caption: { type: string, minLength: 1, maxLength: 4000 }
+        hashtags:
+          type: array
+          maxItems: 30
+          items: { type: string, minLength: 1, maxLength: 100 }
+        cta: { type: string, minLength: 1, maxLength: 500 }
+        objective: { type: string, minLength: 1, maxLength: 2000 }
+        rationale: { type: string, minLength: 1, maxLength: 4000 }
+        plannedAt: { type: string, format: date-time }
+        timezone: { type: string, minLength: 1, maxLength: 120 }
+        payloadHash:
+          type: string
+          pattern: '^sha256:[a-f0-9]{64}$'
+        approvalState: { const: REQUESTED }
+        deliveryState: { const: NOT_CONFIGURED }
+        requestedAt: { type: string, format: date-time }
+    ApprovalQueueResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApprovalQueueItem'
+    PostVariantDecisionRequest:
+      type: object
+      additionalProperties: false
+      required: [approvalId, expectedPayloadHash]
+      properties:
+        approvalId: { type: string, minLength: 1 }
+        expectedPayloadHash:
+          type: string
+          pattern: '^sha256:[a-f0-9]{64}$'
+    PostVariantDecision:
+      type: object
+      additionalProperties: false
+      required: [approvalId, variantId, approvalState, deliveryState, payloadHash, decidedAt]
+      properties:
+        approvalId: { type: string, minLength: 1 }
+        variantId: { type: string, minLength: 1 }
+        approvalState: { enum: [APPROVED, REJECTED] }
+        deliveryState: { const: NOT_CONFIGURED }
+        payloadHash:
+          type: string
+          pattern: '^sha256:[a-f0-9]{64}$'
+        decidedAt: { type: string, format: date-time }
+    PostVariantDecisionResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/PostVariantDecision'
     TaskStatus:
       enum: [TODO, IN_PROGRESS, DONE, CANCELLED]
     Task:

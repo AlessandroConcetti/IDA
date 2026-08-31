@@ -348,6 +348,93 @@ export const taskCompleteParamsSchema = z
 export const socialPlatformSchema = z.enum(["INSTAGRAM", "TIKTOK", "YOUTUBE", "FACEBOOK"]);
 export type SocialPlatform = z.infer<typeof socialPlatformSchema>;
 
+// Approval Center ----------------------------------------------------------
+//
+// Une approbation lie une décision humaine à une version exacte et stable
+// d'une variante. Le client ne peut soumettre que les deux préconditions
+// (approvalId + payloadHash) ; il ne transporte jamais l'acteur, l'état, le
+// workspace ou le contenu qui sera décidé.
+export const approvalStateSchema = z.enum(["REQUESTED", "APPROVED", "REJECTED", "INVALIDATED"]);
+export type ApprovalState = z.infer<typeof approvalStateSchema>;
+
+export const approvalQueueStateSchema = z.literal("REQUESTED");
+export const approvalDecisionStateSchema = z.enum(["APPROVED", "REJECTED"]);
+
+export const postDeliveryStateSchema = z.enum(["NOT_CONFIGURED"]);
+export type PostDeliveryState = z.infer<typeof postDeliveryStateSchema>;
+
+const postTitleSchema = z.string().trim().min(1).max(240);
+const postCaptionSchema = z.string().trim().min(1).max(4_000);
+const postHashtagSchema = z.string().trim().min(1).max(100);
+const postCtaSchema = z.string().trim().min(1).max(500);
+const postObjectiveSchema = z.string().trim().min(1).max(2_000);
+const postRationaleSchema = z.string().trim().min(1).max(4_000);
+const timezoneSchema = z.string().trim().min(1).max(120);
+
+// Le préfixe rend le type de hash explicite et interdit des valeurs libres
+// susceptibles d'être confondues avec un contenu ou une URL.
+export const payloadHashSchema = z.string().regex(/^sha256:[a-f0-9]{64}$/);
+
+export const postVariantMediaSummarySchema = z.object({
+  id: entityIdSchema,
+  filename: z.string().trim().min(1).max(255),
+  type: mediaTypeSchema,
+  status: mediaStatusSchema,
+});
+
+export type PostVariantMediaSummary = z.infer<typeof postVariantMediaSummarySchema>;
+
+export const approvalQueueItemSchema = z.object({
+  approvalId: entityIdSchema,
+  variantId: entityIdSchema,
+  postId: entityIdSchema,
+  postTitle: postTitleSchema,
+  platform: socialPlatformSchema,
+  media: z.array(postVariantMediaSummarySchema).max(20),
+  caption: postCaptionSchema,
+  hashtags: z.array(postHashtagSchema).max(30),
+  cta: postCtaSchema.optional(),
+  objective: postObjectiveSchema,
+  rationale: postRationaleSchema.optional(),
+  plannedAt: timestampSchema.optional(),
+  timezone: timezoneSchema,
+  payloadHash: payloadHashSchema,
+  approvalState: approvalQueueStateSchema,
+  deliveryState: postDeliveryStateSchema,
+  requestedAt: timestampSchema,
+});
+
+export type ApprovalQueueItem = z.infer<typeof approvalQueueItemSchema>;
+
+// Les deux routes humaines partagent ce corps strict. Ce sont uniquement des
+// préconditions de concurrence : elles ne donnent aucun droit ni aucun état
+// au client.
+export const postVariantDecisionRequestSchema = z
+  .object({
+    approvalId: entityIdSchema,
+    expectedPayloadHash: payloadHashSchema,
+  })
+  .strict();
+
+export type PostVariantDecisionRequest = z.infer<typeof postVariantDecisionRequestSchema>;
+
+export const postVariantDecisionParamsSchema = z
+  .object({
+    variantId: entityIdSchema,
+  })
+  .strict();
+
+export const postVariantDecisionSchema = z.object({
+  approvalId: entityIdSchema,
+  variantId: entityIdSchema,
+  approvalState: approvalDecisionStateSchema,
+  deliveryState: postDeliveryStateSchema,
+  payloadHash: payloadHashSchema,
+  decidedAt: timestampSchema,
+});
+
+export type PostVariantDecision = z.infer<typeof postVariantDecisionSchema>;
+
 export const socialPlatformCapabilitySchema = z.object({
   platform: socialPlatformSchema,
   apiVersion: z.string().trim().min(1),
