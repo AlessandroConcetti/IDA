@@ -25,6 +25,25 @@ export interface TrackCreateInput {
   description?: string;
 }
 
+export type MemoryCategory =
+  | "ARTIST_MEMORY"
+  | "CONTENT_MEMORY"
+  | "CAMPAIGN_MEMORY"
+  | "SOCIAL_MEMORY"
+  | "PREFERENCE_MEMORY"
+  | "SYSTEM_MEMORY";
+
+export type MemoryState = "PENDING" | "CONFIRMED" | "REJECTED";
+
+export interface MemoryRecord {
+  id: string;
+  category: MemoryCategory;
+  content: string;
+  state: MemoryState;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface MediaUploadInput {
   file: File;
   description?: string;
@@ -119,7 +138,7 @@ export async function submitIdaCommand(text: string): Promise<IdaCommandResult> 
   );
 }
 
-async function postApiJson(path: string, body: unknown): Promise<unknown> {
+async function postApiJson(path: string, body?: unknown): Promise<unknown> {
   if (!isApiConfigured) {
     throw new IdaApiError("VITE_IDA_API_URL n’est pas configurée.");
   }
@@ -130,11 +149,11 @@ async function postApiJson(path: string, body: unknown): Promise<unknown> {
     response = await fetch(`${apiBaseUrl}${path}`, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
+        ...(body === undefined ? {} : { "Content-Type": "application/json" }),
         Accept: "application/json",
         "X-Request-Id": createRequestId(),
       },
-      body: JSON.stringify(body),
+      body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
     throw new IdaApiError("IDA API est indisponible.");
@@ -307,6 +326,29 @@ function mediaKind(value: unknown): MediaAsset["kind"] {
   return "FILE";
 }
 
+function memoryCategory(value: unknown): MemoryCategory {
+  if (
+    value === "ARTIST_MEMORY" ||
+    value === "CONTENT_MEMORY" ||
+    value === "CAMPAIGN_MEMORY" ||
+    value === "SOCIAL_MEMORY" ||
+    value === "PREFERENCE_MEMORY" ||
+    value === "SYSTEM_MEMORY"
+  ) {
+    return value;
+  }
+
+  throw new IdaApiError("La catégorie de mémoire retournée par IDA API est invalide.");
+}
+
+function memoryState(value: unknown): MemoryState {
+  if (value === "PENDING" || value === "CONFIRMED" || value === "REJECTED") {
+    return value;
+  }
+
+  throw new IdaApiError("L’état de mémoire retourné par IDA API est invalide.");
+}
+
 function displaySystemName(component: unknown): string {
   const labels: Record<string, string> = {
     AI: "AI",
@@ -357,6 +399,48 @@ export async function fetchArtistBrain(): Promise<ArtistBrain> {
 
 export async function updateArtistBrain(profile: ArtistBrain): Promise<ArtistBrain> {
   return toArtistBrain(await patchApiJson("/v1/artist-profile", profile));
+}
+
+function toMemory(record: Record<string, unknown>): MemoryRecord {
+  const id = readString(record.id);
+  const content = readString(record.content);
+  const createdAt = readString(record.createdAt);
+  const updatedAt = readString(record.updatedAt);
+
+  if (!id || !content || !createdAt || !updatedAt) {
+    throw new IdaApiError("La réponse mémoire d’IDA API n’a pas le format attendu.");
+  }
+
+  return {
+    id,
+    category: memoryCategory(record.category),
+    content,
+    state: memoryState(record.state),
+    createdAt,
+    updatedAt,
+  };
+}
+
+export async function fetchMemories(): Promise<MemoryRecord[]> {
+  return readDataList(await getApiJson("/v1/memories"), "/v1/memories").map(toMemory);
+}
+
+export async function proposePreferenceMemory(content: string): Promise<MemoryRecord> {
+  const payload = await postApiJson("/v1/memories/proposals", { content });
+
+  return toMemory(readDataObjectOrDirect(payload, "/v1/memories/proposals"));
+}
+
+export async function confirmMemory(memoryId: string): Promise<MemoryRecord> {
+  const payload = await postApiJson(`/v1/memories/${encodeURIComponent(memoryId)}/confirm`);
+
+  return toMemory(readDataObjectOrDirect(payload, "/v1/memories/:id/confirm"));
+}
+
+export async function rejectMemory(memoryId: string): Promise<MemoryRecord> {
+  const payload = await postApiJson(`/v1/memories/${encodeURIComponent(memoryId)}/reject`);
+
+  return toMemory(readDataObjectOrDirect(payload, "/v1/memories/:id/reject"));
 }
 
 function toTrack(record: Record<string, unknown>): Track {

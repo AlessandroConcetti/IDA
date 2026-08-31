@@ -1,11 +1,16 @@
 import { type DragEvent, type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
+  confirmMemory,
   createTrack,
   type DashboardSnapshot,
   fetchArtistBrain,
   fetchDashboardSnapshot,
+  fetchMemories,
   IdaApiError,
   isApiConfigured,
+  type MemoryRecord,
+  proposePreferenceMemory,
+  rejectMemory,
   submitIdaCommand,
   type TrackCreateInput,
   updateArtistBrain,
@@ -994,6 +999,279 @@ function formToArtistBrain(form: ArtistBrainForm, current: ArtistBrain): ArtistB
   };
 }
 
+function memoryCategoryLabel(category: MemoryRecord["category"]): string {
+  const labels: Record<MemoryRecord["category"], string> = {
+    ARTIST_MEMORY: "Artist memory",
+    CONTENT_MEMORY: "Content memory",
+    CAMPAIGN_MEMORY: "Campaign memory",
+    SOCIAL_MEMORY: "Social memory",
+    PREFERENCE_MEMORY: "Preference",
+    SYSTEM_MEMORY: "System memory",
+  };
+
+  return labels[category];
+}
+
+function memoryStateLabel(state: MemoryRecord["state"]): string {
+  const labels: Record<MemoryRecord["state"], string> = {
+    PENDING: "PENDING",
+    CONFIRMED: "CONFIRMED",
+    REJECTED: "REJECTED",
+  };
+
+  return labels[state];
+}
+
+function formatMemoryDate(value: string): string {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.valueOf())) {
+    return "Date indisponible";
+  }
+
+  return new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short" }).format(date);
+}
+
+function MemoryConsentCenter() {
+  const [memories, setMemories] = useState<MemoryRecord[]>([]);
+  const [proposal, setProposal] = useState("");
+  const [source, setSource] = useState<"loading" | "api" | "unavailable">(isApiConfigured ? "loading" : "unavailable");
+  const [notice, setNotice] = useState(
+    isApiConfigured
+      ? "Chargement des propositions de mémoire…"
+      : "Les propositions de mémoire nécessitent la connexion à IDA API.",
+  );
+  const [noticeState, setNoticeState] = useState<"default" | "success" | "error">("default");
+  const [isProposing, setIsProposing] = useState(false);
+  const [activeMemoryId, setActiveMemoryId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    if (!isApiConfigured) {
+      return () => {
+        isCurrent = false;
+      };
+    }
+
+    void fetchMemories()
+      .then((nextMemories) => {
+        if (!isCurrent) {
+          return;
+        }
+
+        setMemories(nextMemories);
+        setSource("api");
+        setNotice("Aucune préférence n’est enregistrée tant que tu ne l’as pas explicitement confirmée.");
+      })
+      .catch((error: unknown) => {
+        if (!isCurrent) {
+          return;
+        }
+
+        const reason = error instanceof IdaApiError ? error.message : "IDA API est indisponible.";
+        setSource("unavailable");
+        setNotice(`La mémoire consentie est indisponible : ${reason}`);
+        setNoticeState("error");
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, []);
+
+  async function handleProposal(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const content = proposal.trim();
+
+    if (!content) {
+      setNotice("Écris une préférence avant de la proposer à IDA.");
+      setNoticeState("error");
+      return;
+    }
+
+    setIsProposing(true);
+
+    try {
+      const memory = await proposePreferenceMemory(content);
+      setMemories((current) => [memory, ...current]);
+      setProposal("");
+      setSource("api");
+      setNotice("Proposition ajoutée. Elle reste PENDING et ne sera pas utilisée avant ton approbation.");
+      setNoticeState("success");
+    } catch (error: unknown) {
+      const reason = error instanceof IdaApiError ? error.message : "IDA API est indisponible.";
+      setNotice(`La préférence n’a pas été proposée : ${reason}`);
+      setNoticeState("error");
+    } finally {
+      setIsProposing(false);
+    }
+  }
+
+  async function handleMemoryAction(memory: MemoryRecord, action: "confirm" | "reject") {
+    if (memory.state !== "PENDING" || activeMemoryId) {
+      return;
+    }
+
+    setActiveMemoryId(memory.id);
+
+    try {
+      const updated = action === "confirm" ? await confirmMemory(memory.id) : await rejectMemory(memory.id);
+      setMemories((current) => current.map((candidate) => (candidate.id === updated.id ? updated : candidate)));
+      setSource("api");
+      setNotice(
+        action === "confirm"
+          ? "Préférence confirmée. IDA pourra désormais l’utiliser dans les contextes autorisés."
+          : "Proposition refusée. IDA ne l’enregistrera pas comme préférence durable.",
+      );
+      setNoticeState("success");
+    } catch (error: unknown) {
+      const reason = error instanceof IdaApiError ? error.message : "IDA API est indisponible.";
+
+      if (error instanceof IdaApiError && error.status === 409) {
+        try {
+          const nextMemories = await fetchMemories();
+          setMemories(nextMemories);
+          setSource("api");
+          setNotice("Cette proposition a déjà été traitée. La file a été actualisée.");
+        } catch (refreshError: unknown) {
+          const refreshReason =
+            refreshError instanceof IdaApiError ? refreshError.message : "IDA API est indisponible.";
+          setNotice(
+            `Cette proposition a déjà changé d’état, mais la file n’a pas pu être actualisée : ${refreshReason}`,
+          );
+        }
+      } else {
+        setNotice(`La proposition n’a pas été mise à jour : ${reason}`);
+      }
+
+      setNoticeState("error");
+    } finally {
+      setActiveMemoryId(null);
+    }
+  }
+
+  const pendingMemories = memories.filter((memory) => memory.state === "PENDING");
+  const reviewedMemories = memories.filter((memory) => memory.state !== "PENDING");
+  const confirmedCount = memories.filter((memory) => memory.state === "CONFIRMED").length;
+  const rejectedCount = memories.filter((memory) => memory.state === "REJECTED").length;
+  const canManage = source === "api" && !isProposing && !activeMemoryId;
+
+  return (
+    <section className="panel wide-panel memory-consent-card" aria-labelledby="memory-consent-title">
+      <div className="panel-heading">
+        <div>
+          <p className="eyebrow">MEMORY CONSENT CENTER</p>
+          <h2 id="memory-consent-title">You decide what stays.</h2>
+        </div>
+        <span className="status-tag approval">EXPLICIT CONSENT</span>
+      </div>
+      <p className="memory-consent-intro">
+        Propose une préférence à IDA, puis confirme-la ou refuse-la. Une conversation ne devient jamais une mémoire
+        durable automatiquement.
+      </p>
+      <p className={`memory-consent-notice ${noticeState}`} role="status">
+        <span aria-hidden="true" />
+        {notice}
+      </p>
+
+      <form className="memory-proposal-form" noValidate onSubmit={handleProposal}>
+        <label className="memory-proposal-field" htmlFor="memory-preference-proposal">
+          <span>Nouvelle préférence</span>
+          <textarea
+            id="memory-preference-proposal"
+            value={proposal}
+            onChange={(event) => setProposal(event.target.value)}
+            placeholder="Ex. Je préfère les captions courtes, directes et sans hashtags excessifs."
+            rows={3}
+            maxLength={4000}
+            disabled={!canManage}
+          />
+        </label>
+        <div className="memory-proposal-actions">
+          <p>IDA la place d’abord dans la file PENDING : aucune préférence confirmée n’est créée à cette étape.</p>
+          <button className="send-button" type="submit" disabled={!canManage}>
+            {isProposing ? "Proposition…" : "Propose to IDA"}
+            <span aria-hidden="true">↗</span>
+          </button>
+        </div>
+      </form>
+
+      <div className="memory-consent-divider" />
+
+      <div className="memory-consent-section-heading">
+        <div>
+          <p className="eyebrow">PENDING PROPOSALS</p>
+          <h3>{pendingMemories.length ? `${pendingMemories.length} à décider` : "Nothing waiting."}</h3>
+        </div>
+        <span className="quiet-label">Human decision required</span>
+      </div>
+
+      {source === "loading" ? <p className="memory-empty-state">Chargement des propositions…</p> : null}
+      {source === "api" && pendingMemories.length === 0 ? (
+        <p className="memory-empty-state">Aucune proposition en attente. Tu gardes le contrôle.</p>
+      ) : null}
+      <div className="memory-pending-list">
+        {pendingMemories.map((memory) => {
+          const isActive = activeMemoryId === memory.id;
+
+          return (
+            <article className="memory-pending-item" key={memory.id}>
+              <div className="memory-pending-copy">
+                <div className="memory-pending-meta">
+                  <span>{memoryCategoryLabel(memory.category)}</span>
+                  <span>·</span>
+                  <time dateTime={memory.createdAt}>{formatMemoryDate(memory.createdAt)}</time>
+                </div>
+                <p>{memory.content}</p>
+              </div>
+              <div className="memory-pending-actions">
+                <button
+                  className="memory-action-button approve"
+                  type="button"
+                  onClick={() => void handleMemoryAction(memory, "confirm")}
+                  disabled={!canManage}
+                >
+                  {isActive ? "Updating…" : "APPROVE"}
+                </button>
+                <button
+                  className="memory-action-button reject"
+                  type="button"
+                  onClick={() => void handleMemoryAction(memory, "reject")}
+                  disabled={!canManage}
+                >
+                  {isActive ? "Updating…" : "REJECT"}
+                </button>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+
+      <div className="memory-review-summary">
+        <div className="memory-review-counts">
+          <span>{confirmedCount} confirmed</span>
+          <span>{rejectedCount} rejected</span>
+        </div>
+        {reviewedMemories.length > 0 ? (
+          <div className="memory-reviewed-list">
+            {reviewedMemories.slice(0, 3).map((memory) => (
+              <article key={memory.id}>
+                <span className={`memory-state-tag ${memory.state.toLocaleLowerCase("en-US")}`}>
+                  {memoryStateLabel(memory.state)}
+                </span>
+                <p>{memory.content}</p>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="memory-reviewed-empty">Les décisions confirmées ou refusées apparaîtront ici.</p>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function MemoryView() {
   const [profile, setProfile] = useState<ArtistBrain>(localArtistBrain);
   const [form, setForm] = useState<ArtistBrainForm>(() => artistBrainToForm(localArtistBrain));
@@ -1074,112 +1352,115 @@ function MemoryView() {
   ] as const;
 
   return (
-    <section className="panel wide-panel memory-card">
-      <div className="panel-heading">
-        <div>
-          <p className="eyebrow">ARTIST BRAIN</p>
-          <h2>Memory under your control.</h2>
+    <>
+      <section className="panel wide-panel memory-card">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">ARTIST BRAIN</p>
+            <h2>Memory under your control.</h2>
+          </div>
+          <span className="quiet-label">{source === "api" ? "Editable workspace data" : "Local preview"}</span>
         </div>
-        <span className="quiet-label">{source === "api" ? "Editable workspace data" : "Local preview"}</span>
-      </div>
-      <p className={`data-source-notice ${source}`} role="status">
-        <span aria-hidden="true" />
-        {notice}
-      </p>
-      <div className="memory-grid artist-brain-summary">
-        {summaryCards.map(([label, value]) => (
-          <article key={label}>
-            <p>{label}</p>
-            <strong>{value}</strong>
-          </article>
-        ))}
-      </div>
-      <form className="artist-brain-form" onSubmit={handleSubmit}>
-        <div className="artist-brain-fields">
-          <label className="artist-brain-field artist-brain-field-wide">
-            <span>Identité artistique</span>
-            <textarea
-              value={form.identity}
-              onChange={(event) => updateField("identity", event.target.value)}
-              rows={3}
-              disabled={isSaving}
-            />
-          </label>
-          <label className="artist-brain-field">
-            <span>Ton</span>
-            <input
-              value={form.tone}
-              onChange={(event) => updateField("tone", event.target.value)}
-              disabled={isSaving}
-            />
-          </label>
-          <label className="artist-brain-field">
-            <span>Genres</span>
-            <input
-              value={form.genres}
-              onChange={(event) => updateField("genres", event.target.value)}
-              placeholder="Melodic techno, progressive house…"
-              disabled={isSaving}
-            />
-          </label>
-          <label className="artist-brain-field artist-brain-field-wide">
-            <span>Audience</span>
-            <textarea
-              value={form.audience}
-              onChange={(event) => updateField("audience", event.target.value)}
-              rows={2}
-              disabled={isSaving}
-            />
-          </label>
-          <label className="artist-brain-field">
-            <span>Influences</span>
-            <input
-              value={form.influences}
-              onChange={(event) => updateField("influences", event.target.value)}
-              placeholder="Sépare chaque influence par une virgule"
-              disabled={isSaving}
-            />
-          </label>
-          <label className="artist-brain-field">
-            <span>Objectifs</span>
-            <input
-              value={form.goals}
-              onChange={(event) => updateField("goals", event.target.value)}
-              placeholder="Sépare chaque objectif par une virgule"
-              disabled={isSaving}
-            />
-          </label>
-          <label className="artist-brain-field">
-            <span>Vocabulaire préféré</span>
-            <input
-              value={form.preferredVocabulary}
-              onChange={(event) => updateField("preferredVocabulary", event.target.value)}
-              placeholder="nocturne, texture…"
-              disabled={isSaving}
-            />
-          </label>
-          <label className="artist-brain-field">
-            <span>Vocabulaire à éviter</span>
-            <input
-              value={form.forbiddenVocabulary}
-              onChange={(event) => updateField("forbiddenVocabulary", event.target.value)}
-              placeholder="banger, vibes…"
-              disabled={isSaving}
-            />
-          </label>
+        <p className={`data-source-notice ${source}`} role="status">
+          <span aria-hidden="true" />
+          {notice}
+        </p>
+        <div className="memory-grid artist-brain-summary">
+          {summaryCards.map(([label, value]) => (
+            <article key={label}>
+              <p>{label}</p>
+              <strong>{value}</strong>
+            </article>
+          ))}
         </div>
-        <div className="artist-brain-actions">
-          <p>
-            Les changements restent internes à IDA. Ils ne créent aucune publication ni mémoire conversationnelle
-            implicite.
-          </p>
-          <button className="send-button" type="submit" disabled={isSaving}>
-            {isSaving ? "Enregistrement…" : "Save Artist Brain"}
-            <span aria-hidden="true">↗</span>
-          </button>
-        </div>
-      </form>
-    </section>
+        <form className="artist-brain-form" onSubmit={handleSubmit}>
+          <div className="artist-brain-fields">
+            <label className="artist-brain-field artist-brain-field-wide">
+              <span>Identité artistique</span>
+              <textarea
+                value={form.identity}
+                onChange={(event) => updateField("identity", event.target.value)}
+                rows={3}
+                disabled={isSaving}
+              />
+            </label>
+            <label className="artist-brain-field">
+              <span>Ton</span>
+              <input
+                value={form.tone}
+                onChange={(event) => updateField("tone", event.target.value)}
+                disabled={isSaving}
+              />
+            </label>
+            <label className="artist-brain-field">
+              <span>Genres</span>
+              <input
+                value={form.genres}
+                onChange={(event) => updateField("genres", event.target.value)}
+                placeholder="Melodic techno, progressive house…"
+                disabled={isSaving}
+              />
+            </label>
+            <label className="artist-brain-field artist-brain-field-wide">
+              <span>Audience</span>
+              <textarea
+                value={form.audience}
+                onChange={(event) => updateField("audience", event.target.value)}
+                rows={2}
+                disabled={isSaving}
+              />
+            </label>
+            <label className="artist-brain-field">
+              <span>Influences</span>
+              <input
+                value={form.influences}
+                onChange={(event) => updateField("influences", event.target.value)}
+                placeholder="Sépare chaque influence par une virgule"
+                disabled={isSaving}
+              />
+            </label>
+            <label className="artist-brain-field">
+              <span>Objectifs</span>
+              <input
+                value={form.goals}
+                onChange={(event) => updateField("goals", event.target.value)}
+                placeholder="Sépare chaque objectif par une virgule"
+                disabled={isSaving}
+              />
+            </label>
+            <label className="artist-brain-field">
+              <span>Vocabulaire préféré</span>
+              <input
+                value={form.preferredVocabulary}
+                onChange={(event) => updateField("preferredVocabulary", event.target.value)}
+                placeholder="nocturne, texture…"
+                disabled={isSaving}
+              />
+            </label>
+            <label className="artist-brain-field">
+              <span>Vocabulaire à éviter</span>
+              <input
+                value={form.forbiddenVocabulary}
+                onChange={(event) => updateField("forbiddenVocabulary", event.target.value)}
+                placeholder="banger, vibes…"
+                disabled={isSaving}
+              />
+            </label>
+          </div>
+          <div className="artist-brain-actions">
+            <p>
+              Les changements restent internes à IDA. Ils ne créent aucune publication ni mémoire conversationnelle
+              implicite.
+            </p>
+            <button className="send-button" type="submit" disabled={isSaving}>
+              {isSaving ? "Enregistrement…" : "Save Artist Brain"}
+              <span aria-hidden="true">↗</span>
+            </button>
+          </div>
+        </form>
+      </section>
+      <MemoryConsentCenter />
+    </>
   );
 }
 

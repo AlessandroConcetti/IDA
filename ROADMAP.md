@@ -67,9 +67,10 @@ Créer le premier produit réellement utilisable : un Command Center responsive 
 - Artist Brain éditable : identité, ton, genres, influences, audience, objectifs et vocabulaire, avec validation, permission `WRITE` interne et persistance locale ;
 - Music Brain : création locale contrôlée d’un morceau avec métadonnées, validation stricte, scope résolu par le serveur, outil `WRITE` allowlisté et audit append-only ;
 - Content Library : import local privé d’un média avec limites, hash SHA-256, détection de doublon, tags normalisés, stockage à clé générée et audit append-only ;
+- Memory Consent Center : proposition de préférence en `PENDING`, décision humaine explicite et finale, scope serveur, timestamps persistés et audit sans contenu libre ;
 - PGlite uniquement pour le développement/test local ; aucun compte social, aucun token, aucune publication et aucune donnée personnelle réelle.
 
-La tranche suivante de Phase 1 remplace le contexte de démonstration par une vraie identité/workspace, puis ajoute la recherche et les filtres média, les prévisualisations/traitements sécurisés, la mémoire consentie, l’historique de commandes et la consultation du journal d’activité. Elle ne débloque pas encore la publication sociale.
+La tranche suivante de Phase 1 remplace le contexte de démonstration par une vraie identité/workspace, puis ajoute la recherche et les filtres média, les prévisualisations/traitements sécurisés, l’historique de commandes et la consultation du journal d’activité. Elle ne débloque pas encore la publication sociale.
 
 ### Périmètre
 

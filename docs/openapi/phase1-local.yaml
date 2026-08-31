@@ -5,8 +5,8 @@ info:
   description: >-
     Contrat du runtime de développement local. Il expose uniquement des données
     de démonstration, des commandes IDA déterministes en lecture seule, une
-    modification interne bornée de l’Artist Brain et une création Music Brain
-    strictement contrôlée.
+    modification interne bornée de l’Artist Brain, une création Music Brain
+    strictement contrôlée et un flux de mémoire consentie local.
 servers:
   - url: http://127.0.0.1:8787
     description: API locale de développement
@@ -201,7 +201,7 @@ paths:
   /v1/memories:
     get:
       operationId: listMemories
-      summary: Liste la mémoire de démonstration
+      summary: Liste les mémoires du workspace local avec leurs timestamps persistés
       responses:
         '200':
           description: Mémoires structurées du workspace local
@@ -209,6 +209,79 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MemoryListResponse'
+  /v1/memories/proposals:
+    post:
+      operationId: createMemoryProposal
+      summary: Propose une préférence durable qui reste en attente de consentement
+      description: >-
+        Accepte uniquement le contenu d'une préférence. Le serveur impose le
+        workspace, l'acteur, l'identifiant, PREFERENCE_MEMORY et PENDING ; la
+        proposition ne devient jamais permanente avant une confirmation séparée.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemoryProposalRequest'
+      responses:
+        '201':
+          description: Proposition PENDING créée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryResponse'
+        '400':
+          $ref: '#/components/responses/InvalidMemoryProposal'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /v1/memories/{memoryId}/confirm:
+    post:
+      operationId: confirmMemory
+      summary: Confirme explicitement une proposition PENDING
+      description: >-
+        Ne reçoit aucun corps. La transition atomique PENDING vers CONFIRMED est
+        immuable après succès et est limitée au workspace serveur.
+      parameters:
+        - $ref: '#/components/parameters/MemoryId'
+      responses:
+        '200':
+          description: Mémoire confirmée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryResponse'
+        '400':
+          $ref: '#/components/responses/InvalidMemoryDecision'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/MemoryNotFound'
+        '409':
+          $ref: '#/components/responses/MemoryDecisionFinal'
+  /v1/memories/{memoryId}/reject:
+    post:
+      operationId: rejectMemory
+      summary: Refuse explicitement une proposition PENDING
+      description: >-
+        Ne reçoit aucun corps. La transition atomique PENDING vers REJECTED est
+        immuable après succès et est limitée au workspace serveur.
+      parameters:
+        - $ref: '#/components/parameters/MemoryId'
+      responses:
+        '200':
+          description: Mémoire refusée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryResponse'
+        '400':
+          $ref: '#/components/responses/InvalidMemoryDecision'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/MemoryNotFound'
+        '409':
+          $ref: '#/components/responses/MemoryDecisionFinal'
   /v1/social/platforms:
     get:
       operationId: listSocialPlatformCapabilities
@@ -243,6 +316,15 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 components:
+  parameters:
+    MemoryId:
+      name: memoryId
+      in: path
+      required: true
+      description: Identifiant de mémoire résolu dans le workspace serveur.
+      schema:
+        type: string
+        minLength: 1
   responses:
     InvalidCommand:
       description: Corps de commande ou filtre invalide
@@ -264,6 +346,30 @@ components:
             $ref: '#/components/schemas/ErrorResponse'
     InvalidMediaImport:
       description: Formulaire media invalide, champ inattendu ou tentative de définir le scope client
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InvalidMemoryProposal:
+      description: Proposition de mémoire invalide ou tentative de définir un état, un scope, un identifiant ou un acteur client
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InvalidMemoryDecision:
+      description: Décision de mémoire invalide ou corps non vide
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    MemoryNotFound:
+      description: Mémoire introuvable dans le workspace autorisé
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    MemoryDecisionFinal:
+      description: La mémoire possède déjà un état final immuable
       content:
         application/json:
           schema:
@@ -645,11 +751,25 @@ components:
         workspaceId: { type: string }
         category:
           enum: [ARTIST_MEMORY, CONTENT_MEMORY, CAMPAIGN_MEMORY, SOCIAL_MEMORY, PREFERENCE_MEMORY, SYSTEM_MEMORY]
-        content: { type: string }
+        content: { type: string, minLength: 1, maxLength: 4000 }
         state:
           enum: [PENDING, CONFIRMED, REJECTED]
+        confirmedBy: { type: string }
+        confirmedAt: { type: string, format: date-time }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    MemoryProposalRequest:
+      type: object
+      required: [content]
+      additionalProperties: false
+      properties:
+        content: { type: string, minLength: 1, maxLength: 4000 }
+    MemoryResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/Memory'
     MemoryListResponse:
       type: object
       required: [data]

@@ -263,20 +263,44 @@ export type MemoryCategory = z.infer<typeof memoryCategorySchema>;
 export const memoryStateSchema = z.enum(["PENDING", "CONFIRMED", "REJECTED"]);
 export type MemoryState = z.infer<typeof memoryStateSchema>;
 
+const memoryContentSchema = z.string().trim().min(1).max(4_000);
+
 export const memorySchema = z.object({
   id: entityIdSchema,
   workspaceId: entityIdSchema,
   artistProjectId: entityIdSchema.optional(),
   category: memoryCategorySchema,
-  content: z.string().trim().min(1),
+  content: memoryContentSchema,
   state: memoryStateSchema,
   sourceMessageId: entityIdSchema.optional(),
   confirmedBy: entityIdSchema.optional(),
+  confirmedAt: timestampSchema.optional(),
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
 });
 
 export type Memory = z.infer<typeof memorySchema>;
+
+// Une proposition de préférence ne peut pas choisir son état, sa catégorie,
+// son workspace ou son acteur. Ces valeurs restent entièrement côté serveur.
+export const memoryProposalCreateSchema = z
+  .object({
+    content: memoryContentSchema,
+  })
+  .strict();
+
+export type MemoryProposalCreate = z.infer<typeof memoryProposalCreateSchema>;
+
+// Les transitions confirm/reject sont matérialisées par leur route. Le corps
+// doit donc rester vide, afin d'empêcher toute tentative de forcer un état ou
+// un acteur depuis le client.
+export const memoryDecisionRequestSchema = z.object({}).strict();
+
+export const memoryDecisionParamsSchema = z
+  .object({
+    memoryId: entityIdSchema,
+  })
+  .strict();
 
 export const socialPlatformSchema = z.enum(["INSTAGRAM", "TIKTOK", "YOUTUBE", "FACEBOOK"]);
 export type SocialPlatform = z.infer<typeof socialPlatformSchema>;

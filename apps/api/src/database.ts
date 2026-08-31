@@ -6,6 +6,7 @@ import type {
   ArtistProfile as ArtistProfileContract,
   ArtistProfileUpdate,
   MediaImport,
+  MemoryProposalCreate,
   TrackCreate,
 } from "@ida/contracts";
 
@@ -106,8 +107,18 @@ export type Memory = {
   category: string;
   content: string;
   state: string;
+  confirmedBy: string | null;
   confirmedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
 };
+
+export type MemoryDecision = "CONFIRMED" | "REJECTED";
+
+export type MemoryDecisionResult =
+  | { kind: "updated"; memory: Memory }
+  | { kind: "not-found" }
+  | { kind: "already-decided"; state: string };
 
 export type TodayItem = {
   id: string;
@@ -250,6 +261,19 @@ function toMediaAsset(row: ScalarRow): MediaAsset {
     releaseTitle: asNullableString(row.releaseTitle),
     trackTitle: asNullableString(row.trackTitle),
     tags: asStringArray(row.tags),
+    createdAt: asTimestamp(row.createdAt) ?? "1970-01-01T00:00:00.000Z",
+    updatedAt: asTimestamp(row.updatedAt) ?? "1970-01-01T00:00:00.000Z",
+  };
+}
+
+function toMemory(row: ScalarRow): Memory {
+  return {
+    id: asString(row.id),
+    category: asString(row.category),
+    content: asString(row.content),
+    state: asString(row.state),
+    confirmedBy: asNullableString(row.confirmedBy),
+    confirmedAt: asTimestamp(row.confirmedAt),
     createdAt: asTimestamp(row.createdAt) ?? "1970-01-01T00:00:00.000Z",
     updatedAt: asTimestamp(row.updatedAt) ?? "1970-01-01T00:00:00.000Z",
   };
@@ -744,21 +768,151 @@ export class DemoDatabase {
   async listMemories(workspaceId: string): Promise<Memory[]> {
     const result = await this.pglite.query<ScalarRow>(
       `
-        SELECT id, category, content, state, confirmed_at AS "confirmedAt"
+        SELECT
+          id,
+          category,
+          content,
+          state,
+          confirmed_by AS "confirmedBy",
+          confirmed_at AS "confirmedAt",
+          created_at AS "createdAt",
+          updated_at AS "updatedAt"
         FROM memories
         WHERE workspace_id = $1
-        ORDER BY created_at DESC
+        ORDER BY created_at DESC, id ASC
       `,
       [workspaceId],
     );
 
-    return result.rows.map((row) => ({
-      id: asString(row.id),
-      category: asString(row.category),
-      content: asString(row.content),
-      state: asString(row.state),
-      confirmedAt: asTimestamp(row.confirmedAt),
-    }));
+    return result.rows.map(toMemory);
+  }
+
+  async createMemoryProposal(workspaceId: string, actorUserId: string, input: MemoryProposalCreate): Promise<Memory> {
+    return this.pglite.transaction(async (transaction) => {
+      // L'ID, la catégorie et l'état de départ sont toujours décidés ici, pas
+      // par le client. Une proposition n'est jamais une mémoire durable.
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const memoryId = `mem_${randomUUID().replaceAll("-", "")}`;
+        const result = await transaction.query<ScalarRow>(
+          `
+            INSERT INTO memories (id, workspace_id, category, content, state)
+            VALUES ($1, $2, 'PREFERENCE_MEMORY', $3, 'PENDING')
+            ON CONFLICT (id) DO NOTHING
+            RETURNING
+              id,
+              category,
+              content,
+              state,
+              confirmed_by AS "confirmedBy",
+              confirmed_at AS "confirmedAt",
+              created_at AS "createdAt",
+              updated_at AS "updatedAt"
+          `,
+          [memoryId, workspaceId, input.content],
+        );
+        const row = result.rows[0];
+
+        if (!row) {
+          continue;
+        }
+
+        const memory = toMemory(row);
+        await transaction.query(
+          `
+            INSERT INTO activity_logs (id, workspace_id, actor_user_id, action, entity_type, entity_id, payload)
+            VALUES ($1, $2, $3, 'memory.proposed', 'MEMORY', $4, $5::json)
+          `,
+          [
+            `act_${randomUUID().replaceAll("-", "")}`,
+            workspaceId,
+            actorUserId,
+            memory.id,
+            JSON.stringify({ category: memory.category, state: memory.state }),
+          ],
+        );
+
+        return memory;
+      }
+
+      throw new Error("Impossible de générer un identifiant unique pour la proposition de mémoire.");
+    });
+  }
+
+  async decideMemory(
+    workspaceId: string,
+    actorUserId: string,
+    memoryId: string,
+    decision: MemoryDecision,
+  ): Promise<MemoryDecisionResult> {
+    return this.pglite.transaction(async (transaction) => {
+      // La clause `state = 'PENDING'` rend la décision atomique : un état final
+      // ne peut pas être remplacé par une seconde confirmation ou un refus.
+      const update = await transaction.query<ScalarRow>(
+        `
+          UPDATE memories
+          SET
+            state = $3,
+            confirmed_at = CASE WHEN $3 = 'CONFIRMED' THEN CURRENT_TIMESTAMP ELSE NULL END,
+            confirmed_by = CASE WHEN $3 = 'CONFIRMED' THEN $4 ELSE NULL END,
+            updated_at = CURRENT_TIMESTAMP
+          WHERE id = $1
+            AND workspace_id = $2
+            AND state = 'PENDING'
+          RETURNING
+            id,
+            category,
+            content,
+            state,
+            confirmed_by AS "confirmedBy",
+            confirmed_at AS "confirmedAt",
+            created_at AS "createdAt",
+            updated_at AS "updatedAt"
+        `,
+        [memoryId, workspaceId, decision, actorUserId],
+      );
+      const row = update.rows[0];
+
+      if (row) {
+        const memory = toMemory(row);
+        const action = decision === "CONFIRMED" ? "memory.confirmed" : "memory.rejected";
+
+        await transaction.query(
+          `
+            INSERT INTO activity_logs (id, workspace_id, actor_user_id, action, entity_type, entity_id, payload)
+            VALUES ($1, $2, $3, $4, 'MEMORY', $5, $6::json)
+          `,
+          [
+            `act_${randomUUID().replaceAll("-", "")}`,
+            workspaceId,
+            actorUserId,
+            action,
+            memory.id,
+            JSON.stringify({ state: memory.state }),
+          ],
+        );
+
+        return { kind: "updated", memory };
+      }
+
+      // Une recherche strictement scoped distingue une mémoire absente/hors
+      // workspace (404 côté route) d'une décision finale immuable (409).
+      const existing = await transaction.query<ScalarRow>(
+        `
+          SELECT state
+          FROM memories
+          WHERE id = $1
+            AND workspace_id = $2
+        `,
+        [memoryId, workspaceId],
+      );
+      const existingMemory = existing.rows[0];
+
+      if (!existingMemory) {
+        return { kind: "not-found" };
+      }
+
+      return { kind: "already-decided", state: asString(existingMemory.state) };
+    });
   }
 
   async listToday(workspaceId: string): Promise<TodayItem[]> {
@@ -946,8 +1100,10 @@ export class DemoDatabase {
         category TEXT NOT NULL,
         content TEXT NOT NULL,
         state TEXT NOT NULL,
+        confirmed_by TEXT REFERENCES users(id),
         confirmed_at TIMESTAMPTZ,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
 
       CREATE TABLE IF NOT EXISTS social_platforms (
@@ -1000,6 +1156,8 @@ export class DemoDatabase {
         ON media_assets (workspace_id, status);
       CREATE INDEX IF NOT EXISTS idx_memories_workspace_created
         ON memories (workspace_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_memories_workspace_state_created
+        ON memories (workspace_id, state, created_at DESC);
     `);
 
     // Cette migration additive garde un Artist Brain local déjà modifié intact.
@@ -1029,6 +1187,16 @@ export class DemoDatabase {
         ADD COLUMN IF NOT EXISTS storage_key TEXT;
       ALTER TABLE media_assets
         ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+      ALTER TABLE memories
+        ADD COLUMN IF NOT EXISTS confirmed_by TEXT REFERENCES users(id);
+      ALTER TABLE memories
+        ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;
+      UPDATE memories
+        SET updated_at = COALESCE(updated_at, confirmed_at, created_at);
+      ALTER TABLE memories
+        ALTER COLUMN updated_at SET DEFAULT CURRENT_TIMESTAMP;
+      ALTER TABLE memories
+        ALTER COLUMN updated_at SET NOT NULL;
     `);
   }
 
@@ -1165,14 +1333,33 @@ export class DemoDatabase {
       );
       await transaction.query(
         `
-          INSERT INTO memories (id, workspace_id, category, content, state, confirmed_at)
+          INSERT INTO memories (
+            id, workspace_id, category, content, state, confirmed_by, confirmed_at, created_at, updated_at
+          )
           VALUES
-            ('mem_short_captions', $1, 'PREFERENCE_MEMORY', 'Préférence confirmée : captions courtes, directes et sans hashtags excessifs.', 'CONFIRMED', '2026-08-20T09:00:00Z'),
-            ('mem_weekly_planning', $1, 'ARTIST_MEMORY', 'Objectif courant : valoriser les contenus de studio avant la sortie de Lumière Noire.', 'CONFIRMED', '2026-08-24T12:00:00Z'),
-            ('mem_tiktok_question', $1, 'PREFERENCE_MEMORY', 'Proposition : tester une série de hooks TikTok plus frontaux.', 'PENDING', NULL)
+            (
+              'mem_short_captions', $1, 'PREFERENCE_MEMORY',
+              'Préférence confirmée : captions courtes, directes et sans hashtags excessifs.',
+              'CONFIRMED', $2, '2026-08-20T09:00:00Z', '2026-08-20T09:00:00Z', '2026-08-20T09:00:00Z'
+            ),
+            (
+              'mem_weekly_planning', $1, 'ARTIST_MEMORY',
+              'Objectif courant : valoriser les contenus de studio avant la sortie de Lumière Noire.',
+              'CONFIRMED', $2, '2026-08-24T12:00:00Z', '2026-08-24T12:00:00Z', '2026-08-24T12:00:00Z'
+            ),
+            (
+              'mem_tiktok_question', $1, 'PREFERENCE_MEMORY',
+              'Proposition : tester une série de hooks TikTok plus frontaux.',
+              'PENDING', NULL, NULL, '2026-08-26T10:00:00Z', '2026-08-26T10:00:00Z'
+            ),
+            (
+              'mem_other_workspace', 'wsp_other', 'PREFERENCE_MEMORY',
+              'Préférence privée d’un autre workspace.',
+              'PENDING', NULL, NULL, '2026-08-26T11:00:00Z', '2026-08-26T11:00:00Z'
+            )
           ON CONFLICT (id) DO NOTHING
         `,
-        [demoWorkspace.id],
+        [demoWorkspace.id, demoContext.userId],
       );
       await transaction.query(
         `

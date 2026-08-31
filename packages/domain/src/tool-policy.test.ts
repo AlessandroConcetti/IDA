@@ -27,12 +27,24 @@ describe("ToolGateway", () => {
     const gateway = new ToolGateway(undefined, [
       { toolKey: "create_track", moduleKey: "MUSIC", permission: "WRITE" },
       { toolKey: "import_media", moduleKey: "CONTENT", permission: "WRITE" },
+      { toolKey: "propose_preference_memory", moduleKey: "MEMORY", permission: "WRITE" },
+      { toolKey: "confirm_memory", moduleKey: "MEMORY", permission: "WRITE" },
+      { toolKey: "reject_memory", moduleKey: "MEMORY", permission: "WRITE" },
     ]);
 
     expect(gateway.authorize({ toolKey: "create_track", moduleKey: "MUSIC", permission: "WRITE" })).toMatchObject({
       allowed: true,
     });
     expect(gateway.authorize({ toolKey: "import_media", moduleKey: "CONTENT", permission: "WRITE" })).toMatchObject({
+      allowed: true,
+    });
+    expect(
+      gateway.authorize({ toolKey: "propose_preference_memory", moduleKey: "MEMORY", permission: "WRITE" }),
+    ).toMatchObject({ allowed: true });
+    expect(gateway.authorize({ toolKey: "confirm_memory", moduleKey: "MEMORY", permission: "WRITE" })).toMatchObject({
+      allowed: true,
+    });
+    expect(gateway.authorize({ toolKey: "reject_memory", moduleKey: "MEMORY", permission: "WRITE" })).toMatchObject({
       allowed: true,
     });
     expect(gateway.authorize({ toolKey: "delete_track", moduleKey: "MUSIC", permission: "WRITE" })).toMatchObject({

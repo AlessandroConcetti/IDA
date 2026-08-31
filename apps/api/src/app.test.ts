@@ -482,6 +482,144 @@ describe("IDA API — première tranche Phase 1", () => {
     }
   });
 
+  it("crée une proposition de préférence PENDING avec de vrais timestamps persistés", async () => {
+    const proposal = await app.inject({
+      method: "POST",
+      url: "/v1/memories/proposals",
+      payload: { content: "Préférence proposée : garder les captions très courtes." },
+    });
+
+    expect(proposal.statusCode).toBe(201);
+    const body = proposal.json() as {
+      data: {
+        id: string;
+        workspaceId: string;
+        category: string;
+        content: string;
+        state: string;
+        createdAt: string;
+        updatedAt: string;
+        confirmedBy?: string;
+        confirmedAt?: string;
+      };
+    };
+
+    expect(body.data).toMatchObject({
+      id: expect.stringMatching(/^mem_[a-f0-9]{32}$/),
+      workspaceId: "wsp_demo_aless",
+      category: "PREFERENCE_MEMORY",
+      content: "Préférence proposée : garder les captions très courtes.",
+      state: "PENDING",
+    });
+    expect(Number.isNaN(Date.parse(body.data.createdAt))).toBe(false);
+    expect(Number.isNaN(Date.parse(body.data.updatedAt))).toBe(false);
+    expect(body.data).not.toHaveProperty("confirmedBy");
+    expect(body.data).not.toHaveProperty("confirmedAt");
+
+    const memories = await app.inject({ method: "GET", url: "/v1/memories" });
+    expect(memories.statusCode).toBe(200);
+    expect(
+      (memories.json() as { data: Array<{ id: string; state: string; createdAt: string; updatedAt: string }> }).data,
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: body.data.id,
+          state: "PENDING",
+          createdAt: body.data.createdAt,
+          updatedAt: body.data.updatedAt,
+        }),
+      ]),
+    );
+  });
+
+  it("confirme ou refuse explicitement une proposition, puis bloque toute seconde décision", async () => {
+    const confirmedProposal = await app.inject({
+      method: "POST",
+      url: "/v1/memories/proposals",
+      payload: { content: "Préférence proposée : privilégier les hooks directs." },
+    });
+    const confirmedId = (confirmedProposal.json() as { data: { id: string } }).data.id;
+
+    const confirmation = await app.inject({ method: "POST", url: `/v1/memories/${confirmedId}/confirm` });
+    expect(confirmation.statusCode).toBe(200);
+    expect(confirmation.json()).toMatchObject({
+      data: {
+        id: confirmedId,
+        state: "CONFIRMED",
+        confirmedBy: "usr_demo_aless",
+        confirmedAt: expect.any(String),
+      },
+    });
+
+    const secondDecision = await app.inject({ method: "POST", url: `/v1/memories/${confirmedId}/reject` });
+    expect(secondDecision.statusCode).toBe(409);
+    expect(secondDecision.json()).toMatchObject({ error: { code: "MEMORY_DECISION_FINAL" } });
+
+    const rejectedProposal = await app.inject({
+      method: "POST",
+      url: "/v1/memories/proposals",
+      payload: { content: "Préférence proposée : ajouter des hashtags systématiquement." },
+    });
+    const rejectedId = (rejectedProposal.json() as { data: { id: string } }).data.id;
+
+    const rejection = await app.inject({ method: "POST", url: `/v1/memories/${rejectedId}/reject` });
+    expect(rejection.statusCode).toBe(200);
+    expect(rejection.json()).toMatchObject({ data: { id: rejectedId, state: "REJECTED" } });
+    expect((rejection.json() as { data: Record<string, unknown> }).data).not.toHaveProperty("confirmedBy");
+    expect((rejection.json() as { data: Record<string, unknown> }).data).not.toHaveProperty("confirmedAt");
+
+    const secondRejection = await app.inject({ method: "POST", url: `/v1/memories/${rejectedId}/reject` });
+    expect(secondRejection.statusCode).toBe(409);
+    expect(secondRejection.json()).toMatchObject({ error: { code: "MEMORY_DECISION_FINAL" } });
+  });
+
+  it("refuse tout scope, état ou acteur client et masque les mémoires d’un autre workspace", async () => {
+    const invalidProposal = await app.inject({
+      method: "POST",
+      url: "/v1/memories/proposals",
+      payload: {
+        content: "Tentative de mémoire déjà confirmée.",
+        category: "ARTIST_MEMORY",
+        state: "CONFIRMED",
+        workspaceId: "wsp_other",
+        id: "mem_client",
+        actorUserId: "usr_other",
+      },
+    });
+
+    expect(invalidProposal.statusCode).toBe(400);
+    expect(invalidProposal.json()).toMatchObject({ error: { code: "INVALID_MEMORY_PROPOSAL" } });
+
+    const decisionWithBody = await app.inject({
+      method: "POST",
+      url: "/v1/memories/mem_tiktok_question/confirm",
+      payload: { state: "REJECTED", workspaceId: "wsp_other", actorUserId: "usr_other" },
+    });
+    expect(decisionWithBody.statusCode).toBe(400);
+    expect(decisionWithBody.json()).toMatchObject({ error: { code: "INVALID_MEMORY_DECISION" } });
+
+    const decisionWithNullBody = await app.inject({
+      method: "POST",
+      url: "/v1/memories/mem_tiktok_question/confirm",
+      headers: { "content-type": "application/json" },
+      payload: "null",
+    });
+    expect(decisionWithNullBody.statusCode).toBe(400);
+    expect(decisionWithNullBody.json()).toMatchObject({ error: { code: "INVALID_MEMORY_DECISION" } });
+
+    const stillPending = await app.inject({ method: "GET", url: "/v1/memories" });
+    expect(stillPending.json()).toMatchObject({
+      data: expect.arrayContaining([expect.objectContaining({ id: "mem_tiktok_question", state: "PENDING" })]),
+    });
+
+    const otherWorkspace = await app.inject({
+      method: "POST",
+      url: "/v1/memories/mem_other_workspace/confirm",
+    });
+    expect(otherWorkspace.statusCode).toBe(404);
+    expect(otherWorkspace.json()).toMatchObject({ error: { code: "MEMORY_NOT_FOUND" } });
+  });
+
   it("traite une commande de contenus inutilisés uniquement avec un outil READ", async () => {
     const response = await app.inject({
       method: "POST",

@@ -10,6 +10,9 @@ import {
   mediaAssetSchema,
   mediaImportSchema,
   mediaStatusSchema,
+  memoryDecisionParamsSchema,
+  memoryDecisionRequestSchema,
+  memoryProposalCreateSchema,
   memorySchema,
   releaseSchema,
   socialPlatformCapabilitySchema,
@@ -17,13 +20,15 @@ import {
   trackSchema,
 } from "@ida/contracts";
 import { createModuleRegistry, ToolGateway, ToolPolicyError } from "@ida/domain";
-import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify";
+import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 
 import {
   type ArtistProfile,
   DemoDatabase,
   type DemoDatabaseOptions,
   type MediaAsset,
+  type Memory,
+  type MemoryDecision,
   mediaStatuses,
   type Track,
 } from "./database.js";
@@ -125,6 +130,24 @@ class TrackInputError extends Error {
 
   constructor() {
     super("Les champs transmis pour le morceau sont invalides.");
+  }
+}
+
+class MemoryProposalInputError extends Error {
+  readonly statusCode = 400;
+  readonly code = "INVALID_MEMORY_PROPOSAL";
+
+  constructor() {
+    super("Les champs transmis pour la proposition de mémoire sont invalides.");
+  }
+}
+
+class MemoryDecisionInputError extends Error {
+  readonly statusCode = 400;
+  readonly code = "INVALID_MEMORY_DECISION";
+
+  constructor() {
+    super("La décision de mémoire est invalide.");
   }
 }
 
@@ -373,6 +396,20 @@ function toTrackResponse(track: Track) {
   });
 }
 
+function toMemoryResponse(memory: Memory) {
+  return memorySchema.parse({
+    id: memory.id,
+    workspaceId: demoContext.workspaceId,
+    category: memory.category,
+    content: memory.content,
+    state: memory.state,
+    confirmedBy: optionalString(memory.confirmedBy),
+    confirmedAt: memory.confirmedAt ?? undefined,
+    createdAt: memory.createdAt,
+    updatedAt: memory.updatedAt,
+  });
+}
+
 export async function createApp(options: CreateAppOptions = {}): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   const database = await DemoDatabase.open(options);
@@ -381,6 +418,9 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   const modules = createModuleRegistry();
   const toolGateway = new ToolGateway(undefined, [
     { toolKey: "update_artist_profile", moduleKey: "MEMORY", permission: "WRITE" },
+    { toolKey: "propose_preference_memory", moduleKey: "MEMORY", permission: "WRITE" },
+    { toolKey: "confirm_memory", moduleKey: "MEMORY", permission: "WRITE" },
+    { toolKey: "reject_memory", moduleKey: "MEMORY", permission: "WRITE" },
     { toolKey: "create_track", moduleKey: "MUSIC", permission: "WRITE" },
     { toolKey: "import_media", moduleKey: "CONTENT", permission: "WRITE" },
   ]);
@@ -411,6 +451,12 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
       });
     }
 
+    if (error instanceof MemoryProposalInputError || error instanceof MemoryDecisionInputError) {
+      return reply.status(error.statusCode).send({
+        error: { code: error.code, message: error.message },
+      });
+    }
+
     if (error instanceof MediaImportError) {
       return reply.status(error.statusCode).send({
         error: { code: error.code, message: error.message },
@@ -437,6 +483,48 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
       },
     });
   });
+
+  const decideMemory = async (request: FastifyRequest, reply: FastifyReply, decision: MemoryDecision) => {
+    const params = memoryDecisionParamsSchema.safeParse(request.params);
+    // Une requête sans corps est autorisée ; un JSON `null` reste en revanche
+    // un corps invalide au même titre qu'une tentative d'injecter un état ou un
+    // workspace. Cela garde le contrat de décision réellement vide.
+    const body = memoryDecisionRequestSchema.safeParse(request.body === undefined ? {} : request.body);
+
+    if (!params.success || !body.success) {
+      throw new MemoryDecisionInputError();
+    }
+
+    toolGateway.assertAuthorized({
+      toolKey: decision === "CONFIRMED" ? "confirm_memory" : "reject_memory",
+      moduleKey: "MEMORY",
+      permission: "WRITE",
+    });
+
+    const result = await database.decideMemory(
+      demoContext.workspaceId,
+      demoContext.userId,
+      params.data.memoryId,
+      decision,
+    );
+
+    if (result.kind === "not-found") {
+      return reply.status(404).send({
+        error: { code: "MEMORY_NOT_FOUND", message: "Mémoire introuvable dans ce workspace." },
+      });
+    }
+
+    if (result.kind === "already-decided") {
+      return reply.status(409).send({
+        error: {
+          code: "MEMORY_DECISION_FINAL",
+          message: "Cette mémoire a déjà reçu une décision finale et ne peut plus être modifiée.",
+        },
+      });
+    }
+
+    return { data: toMemoryResponse(result.memory) };
+  };
 
   app.get("/health", async () => ({
     status: "ok",
@@ -635,23 +723,33 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
 
   app.get("/v1/memories", async () => {
     const memories = await database.listMemories(demoContext.workspaceId);
-    const timestamp = "2026-08-30T00:00:00.000Z";
 
-    return {
-      data: memories.map((memory) =>
-        memorySchema.parse({
-          id: memory.id,
-          workspaceId: demoContext.workspaceId,
-          category: memory.category,
-          content: memory.content,
-          state: memory.state,
-          confirmedBy: memory.state === "CONFIRMED" ? demoContext.userId : undefined,
-          createdAt: timestamp,
-          updatedAt: memory.confirmedAt ?? timestamp,
-        }),
-      ),
-    };
+    return { data: memories.map(toMemoryResponse) };
   });
+
+  app.post("/v1/memories/proposals", async (request, reply) => {
+    const input = memoryProposalCreateSchema.safeParse(request.body);
+
+    if (!input.success) {
+      throw new MemoryProposalInputError();
+    }
+
+    toolGateway.assertAuthorized({
+      toolKey: "propose_preference_memory",
+      moduleKey: "MEMORY",
+      permission: "WRITE",
+    });
+
+    // Le client ne peut proposer que le texte. La catégorie, l'état PENDING,
+    // le workspace, l'acteur et l'identifiant sont toujours imposés ici.
+    const memory = await database.createMemoryProposal(demoContext.workspaceId, demoContext.userId, input.data);
+
+    return reply.status(201).send({ data: toMemoryResponse(memory) });
+  });
+
+  app.post("/v1/memories/:memoryId/confirm", async (request, reply) => decideMemory(request, reply, "CONFIRMED"));
+
+  app.post("/v1/memories/:memoryId/reject", async (request, reply) => decideMemory(request, reply, "REJECTED"));
 
   app.get("/v1/social/platforms", async () => {
     const platforms = await database.listSocialPlatforms();

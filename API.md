@@ -21,11 +21,12 @@ Le premier runtime est une API Fastify locale sur `http://127.0.0.1:8787`, conso
 | `GET /v1/me` | Livrée | Identité et workspace de démonstration, marqués `LOCAL_DEMO`. |
 | `GET /v1/modules` | Livrée | Registre des modules visibles du Command Center. |
 | `GET /v1/system/status` | Livrée | États factuels de la tranche locale ; les intégrations absentes sont `WARNING` ou `DISCONNECTED`. |
-| `GET/PATCH /v1/artist-profile`, `/v1/releases`, `GET/POST /v1/tracks`, `GET/POST /v1/media`, `/v1/memories` | Livrées | Données de démonstration isolées par workspace côté serveur. L’Artist Brain, la création bornée d’un morceau Music Brain et l’import local privé d’un média passent par des outils `WRITE` allowlistés ; `GET /v1/media?status=UNUSED` est supporté. |
+| `GET/PATCH /v1/artist-profile`, `/v1/releases`, `GET/POST /v1/tracks`, `GET/POST /v1/media`, `GET /v1/memories` | Livrées | Données de démonstration isolées par workspace côté serveur. L’Artist Brain, la création bornée d’un morceau Music Brain et l’import local privé d’un média passent par des outils `WRITE` allowlistés ; `GET /v1/media?status=UNUSED` est supporté. |
+| `POST /v1/memories/proposals`, `POST /v1/memories/:memoryId/confirm`, `POST /v1/memories/:memoryId/reject` | Livrées | Flux de mémoire consentie : une préférence commence forcément à `PENDING` et seule une décision humaine explicite peut la faire passer à `CONFIRMED` ou `REJECTED`. |
 | `GET /v1/social/platforms` | Livrée | Capacités déclaratives de démonstration ; aucune connexion sociale n’est créée. |
 | `POST /v1/ida/commands` | Livrée | Corps `{ "message": "…" }` ; commandes déterministes de lecture pour la journée, les contenus inutilisés et l’état système. |
 
-La commande retourne un objet `data` contenant la commande structurée, les outils de lecture autorisés et un résultat. À l’exception de la modification interne de l’Artist Brain, de la création Music Brain bornée et de l’import local privé décrit ci-dessous, toute mutation, publication, intégration externe ou accès financier est hors de cette tranche et reste refusée par conception.
+La commande retourne un objet `data` contenant la commande structurée, les outils de lecture autorisés et un résultat. À l’exception de la modification interne de l’Artist Brain, de la création Music Brain bornée, de l’import local privé et du flux de consentement mémoire décrit ci-dessous, toute mutation, publication, intégration externe ou accès financier est hors de cette tranche et reste refusée par conception.
 
 ### Artist Brain local éditable
 
@@ -53,6 +54,16 @@ La commande retourne un objet `data` contenant la commande structurée, les outi
 - Un seul fichier est accepté, avec une limite de **25 MiB**. L’API contrôle une whitelist conjointe MIME/extension : JPEG, PNG, WebP, GIF, MP4, MOV, WebM, MP3, WAV, FLAC, OGG, AAC, M4A et PDF. Aucun contenu n’est publié, envoyé à une IA ou transmis à un service tiers.
 - Le serveur calcule SHA-256 puis vérifie le couple `(workspace_id, sha256)` avant l’écriture. Un doublon exact répond `409 DUPLICATE_MEDIA` et ne crée ni second asset ni second fichier.
 - Le fichier est enregistré hors de toute URL publique dans un stockage privé à clé générée côté serveur. La clé, le chemin local et toute URL de stockage restent absents des réponses et des journaux. L’asset démarre à `UNUSED`, ses tags sont associés localement et l’activité append-only `media.imported` est écrite.
+
+### Mémoire consentie : préférences explicites
+
+`POST /v1/memories/proposals` accepte strictement `{ "content": "…" }`. Il crée une mémoire avec une catégorie forcée à `PREFERENCE_MEMORY` et l’état forcé à `PENDING`.
+
+- Le client ne peut jamais choisir l’identifiant, le workspace, l’acteur, la catégorie, l’état ou une date. Toute propriété supplémentaire — notamment `state`, `workspaceId`, `id` ou `actorUserId` — renvoie `400 INVALID_MEMORY_PROPOSAL`.
+- `POST /v1/memories/:memoryId/confirm` et `POST /v1/memories/:memoryId/reject` ne reçoivent aucun corps. Ils sont tous deux protégés par un outil `MEMORY` / `WRITE` allowlisté ; un corps qui tente d’injecter une décision ou un scope est refusé par `400 INVALID_MEMORY_DECISION`.
+- La transition est atomique : seulement `PENDING → CONFIRMED` ou `PENDING → REJECTED`. Un état final est immuable et toute nouvelle décision retourne `409 MEMORY_DECISION_FINAL`.
+- Le `memoryId` est toujours recherché dans le workspace imposé par le serveur. Une mémoire hors workspace répond comme absente avec `404 MEMORY_NOT_FOUND`, sans révéler son existence. `GET /v1/memories` renvoie les vrais `createdAt` et `updatedAt` persistés ; une confirmation expose aussi `confirmedBy` et `confirmedAt`.
+- Les actions écrivent uniquement des événements d’audit append-only `memory.proposed`, `memory.confirmed` et `memory.rejected`. Le contenu libre de la préférence est volontairement absent du payload d’audit.
 - Une réussite retourne `201 Created` avec le contrat `MediaAsset`, et l’asset est ensuite visible uniquement dans `GET /v1/media` du workspace imposé.
 
 La version machine-lisible de ces routes est disponible dans [`docs/openapi/phase1-local.yaml`](docs/openapi/phase1-local.yaml). Elle décrit uniquement le runtime local existant, pas les endpoints projetés plus bas.
@@ -215,7 +226,8 @@ POST   /v1/ida/command-runs/:commandRunId/cancel
 
 GET    /v1/memories
 POST   /v1/memories/proposals
-POST   /v1/memories/:memoryId/decision
+POST   /v1/memories/:memoryId/confirm
+POST   /v1/memories/:memoryId/reject
 PATCH  /v1/memories/:memoryId
 DELETE /v1/memories/:memoryId
 ```

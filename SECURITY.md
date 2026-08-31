@@ -147,7 +147,7 @@ Conserver séparément :
 
 Journaliser notamment : connexion/révocation, changement de rôle, connexion sociale, upload/suppression, création/modification de mémoire, approbation/rejet, déclenchement/résultat de job et changement de configuration. Ne jamais journaliser secrets, mots de passe, cookies, jetons, clés, chaînes de connexion, médias privés ou prompts complets.
 
-La mémoire permanente reste opt-in : IDA demande confirmation avant de stocker une préférence durable. L’utilisateur doit pouvoir consulter, corriger et supprimer sa mémoire. Les données servant au contexte IA sont minimisées et filtrées par workspace.
+La mémoire permanente reste opt-in : IDA demande confirmation avant de stocker une préférence durable. Le flux local crée uniquement une proposition `PENDING`, puis accepte seulement `PENDING → CONFIRMED` ou `PENDING → REJECTED` via deux routes sans corps. Toute décision finale est immuable, et l’identifiant est recherché dans le workspace serveur avant la transition afin de ne pas révéler les mémoires d’un autre périmètre. Les actions sont allowlistées en `MEMORY` / `WRITE` et écrivent `memory.proposed`, `memory.confirmed` ou `memory.rejected` dans l’audit sans recopier le contenu de la préférence. L’utilisateur doit pouvoir consulter, corriger et supprimer sa mémoire. Les données servant au contexte IA sont minimisées et filtrées par workspace.
 
 ## 10. Exploitation, sauvegardes et environnements
 
