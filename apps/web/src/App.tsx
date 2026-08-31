@@ -7,9 +7,13 @@ import {
   createTask,
   createTrack,
   type DashboardSnapshot,
+  type EditorialCalendarItem,
+  type EditorialCalendarSnapshot,
+  type EditorialCalendarView,
   fetchApprovalQueue,
   fetchArtistBrain,
   fetchDashboardSnapshot,
+  fetchEditorialCalendar,
   fetchMemories,
   fetchTasks,
   IdaApiError,
@@ -18,6 +22,7 @@ import {
   proposePreferenceMemory,
   rejectMemory,
   rejectPostVariant,
+  scheduleApprovedPostVariant,
   submitIdaCommand,
   type TaskCreateInput,
   type TaskRecord,
@@ -27,7 +32,6 @@ import {
 } from "./api";
 import {
   type ArtistBrain,
-  calendarItems,
   getLocalIdaResponse,
   artistBrain as localArtistBrain,
   mediaAssets as localMediaAssets,
@@ -217,27 +221,148 @@ function PriorityGrid() {
   );
 }
 
-function CalendarPanel() {
+type EditorialCalendarSource = "loading" | "api" | "unavailable";
+
+const editorialCalendarViews: Array<{ id: EditorialCalendarView; label: string }> = [
+  { id: "DAY", label: "DAY" },
+  { id: "WEEK", label: "WEEK" },
+  { id: "MONTH", label: "MONTH" },
+];
+
+function editorialCalendarPlatform(platform: string): string {
+  const labels: Record<string, string> = {
+    FACEBOOK: "Facebook",
+    INSTAGRAM: "Instagram",
+    TIKTOK: "TikTok",
+    YOUTUBE: "YouTube",
+  };
+
+  return labels[platform] ?? platform.replaceAll("_", " ");
+}
+
+function formatEditorialCalendarDate(value: string, timezone: string, compact = false): string {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.valueOf())) {
+    return `Horaire indisponible · ${timezone}`;
+  }
+
+  const options: Intl.DateTimeFormatOptions = compact
+    ? { day: "numeric", hour: "2-digit", minute: "2-digit", month: "short", timeZone: timezone }
+    : { day: "numeric", hour: "2-digit", minute: "2-digit", month: "long", timeZone: timezone, weekday: "long" };
+
+  try {
+    return `${new Intl.DateTimeFormat("fr-FR", options).format(date)} · ${timezone}`;
+  } catch {
+    return new Intl.DateTimeFormat("fr-FR", { ...options, timeZone: undefined }).format(date);
+  }
+}
+
+function formatEditorialCalendarTime(value: string, timezone: string): string {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.valueOf())) {
+    return "—";
+  }
+
+  try {
+    return new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: timezone }).format(date);
+  } catch {
+    return new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit" }).format(date);
+  }
+}
+
+function editorialCalendarStateLabel(state: EditorialCalendarItem["state"]): string {
+  return state === "SCHEDULED_INTERNAL" ? "PLANIFIÉ DANS IDA" : "PRÊTE À PLANIFIER";
+}
+
+function useEditorialCalendar(view: EditorialCalendarView) {
+  const [snapshot, setSnapshot] = useState<EditorialCalendarSnapshot | null>(null);
+  const [source, setSource] = useState<EditorialCalendarSource>(isApiConfigured ? "loading" : "unavailable");
+  const [notice, setNotice] = useState(
+    isApiConfigured ? "Chargement du calendrier éditorial…" : "Le calendrier nécessite la connexion à IDA API.",
+  );
+  const [revision, setRevision] = useState(0);
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    if (!isApiConfigured) {
+      return () => {
+        isCurrent = false;
+      };
+    }
+
+    setSource("loading");
+    // Le serveur calcule la fenêtre dans le fuseau du workspace. Le client ne
+    // force donc pas une minuit UTC qui décalerait l'affichage local.
+    void fetchEditorialCalendar({ view })
+      .then((nextSnapshot) => {
+        if (!isCurrent) {
+          return;
+        }
+
+        setSnapshot(nextSnapshot);
+        setSource("api");
+        setNotice("Le calendrier affiche uniquement des décisions approuvées et des planifications internes.");
+      })
+      .catch((error: unknown) => {
+        if (!isCurrent) {
+          return;
+        }
+
+        const reason = error instanceof IdaApiError ? error.message : "IDA API est indisponible.";
+        setSnapshot(null);
+        setSource("unavailable");
+        setNotice(`Le calendrier est indisponible : ${reason}`);
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [revision, view]);
+
+  return {
+    snapshot,
+    source,
+    notice,
+    refresh: () => setRevision((current) => current + 1),
+  };
+}
+
+function CalendarPanel({ onOpenCalendar }: { onOpenCalendar: () => void }) {
+  const { snapshot, source } = useEditorialCalendar("WEEK");
+  const items = snapshot?.items.slice(0, 3) ?? [];
+
   return (
     <section className="panel calendar-panel" aria-labelledby="today-title">
       <div className="panel-heading">
         <div>
-          <p className="eyebrow">TODAY</p>
-          <h2 id="today-title">A calm schedule.</h2>
+          <p className="eyebrow">EDITORIAL CALENDAR</p>
+          <h2 id="today-title">The next approved moves.</h2>
         </div>
-        <button className="text-button" type="button">
+        <button className="text-button" type="button" onClick={onOpenCalendar}>
           Open calendar <span aria-hidden="true">→</span>
         </button>
       </div>
       <div className="schedule-list">
-        {calendarItems.map((item) => (
-          <article className="schedule-item" key={`${item.time}-${item.title}`}>
-            <time>{item.time}</time>
+        {source === "loading" ? <p className="calendar-preview-notice">Chargement des prochains créneaux…</p> : null}
+        {source === "unavailable" ? (
+          <p className="calendar-preview-notice">Calendrier disponible dès que l’API IDA est connectée.</p>
+        ) : null}
+        {source === "api" && items.length === 0 ? (
+          <p className="calendar-preview-notice">Aucune décision approuvée dans cette fenêtre.</p>
+        ) : null}
+        {items.map((item) => (
+          <article className="schedule-item" key={item.id}>
+            <time>{formatEditorialCalendarTime(item.scheduledAt, item.timezone)}</time>
             <div>
-              <h3>{item.title}</h3>
-              <p>{item.platform}</p>
+              <h3>{item.postTitle}</h3>
+              <p>{editorialCalendarPlatform(item.platform)}</p>
             </div>
-            <span className={`status-tag ${item.status.toLocaleLowerCase("en-US")}`}>{item.status}</span>
+            <span className={`status-tag ${item.state === "SCHEDULED_INTERNAL" ? "scheduled" : "approval"}`}>
+              {item.state === "SCHEDULED_INTERNAL" ? "INTERNAL" : "READY"}
+            </span>
           </article>
         ))}
       </div>
@@ -1150,14 +1275,148 @@ function ApprovalCenter() {
 }
 
 function CalendarView() {
+  const [view, setView] = useState<EditorialCalendarView>("WEEK");
+  const { snapshot, source, notice, refresh } = useEditorialCalendar(view);
+  const [decisionNotice, setDecisionNotice] = useState<string | null>(null);
+  const [decisionState, setDecisionState] = useState<"default" | "success" | "error">("default");
+  const [activeScheduleId, setActiveScheduleId] = useState<string | null>(null);
+  const items = snapshot?.items ?? [];
+  const readyCount = items.filter((item) => item.state === "READY_TO_SCHEDULE").length;
+  const scheduledCount = items.filter((item) => item.state === "SCHEDULED_INTERNAL").length;
+
+  async function handleSchedule(item: EditorialCalendarItem) {
+    if (item.state !== "READY_TO_SCHEDULE" || activeScheduleId) {
+      return;
+    }
+
+    setActiveScheduleId(item.id);
+    setDecisionNotice(null);
+
+    try {
+      await scheduleApprovedPostVariant(item.variantId, item.approvalId, item.payloadHash);
+      setDecisionState("success");
+      setDecisionNotice(
+        `« ${item.postTitle} » est planifiée dans IDA. Aucun scheduler ni aucune publication externe n’est déclenché.`,
+      );
+      refresh();
+    } catch (error: unknown) {
+      const reason = error instanceof IdaApiError ? error.message : "IDA API est indisponible.";
+      setDecisionState("error");
+      setDecisionNotice(`La planification interne n’a pas été enregistrée : ${reason}`);
+      refresh();
+    } finally {
+      setActiveScheduleId(null);
+    }
+  }
+
   return (
-    <div className="page-grid calendar-view">
-      <CalendarPanel />
-      <section className="panel helper-panel">
+    <div className="page-grid calendar-view editorial-calendar-view">
+      <section className="panel wide-panel editorial-calendar-card" aria-labelledby="editorial-calendar-title">
+        <div className="panel-heading editorial-calendar-heading">
+          <div>
+            <p className="eyebrow">EDITORIAL CALENDAR</p>
+            <h2 id="editorial-calendar-title">Plan the approved moment.</h2>
+          </div>
+          <span className="status-tag approval">INTERNAL ONLY</span>
+        </div>
+        <p className="editorial-calendar-intro">
+          Une planification ici reste une intention interne à IDA. Elle n’active ni scheduler, ni compte social, ni
+          publication.
+        </p>
+        <div className="editorial-calendar-toolbar">
+          <div className="editorial-calendar-tabs" role="tablist" aria-label="Période du calendrier">
+            {editorialCalendarViews.map((option) => (
+              <button
+                className={option.id === view ? "is-active" : ""}
+                type="button"
+                key={option.id}
+                role="tab"
+                aria-selected={option.id === view}
+                onClick={() => {
+                  setView(option.id);
+                  setDecisionNotice(null);
+                  setDecisionState("default");
+                }}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          <span className="editorial-calendar-range">
+            {snapshot
+              ? `${formatEditorialCalendarDate(snapshot.range.from, snapshot.range.timezone, true)} → ${formatEditorialCalendarDate(snapshot.range.to, snapshot.range.timezone, true)}`
+              : "Plage en cours de chargement"}
+          </span>
+        </div>
+        <p
+          className={`editorial-calendar-notice ${source === "unavailable" || decisionState === "error" ? "error" : decisionState}`}
+          role="status"
+        >
+          <span aria-hidden="true" />
+          {decisionNotice ?? notice}
+        </p>
+
+        {source === "loading" ? <p className="editorial-calendar-empty">Chargement des créneaux éditoriaux…</p> : null}
+        {source === "unavailable" ? (
+          <p className="editorial-calendar-empty">
+            La projection calendrier réapparaîtra dès que l’API IDA est disponible.
+          </p>
+        ) : null}
+        {source === "api" && items.length === 0 ? (
+          <p className="editorial-calendar-empty">Aucun contenu approuvé ou planifié dans cette période.</p>
+        ) : null}
+
+        <div className="editorial-calendar-list" aria-live="polite">
+          {items.map((item) => {
+            const isScheduling = activeScheduleId === item.id;
+            const isReady = item.state === "READY_TO_SCHEDULE";
+
+            return (
+              <article
+                className={`editorial-calendar-item ${isReady ? "ready" : "scheduled"}`}
+                key={item.id}
+                aria-busy={isScheduling}
+              >
+                <div className="editorial-calendar-item-topline">
+                  <span>{editorialCalendarPlatform(item.platform)}</span>
+                  <span className={`status-tag ${isReady ? "approval" : "scheduled"}`}>
+                    {editorialCalendarStateLabel(item.state)}
+                  </span>
+                </div>
+                <h3>{item.postTitle}</h3>
+                <time dateTime={item.scheduledAt}>{formatEditorialCalendarDate(item.scheduledAt, item.timezone)}</time>
+                <p>
+                  {isReady
+                    ? "Date approuvée : tu peux la planifier dans IDA sans déclencher de livraison externe."
+                    : "Planifié dans IDA : aucune livraison sociale, aucun job ni scheduler ne sont configurés."}
+                </p>
+                {isReady ? (
+                  <button
+                    className="editorial-calendar-schedule-button"
+                    type="button"
+                    disabled={source !== "api" || activeScheduleId !== null}
+                    onClick={() => void handleSchedule(item)}
+                    aria-label={`Planifier « ${item.postTitle} » uniquement dans IDA`}
+                  >
+                    {isScheduling ? "PLANIFICATION…" : "PLANIFIER DANS IDA"}
+                  </button>
+                ) : null}
+              </article>
+            );
+          })}
+        </div>
+      </section>
+      <section className="panel helper-panel editorial-calendar-observation">
         <p className="eyebrow">IDA OBSERVATION</p>
-        <h2>No overload detected.</h2>
-        <p>Les conflits, répétitions et trop fortes cadences apparaîtront ici avant validation d’un plan éditorial.</p>
-        <span className="status-tag scheduled">3 ITEMS TODAY</span>
+        <h2>
+          {readyCount ? `${readyCount} approved move${readyCount > 1 ? "s" : ""} ready.` : "No approved move waiting."}
+        </h2>
+        <p>
+          {scheduledCount
+            ? `${scheduledCount} planification${scheduledCount > 1 ? "s" : ""} interne${scheduledCount > 1 ? "s" : ""} visible${scheduledCount > 1 ? "s" : ""} dans cette période.`
+            : "Aucune planification interne active dans cette période."}
+        </p>
+        <span className="status-tag warning">NO EXTERNAL DELIVERY</span>
       </section>
     </div>
   );
@@ -2111,16 +2370,18 @@ function HomeView({
   messages,
   dashboard,
   source,
+  onOpenCalendar,
 }: {
   messages: ConversationMessage[];
   dashboard: DashboardSnapshot;
   source: DashboardSource;
+  onOpenCalendar: () => void;
 }) {
   return (
     <>
       <PriorityGrid />
       <div className="home-grid">
-        <CalendarPanel />
+        <CalendarPanel onOpenCalendar={onOpenCalendar} />
         <ConversationPanel messages={messages} />
       </div>
       <div className="home-grid lower-grid">
@@ -2148,6 +2409,7 @@ function SectionContent({
   source,
   onTrackCreated,
   onMediaAssetCreated,
+  onNavigate,
 }: {
   activeId: NavigationId;
   messages: ConversationMessage[];
@@ -2155,6 +2417,7 @@ function SectionContent({
   source: DashboardSource;
   onTrackCreated: (track: Track) => void;
   onMediaAssetCreated: (asset: MediaAsset) => void;
+  onNavigate: (id: NavigationId) => void;
 }) {
   switch (activeId) {
     case "ida":
@@ -2178,7 +2441,14 @@ function SectionContent({
     case "system":
       return <SystemView dashboard={dashboard} source={source} />;
     case "home":
-      return <HomeView messages={messages} dashboard={dashboard} source={source} />;
+      return (
+        <HomeView
+          messages={messages}
+          dashboard={dashboard}
+          source={source}
+          onOpenCalendar={() => onNavigate("calendar")}
+        />
+      );
   }
 }
 
@@ -2368,6 +2638,7 @@ function App() {
             source={dashboardSource}
             onTrackCreated={handleTrackCreated}
             onMediaAssetCreated={handleMediaAssetCreated}
+            onNavigate={navigateTo}
           />
         </div>
       </main>

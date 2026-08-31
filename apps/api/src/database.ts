@@ -191,6 +191,71 @@ export type ApprovalDecisionPreconditionResult =
   | { kind: "stale" }
   | { kind: "opposite-decision" };
 
+// Le scheduler interne possède son propre modèle. Il ne réutilise jamais la
+// table historique `scheduled_posts`, qui reste une projection Today de la
+// démo locale et ne porte pas le snapshot d'une variante approuvée.
+export type InternalPostSchedule = {
+  id: string;
+  variantId: string;
+  postId: string;
+  platform: string;
+  platformId: string;
+  scheduledAt: string;
+  timezone: string;
+  state: "SCHEDULED" | "CANCELLED";
+  approvalId: string;
+  payloadHash: string;
+  deliveryState: "NOT_CONFIGURED";
+};
+
+export type CalendarItem = {
+  id: string;
+  kind: "INTERNAL_SCHEDULE" | "APPROVED_VARIANT";
+  variantId: string;
+  postId: string;
+  postTitle: string;
+  platform: string;
+  scheduledAt: string;
+  timezone: string;
+  state: "SCHEDULED_INTERNAL" | "READY_TO_SCHEDULE";
+  approvalId: string;
+  payloadHash: string;
+};
+
+export type InternalScheduleSnapshot = {
+  approvalId: string;
+  approvalState: string;
+  approvalPayloadHash: string;
+  approvalDecidedBy: string | null;
+  approvalDecidedAt: string | null;
+  variantId: string;
+  variantApprovalState: string;
+  variantPayloadHash: string;
+  postId: string;
+  postTitle: string;
+  platform: string;
+  platformId: string;
+  plannedAt: string | null;
+  timezone: string;
+  currentPayloadHash: string;
+};
+
+export type InternalPostSchedulePreconditionResult =
+  | { kind: "ready"; snapshot: InternalScheduleSnapshot }
+  | { kind: "already-scheduled"; schedule: InternalPostSchedule }
+  | { kind: "not-found" }
+  | { kind: "stale" }
+  | { kind: "time-unavailable" }
+  | { kind: "conflict" };
+
+export type InternalPostScheduleCreateResult =
+  | { kind: "created"; schedule: InternalPostSchedule }
+  | { kind: "already-scheduled"; schedule: InternalPostSchedule }
+  | { kind: "not-found" }
+  | { kind: "stale" }
+  | { kind: "time-unavailable" }
+  | { kind: "conflict" };
+
 export type TodayItem = {
   id: string;
   kind: "TASK" | "SCHEDULED_POST";
@@ -420,6 +485,8 @@ function toPostVariantDecision(row: ScalarRow): PostVariantDecision {
   };
 }
 
+type QueryRows = (statement: string, values?: unknown[]) => Promise<{ rows: ScalarRow[] }>;
+
 function normalizeApprovalPayloadText(value: string): string {
   return value.normalize("NFKC").trim();
 }
@@ -459,6 +526,114 @@ function calculatePostVariantPayloadHash(input: {
   });
 
   return `sha256:${createHash("sha256").update(canonicalPayload).digest("hex")}`;
+}
+
+function toInternalScheduleSnapshot(row: ScalarRow): InternalScheduleSnapshot {
+  const plannedAt = asTimestamp(row.plannedAt);
+
+  return {
+    approvalId: asString(row.approvalId),
+    approvalState: asString(row.approvalState),
+    approvalPayloadHash: asString(row.approvalPayloadHash),
+    approvalDecidedBy: asNullableString(row.approvalDecidedBy),
+    approvalDecidedAt: asTimestamp(row.approvalDecidedAt),
+    variantId: asString(row.variantId),
+    variantApprovalState: asString(row.variantApprovalState),
+    variantPayloadHash: asString(row.variantPayloadHash),
+    postId: asString(row.postId),
+    postTitle: asString(row.postTitle),
+    platform: asString(row.platform),
+    platformId: asString(row.platformId),
+    plannedAt,
+    timezone: asString(row.timezone),
+    currentPayloadHash: calculatePostVariantPayloadHash({
+      postTitle: asString(row.postTitle),
+      objective: asString(row.objective),
+      rationale: asNullableString(row.rationale),
+      platform: asString(row.platform),
+      caption: asString(row.caption),
+      hashtags: asStringArray(row.hashtags),
+      cta: asNullableString(row.cta),
+      plannedAt,
+      timezone: asString(row.timezone),
+      media: asRecordArray(row.media).map(toApprovalMedia),
+    }),
+  };
+}
+
+function isCurrentApprovedScheduleSnapshot(snapshot: InternalScheduleSnapshot, expectedPayloadHash: string): boolean {
+  return (
+    snapshot.approvalState === "APPROVED" &&
+    snapshot.variantApprovalState === "APPROVED" &&
+    snapshot.approvalDecidedBy !== null &&
+    snapshot.approvalDecidedAt !== null &&
+    snapshot.currentPayloadHash === snapshot.variantPayloadHash &&
+    snapshot.approvalPayloadHash === snapshot.variantPayloadHash &&
+    expectedPayloadHash === snapshot.variantPayloadHash
+  );
+}
+
+function isExactActiveSchedule(row: ScalarRow, snapshot: InternalScheduleSnapshot): boolean {
+  return (
+    asString(row.approvalId) === snapshot.approvalId &&
+    asString(row.payloadHash) === snapshot.variantPayloadHash &&
+    asString(row.platformId) === snapshot.platformId &&
+    asTimestamp(row.scheduledAt) === snapshot.plannedAt &&
+    asString(row.timezone) === snapshot.timezone &&
+    asString(row.state) === "SCHEDULED"
+  );
+}
+
+function toInternalPostScheduleFromSnapshot(row: ScalarRow, snapshot: InternalScheduleSnapshot): InternalPostSchedule {
+  return {
+    id: asString(row.id),
+    variantId: snapshot.variantId,
+    postId: snapshot.postId,
+    platform: snapshot.platform,
+    platformId: snapshot.platformId,
+    scheduledAt: asTimestamp(row.scheduledAt) ?? "1970-01-01T00:00:00.000Z",
+    timezone: asString(row.timezone),
+    state: "SCHEDULED",
+    approvalId: snapshot.approvalId,
+    payloadHash: snapshot.variantPayloadHash,
+    deliveryState: "NOT_CONFIGURED",
+  };
+}
+
+function toCalendarInternalScheduleItem(row: ScalarRow, snapshot: InternalScheduleSnapshot): CalendarItem {
+  return {
+    id: asString(row.id),
+    kind: "INTERNAL_SCHEDULE",
+    variantId: snapshot.variantId,
+    postId: snapshot.postId,
+    postTitle: snapshot.postTitle,
+    platform: snapshot.platform,
+    scheduledAt: asTimestamp(row.scheduledAt) ?? "1970-01-01T00:00:00.000Z",
+    timezone: asString(row.timezone),
+    state: "SCHEDULED_INTERNAL",
+    approvalId: snapshot.approvalId,
+    payloadHash: snapshot.variantPayloadHash,
+  };
+}
+
+function toCalendarApprovedVariantItem(snapshot: InternalScheduleSnapshot): CalendarItem | null {
+  if (!snapshot.plannedAt) {
+    return null;
+  }
+
+  return {
+    id: snapshot.variantId,
+    kind: "APPROVED_VARIANT",
+    variantId: snapshot.variantId,
+    postId: snapshot.postId,
+    postTitle: snapshot.postTitle,
+    platform: snapshot.platform,
+    scheduledAt: snapshot.plannedAt,
+    timezone: snapshot.timezone,
+    state: "READY_TO_SCHEDULE",
+    approvalId: snapshot.approvalId,
+    payloadHash: snapshot.variantPayloadHash,
+  };
 }
 
 function normalizeMediaTag(value: string): string {
@@ -1189,6 +1364,8 @@ export class DemoDatabase {
           approval.id AS "approvalId",
           approval.state AS "approvalState",
           approval.payload_hash AS "approvalPayloadHash",
+          approval.decided_by AS "approvalDecidedBy",
+          approval.decided_at AS "approvalDecidedAt",
           approval.payload_hash AS "payloadHash",
           approval.decided_at AS "decidedAt",
           variant.id AS "variantId",
@@ -1528,6 +1705,513 @@ export class DemoDatabase {
 
       return { kind: "decided", decision: postVariantDecision };
     });
+  }
+
+  async getWorkspaceTimezone(workspaceId: string): Promise<string | null> {
+    const result = await this.pglite.query<ScalarRow>(
+      `
+        SELECT timezone
+        FROM workspaces
+        WHERE id = $1
+        LIMIT 1
+      `,
+      [workspaceId],
+    );
+
+    const row = result.rows[0];
+    return row ? asString(row.timezone) : null;
+  }
+
+  private async resolveInternalPostSchedulePrecondition(
+    query: QueryRows,
+    workspaceId: string,
+    variantId: string,
+    approvalId: string,
+    expectedPayloadHash: string,
+    now: string,
+  ): Promise<InternalPostSchedulePreconditionResult> {
+    // La première lecture reste exclusivement scoped afin qu'un identifiant de
+    // variante étranger ne révèle ni son approbation, ni son horaire.
+    const scopedVariant = await query(
+      `
+        SELECT variant.id
+        FROM post_variants variant
+        INNER JOIN posts post ON post.id = variant.post_id
+          AND post.workspace_id = variant.workspace_id
+        WHERE variant.id = $1
+          AND variant.workspace_id = $2
+          AND post.workspace_id = $2
+        LIMIT 1
+      `,
+      [variantId, workspaceId],
+    );
+
+    if (!scopedVariant.rows[0]) {
+      return { kind: "not-found" };
+    }
+
+    const current = await query(
+      `
+        SELECT
+          approval.id AS "approvalId",
+          approval.state AS "approvalState",
+          approval.payload_hash AS "approvalPayloadHash",
+          approval.decided_by AS "approvalDecidedBy",
+          approval.decided_at AS "approvalDecidedAt",
+          variant.id AS "variantId",
+          variant.approval_state AS "variantApprovalState",
+          variant.payload_hash AS "variantPayloadHash",
+          post.id AS "postId",
+          post.title AS "postTitle",
+          post.objective,
+          post.rationale,
+          platform.id AS "platformId",
+          platform.key AS platform,
+          variant.caption,
+          variant.hashtags AS hashtags,
+          variant.cta,
+          variant.planned_at AS "plannedAt",
+          variant.timezone,
+          COALESCE(
+            (
+              SELECT json_agg(
+                json_build_object(
+                  'id', media.id,
+                  'filename', media.filename,
+                  'type', media.media_type,
+                  'status', media.status
+                )
+                ORDER BY link.sort_order ASC, media.id ASC
+              )
+              FROM post_variant_media link
+              INNER JOIN media_assets media ON media.id = link.media_asset_id
+              WHERE link.post_variant_id = variant.id
+                AND link.workspace_id = variant.workspace_id
+                AND media.workspace_id = variant.workspace_id
+            ),
+            '[]'::json
+          ) AS media
+        FROM approvals approval
+        INNER JOIN post_variants variant ON variant.id = approval.post_variant_id
+          AND variant.workspace_id = approval.workspace_id
+        INNER JOIN posts post ON post.id = variant.post_id
+          AND post.workspace_id = variant.workspace_id
+        INNER JOIN social_platforms platform ON platform.id = variant.platform_id
+        WHERE approval.id = $1
+          AND approval.post_variant_id = $2
+          AND approval.workspace_id = $3
+          AND variant.workspace_id = $3
+          AND post.workspace_id = $3
+        LIMIT 1
+      `,
+      [approvalId, variantId, workspaceId],
+    );
+    const row = current.rows[0];
+
+    if (!row) {
+      return { kind: "stale" };
+    }
+
+    const snapshot = toInternalScheduleSnapshot(row);
+
+    if (!isCurrentApprovedScheduleSnapshot(snapshot, expectedPayloadHash)) {
+      return { kind: "stale" };
+    }
+
+    // Un retry exact reste idempotent même une fois l'horaire écoulé. Il est
+    // cependant révoqué si le snapshot ou l'approbation ne sont plus courants,
+    // ce qui a déjà été vérifié juste au-dessus.
+    const activeSchedule = await query(
+      `
+        SELECT
+          id,
+          approval_id AS "approvalId",
+          approved_payload_hash AS "payloadHash",
+          scheduled_at AS "scheduledAt",
+          timezone,
+          platform_id AS "platformId",
+          state
+        FROM internal_post_schedules
+        WHERE workspace_id = $1
+          AND post_variant_id = $2
+          AND state = 'SCHEDULED'
+        LIMIT 1
+      `,
+      [workspaceId, variantId],
+    );
+    const activeRow = activeSchedule.rows[0];
+
+    if (activeRow) {
+      if (isExactActiveSchedule(activeRow, snapshot)) {
+        return { kind: "already-scheduled", schedule: toInternalPostScheduleFromSnapshot(activeRow, snapshot) };
+      }
+
+      // Même si le snapshot historique a été invalidé, une ligne active ne
+      // peut pas être remplacée silencieusement : une future annulation devra
+      // être une transition explicite et auditée.
+      return { kind: "conflict" };
+    }
+
+    const plannedAtMilliseconds = snapshot.plannedAt ? Date.parse(snapshot.plannedAt) : Number.NaN;
+    const nowMilliseconds = Date.parse(now);
+
+    if (
+      !snapshot.plannedAt ||
+      !Number.isFinite(plannedAtMilliseconds) ||
+      !Number.isFinite(nowMilliseconds) ||
+      plannedAtMilliseconds <= nowMilliseconds
+    ) {
+      return { kind: "time-unavailable" };
+    }
+
+    return { kind: "ready", snapshot };
+  }
+
+  async prepareInternalPostSchedule(
+    workspaceId: string,
+    variantId: string,
+    approvalId: string,
+    expectedPayloadHash: string,
+    now: string,
+  ): Promise<InternalPostSchedulePreconditionResult> {
+    // Cette précondition précède le ToolGateway. La méthode de création la
+    // rejoue dans une transaction afin de conserver les mêmes garanties en cas
+    // de course entre l'autorisation et l'écriture.
+    const query: QueryRows = (statement, values = []) => this.pglite.query<ScalarRow>(statement, values);
+    return this.resolveInternalPostSchedulePrecondition(
+      query,
+      workspaceId,
+      variantId,
+      approvalId,
+      expectedPayloadHash,
+      now,
+    );
+  }
+
+  async createInternalPostSchedule(
+    workspaceId: string,
+    actorUserId: string,
+    variantId: string,
+    approvalId: string,
+    expectedPayloadHash: string,
+    now: string,
+  ): Promise<InternalPostScheduleCreateResult> {
+    return this.pglite.transaction(async (transaction) => {
+      const query: QueryRows = (statement, values = []) => transaction.query<ScalarRow>(statement, values);
+      const precondition = await this.resolveInternalPostSchedulePrecondition(
+        query,
+        workspaceId,
+        variantId,
+        approvalId,
+        expectedPayloadHash,
+        now,
+      );
+
+      if (precondition.kind !== "ready") {
+        return precondition;
+      }
+
+      const snapshot = precondition.snapshot;
+      const conflictingSlot = await query(
+        `
+          SELECT id
+          FROM internal_post_schedules
+          WHERE workspace_id = $1
+            AND platform_id = $2
+            AND scheduled_at = $3
+            AND state = 'SCHEDULED'
+          LIMIT 1
+        `,
+        [workspaceId, snapshot.platformId, snapshot.plannedAt],
+      );
+
+      if (conflictingSlot.rows[0]) {
+        return { kind: "conflict" };
+      }
+
+      // Les index partiels sont la dernière ligne de défense concurrente pour
+      // l'unicité de la variante et du créneau plateforme. ON CONFLICT évite
+      // qu'une collision laisse la transaction dans un état avorté.
+      const scheduleId = `ips_${randomUUID().replaceAll("-", "")}`;
+      const created = await query(
+        `
+            INSERT INTO internal_post_schedules (
+              id, workspace_id, post_variant_id, approval_id, approved_payload_hash,
+              scheduled_at, timezone, platform_id, state, created_by, created_at
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'SCHEDULED', $9, $10)
+            ON CONFLICT DO NOTHING
+            RETURNING
+              id,
+              approval_id AS "approvalId",
+              approved_payload_hash AS "payloadHash",
+              scheduled_at AS "scheduledAt",
+              timezone,
+              platform_id AS "platformId",
+              state
+          `,
+        [
+          scheduleId,
+          workspaceId,
+          snapshot.variantId,
+          snapshot.approvalId,
+          snapshot.variantPayloadHash,
+          snapshot.plannedAt,
+          snapshot.timezone,
+          snapshot.platformId,
+          actorUserId,
+          now,
+        ],
+      );
+      const createdRow = created.rows[0];
+
+      if (!createdRow) {
+        const concurrentSchedule = await query(
+          `
+              SELECT
+                id,
+                approval_id AS "approvalId",
+                approved_payload_hash AS "payloadHash",
+                scheduled_at AS "scheduledAt",
+                timezone,
+                platform_id AS "platformId",
+                state
+              FROM internal_post_schedules
+              WHERE workspace_id = $1
+                AND post_variant_id = $2
+                AND state = 'SCHEDULED'
+              LIMIT 1
+            `,
+          [workspaceId, snapshot.variantId],
+        );
+        const concurrentRow = concurrentSchedule.rows[0];
+
+        if (concurrentRow && isExactActiveSchedule(concurrentRow, snapshot)) {
+          return {
+            kind: "already-scheduled",
+            schedule: toInternalPostScheduleFromSnapshot(concurrentRow, snapshot),
+          };
+        }
+
+        return { kind: "conflict" };
+      }
+
+      const schedule = toInternalPostScheduleFromSnapshot(createdRow, snapshot);
+      await query(
+        `
+            INSERT INTO activity_logs (id, workspace_id, actor_user_id, action, entity_type, entity_id, payload)
+            VALUES ($1, $2, $3, 'post_variant.internal_scheduled', 'POST_VARIANT', $4, $5::json)
+          `,
+        [
+          `act_${randomUUID().replaceAll("-", "")}`,
+          workspaceId,
+          actorUserId,
+          snapshot.variantId,
+          JSON.stringify({
+            scheduleId: schedule.id,
+            variantId: schedule.variantId,
+            approvalId: schedule.approvalId,
+            platformId: schedule.platformId,
+            payloadHash: schedule.payloadHash,
+            scheduledAt: schedule.scheduledAt,
+            timezone: schedule.timezone,
+            state: schedule.state,
+          }),
+        ],
+      );
+
+      return { kind: "created", schedule };
+    });
+  }
+
+  async listCalendarItems(workspaceId: string, from: string, to: string): Promise<CalendarItem[]> {
+    const scheduled = await this.pglite.query<ScalarRow>(
+      `
+        SELECT
+          schedule.id,
+          schedule.approval_id AS "approvalId",
+          schedule.approved_payload_hash AS "payloadHash",
+          schedule.scheduled_at AS "scheduledAt",
+          schedule.timezone AS "scheduleTimezone",
+          schedule.platform_id AS "schedulePlatformId",
+          schedule.state AS "scheduleState",
+          approval.id AS "currentApprovalId",
+          approval.state AS "approvalState",
+          approval.payload_hash AS "approvalPayloadHash",
+          approval.decided_by AS "approvalDecidedBy",
+          approval.decided_at AS "approvalDecidedAt",
+          variant.id AS "variantId",
+          variant.approval_state AS "variantApprovalState",
+          variant.payload_hash AS "variantPayloadHash",
+          post.id AS "postId",
+          post.title AS "postTitle",
+          post.objective,
+          post.rationale,
+          platform.id AS "platformId",
+          platform.key AS platform,
+          variant.caption,
+          variant.hashtags AS hashtags,
+          variant.cta,
+          variant.planned_at AS "plannedAt",
+          variant.timezone,
+          COALESCE(
+            (
+              SELECT json_agg(
+                json_build_object(
+                  'id', media.id,
+                  'filename', media.filename,
+                  'type', media.media_type,
+                  'status', media.status
+                )
+                ORDER BY link.sort_order ASC, media.id ASC
+              )
+              FROM post_variant_media link
+              INNER JOIN media_assets media ON media.id = link.media_asset_id
+              WHERE link.post_variant_id = variant.id
+                AND link.workspace_id = variant.workspace_id
+                AND media.workspace_id = variant.workspace_id
+            ),
+            '[]'::json
+          ) AS media
+        FROM internal_post_schedules schedule
+        INNER JOIN post_variants variant ON variant.id = schedule.post_variant_id
+          AND variant.workspace_id = schedule.workspace_id
+        INNER JOIN posts post ON post.id = variant.post_id
+          AND post.workspace_id = variant.workspace_id
+        INNER JOIN approvals approval ON approval.id = schedule.approval_id
+          AND approval.post_variant_id = variant.id
+          AND approval.workspace_id = schedule.workspace_id
+        INNER JOIN social_platforms platform ON platform.id = variant.platform_id
+        WHERE schedule.workspace_id = $1
+          AND schedule.state = 'SCHEDULED'
+          AND schedule.scheduled_at >= $2
+          AND schedule.scheduled_at < $3
+      `,
+      [workspaceId, from, to],
+    );
+
+    const items: CalendarItem[] = [];
+    const scheduledVariantIds = new Set<string>();
+
+    for (const row of scheduled.rows) {
+      // Les aliases du schedule sont volontairement re-projetés ici pour que
+      // le même validateur couvre le hash snapshot, l'approbation courante et
+      // l'immutabilité effective de la date/fuseau/plateforme.
+      const snapshot = toInternalScheduleSnapshot({
+        ...row,
+        approvalId: row.currentApprovalId,
+      });
+      const scheduleRow: ScalarRow = {
+        id: row.id,
+        approvalId: row.approvalId,
+        payloadHash: row.payloadHash,
+        scheduledAt: row.scheduledAt,
+        timezone: row.scheduleTimezone,
+        platformId: row.schedulePlatformId,
+        state: row.scheduleState,
+      };
+
+      if (
+        !isCurrentApprovedScheduleSnapshot(snapshot, snapshot.variantPayloadHash) ||
+        !isExactActiveSchedule(scheduleRow, snapshot)
+      ) {
+        continue;
+      }
+
+      items.push(toCalendarInternalScheduleItem(scheduleRow, snapshot));
+      scheduledVariantIds.add(snapshot.variantId);
+    }
+
+    const candidates = await this.pglite.query<ScalarRow>(
+      `
+        SELECT
+          approval.id AS "approvalId",
+          approval.state AS "approvalState",
+          approval.payload_hash AS "approvalPayloadHash",
+          approval.decided_by AS "approvalDecidedBy",
+          approval.decided_at AS "approvalDecidedAt",
+          variant.id AS "variantId",
+          variant.approval_state AS "variantApprovalState",
+          variant.payload_hash AS "variantPayloadHash",
+          post.id AS "postId",
+          post.title AS "postTitle",
+          post.objective,
+          post.rationale,
+          platform.id AS "platformId",
+          platform.key AS platform,
+          variant.caption,
+          variant.hashtags AS hashtags,
+          variant.cta,
+          variant.planned_at AS "plannedAt",
+          variant.timezone,
+          COALESCE(
+            (
+              SELECT json_agg(
+                json_build_object(
+                  'id', media.id,
+                  'filename', media.filename,
+                  'type', media.media_type,
+                  'status', media.status
+                )
+                ORDER BY link.sort_order ASC, media.id ASC
+              )
+              FROM post_variant_media link
+              INNER JOIN media_assets media ON media.id = link.media_asset_id
+              WHERE link.post_variant_id = variant.id
+                AND link.workspace_id = variant.workspace_id
+                AND media.workspace_id = variant.workspace_id
+            ),
+            '[]'::json
+          ) AS media
+        FROM post_variants variant
+        INNER JOIN posts post ON post.id = variant.post_id
+          AND post.workspace_id = variant.workspace_id
+        INNER JOIN social_platforms platform ON platform.id = variant.platform_id
+        INNER JOIN approvals approval ON approval.post_variant_id = variant.id
+          AND approval.workspace_id = variant.workspace_id
+        WHERE variant.workspace_id = $1
+          AND post.workspace_id = $1
+          AND variant.approval_state = 'APPROVED'
+          AND approval.state = 'APPROVED'
+          AND approval.payload_hash = variant.payload_hash
+          AND variant.planned_at >= $2
+          AND variant.planned_at < $3
+        ORDER BY variant.id ASC, approval.decided_at DESC NULLS LAST, approval.id ASC
+      `,
+      [workspaceId, from, to],
+    );
+
+    const seenCandidateVariantIds = new Set<string>();
+
+    for (const row of candidates.rows) {
+      const snapshot = toInternalScheduleSnapshot(row);
+
+      if (
+        seenCandidateVariantIds.has(snapshot.variantId) ||
+        scheduledVariantIds.has(snapshot.variantId) ||
+        !isCurrentApprovedScheduleSnapshot(snapshot, snapshot.variantPayloadHash)
+      ) {
+        continue;
+      }
+
+      const item = toCalendarApprovedVariantItem(snapshot);
+
+      if (!item) {
+        continue;
+      }
+
+      seenCandidateVariantIds.add(snapshot.variantId);
+      items.push(item);
+    }
+
+    return items
+      .sort(
+        (left, right) =>
+          left.scheduledAt.localeCompare(right.scheduledAt) ||
+          left.kind.localeCompare(right.kind) ||
+          left.id.localeCompare(right.id),
+      )
+      .slice(0, 200);
   }
 
   async listTasks(workspaceId: string): Promise<Task[]> {
@@ -1979,6 +2663,30 @@ export class DemoDatabase {
         )
       );
 
+      -- Snapshot additif de planification interne. Il reste explicitement
+      -- distinct de scheduled_posts : aucune livraison ni publication ne
+      -- peut être déduite de cette ligne.
+      CREATE TABLE IF NOT EXISTS internal_post_schedules (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL REFERENCES workspaces(id),
+        post_variant_id TEXT NOT NULL REFERENCES post_variants(id),
+        approval_id TEXT NOT NULL REFERENCES approvals(id),
+        approved_payload_hash TEXT NOT NULL,
+        scheduled_at TIMESTAMPTZ NOT NULL,
+        timezone TEXT NOT NULL,
+        platform_id TEXT NOT NULL REFERENCES social_platforms(id),
+        state TEXT NOT NULL DEFAULT 'SCHEDULED',
+        created_by TEXT NOT NULL REFERENCES users(id),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        cancelled_by TEXT REFERENCES users(id),
+        cancelled_at TIMESTAMPTZ,
+        CONSTRAINT internal_post_schedules_state_check CHECK (state IN ('SCHEDULED', 'CANCELLED')),
+        CONSTRAINT internal_post_schedules_cancellation_check CHECK (
+          (state = 'SCHEDULED' AND cancelled_by IS NULL AND cancelled_at IS NULL)
+          OR (state = 'CANCELLED' AND cancelled_by IS NOT NULL AND cancelled_at IS NOT NULL)
+        )
+      );
+
       CREATE TABLE IF NOT EXISTS tasks (
         id TEXT PRIMARY KEY,
         workspace_id TEXT NOT NULL REFERENCES workspaces(id),
@@ -2032,12 +2740,51 @@ export class DemoDatabase {
         ON post_variants (workspace_id, approval_state, planned_at);
       CREATE INDEX IF NOT EXISTS idx_approvals_workspace_state_requested
         ON approvals (workspace_id, state, requested_at);
+      CREATE INDEX IF NOT EXISTS idx_internal_post_schedules_workspace_state_time
+        ON internal_post_schedules (workspace_id, state, scheduled_at);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_internal_post_schedules_one_active_variant
+        ON internal_post_schedules (post_variant_id)
+        WHERE state = 'SCHEDULED';
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_internal_post_schedules_active_platform_time
+        ON internal_post_schedules (workspace_id, platform_id, scheduled_at)
+        WHERE state = 'SCHEDULED';
       CREATE UNIQUE INDEX IF NOT EXISTS idx_approvals_requested_variant_hash
         ON approvals (post_variant_id, payload_hash)
         WHERE state = 'REQUESTED';
       CREATE UNIQUE INDEX IF NOT EXISTS idx_approvals_one_requested_per_variant
         ON approvals (post_variant_id)
         WHERE state = 'REQUESTED';
+
+      -- La seule transition future autorisée est SCHEDULED -> CANCELLED. Le
+      -- snapshot qui relie une approbation à sa date ne peut jamais être
+      -- réécrit, même depuis un futur appel SQL interne mal câblé.
+      CREATE OR REPLACE FUNCTION enforce_internal_post_schedule_snapshot_immutable()
+      RETURNS TRIGGER AS $$
+      BEGIN
+        IF NEW.workspace_id IS DISTINCT FROM OLD.workspace_id
+          OR NEW.post_variant_id IS DISTINCT FROM OLD.post_variant_id
+          OR NEW.approval_id IS DISTINCT FROM OLD.approval_id
+          OR NEW.approved_payload_hash IS DISTINCT FROM OLD.approved_payload_hash
+          OR NEW.scheduled_at IS DISTINCT FROM OLD.scheduled_at
+          OR NEW.timezone IS DISTINCT FROM OLD.timezone
+          OR NEW.platform_id IS DISTINCT FROM OLD.platform_id
+          OR NEW.created_by IS DISTINCT FROM OLD.created_by
+          OR NEW.created_at IS DISTINCT FROM OLD.created_at THEN
+          RAISE EXCEPTION 'Le snapshot de planification interne est immuable.';
+        END IF;
+
+        IF OLD.state = 'CANCELLED' AND NEW.state IS DISTINCT FROM 'CANCELLED' THEN
+          RAISE EXCEPTION 'Une planification annulée ne peut pas être réactivée.';
+        END IF;
+
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+
+      DROP TRIGGER IF EXISTS internal_post_schedule_snapshot_immutable ON internal_post_schedules;
+      CREATE TRIGGER internal_post_schedule_snapshot_immutable
+      BEFORE UPDATE ON internal_post_schedules
+      FOR EACH ROW EXECUTE FUNCTION enforce_internal_post_schedule_snapshot_immutable();
     `);
 
     // Cette migration additive garde un Artist Brain local déjà modifié intact.

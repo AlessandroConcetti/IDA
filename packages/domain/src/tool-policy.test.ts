@@ -45,6 +45,33 @@ describe("ToolGateway", () => {
     ).toMatchObject({ allowed: true });
   });
 
+  it("n'autorise la planification interne qu'au gateway CALENDAR explicitement déclaré", () => {
+    const idaCoreGateway = new ToolGateway(undefined, [
+      { toolKey: "get_today", moduleKey: "TASKS", permission: "READ" },
+      { toolKey: "search_unused_media", moduleKey: "CONTENT", permission: "READ" },
+    ]);
+    const calendarGateway = new ToolGateway(undefined, [
+      { toolKey: "schedule_approved_post_variant", moduleKey: "CALENDAR", permission: "APPROVAL_REQUIRED" },
+    ]);
+    const request = {
+      toolKey: "schedule_approved_post_variant",
+      moduleKey: "CALENDAR" as const,
+      permission: "APPROVAL_REQUIRED" as const,
+      explicitApproval: {
+        approvalId: "approval_server_resolved",
+        approvedBy: "usr_demo_aless",
+        approvedAt: "2026-08-30T09:00:00.000Z",
+      },
+    };
+
+    expect(idaCoreGateway.authorize(request)).toMatchObject({ allowed: false, code: "TOOL_NOT_ALLOWED" });
+    expect(calendarGateway.authorize({ ...request, explicitApproval: undefined })).toMatchObject({
+      allowed: false,
+      code: "APPROVAL_REQUIRED",
+    });
+    expect(calendarGateway.authorize(request)).toMatchObject({ allowed: true });
+  });
+
   it("peut limiter explicitement les outils WRITE autorisés", () => {
     const gateway = new ToolGateway(undefined, [
       { toolKey: "create_track", moduleKey: "MUSIC", permission: "WRITE" },

@@ -92,6 +92,7 @@ describe("IDA API — première tranche Phase 1", () => {
       "/v1/media",
       "/v1/memories",
       "/v1/approvals/queue",
+      "/v1/calendar",
       "/v1/tasks",
       "/v1/social/platforms",
     ];
@@ -893,6 +894,423 @@ describe("IDA API — première tranche Phase 1", () => {
       await seededDatabase?.close();
       await upgradedApp?.close();
       await rm(dataDir, { recursive: true, force: true });
+    }
+  });
+
+  it("projette un calendrier borné, strict et sans payload éditorial", async () => {
+    const calendar = await app.inject({ method: "GET", url: "/v1/calendar?view=WEEK" });
+
+    expect(calendar.statusCode).toBe(200);
+    const body = calendar.json() as {
+      data: {
+        range: { view: string; from: string; to: string; timezone: string };
+        items: Array<Record<string, unknown>>;
+      };
+    };
+
+    expect(body.data.range).toEqual({
+      view: "WEEK",
+      from: "2026-08-23T22:00:00.000Z",
+      to: "2026-08-30T22:00:00.000Z",
+      timezone: "Europe/Paris",
+    });
+    expect(body.data.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "variant_afterimage_youtube",
+          kind: "APPROVED_VARIANT",
+          variantId: "variant_afterimage_youtube",
+          postId: "post_afterimage_live",
+          platform: "YOUTUBE",
+          scheduledAt: "2026-08-29T19:00:00.000Z",
+          state: "READY_TO_SCHEDULE",
+          approvalId: "approval_afterimage_youtube",
+          payloadHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+        }),
+      ]),
+    );
+    expect(body.data.items.some((item) => item.variantId === "variant_other_instagram")).toBe(false);
+    expect(Object.keys(body.data.items[0] ?? {}).sort()).toEqual([
+      "approvalId",
+      "id",
+      "kind",
+      "payloadHash",
+      "platform",
+      "postId",
+      "postTitle",
+      "scheduledAt",
+      "state",
+      "timezone",
+      "variantId",
+    ]);
+    expect(body.data.items[0]).not.toHaveProperty("caption");
+    expect(body.data.items[0]).not.toHaveProperty("media");
+
+    const partialRange = await app.inject({ method: "GET", url: "/v1/calendar?from=2026-08-30T00:00:00.000Z" });
+    expect(partialRange.statusCode).toBe(400);
+    expect(partialRange.json()).toMatchObject({ error: { code: "INVALID_CALENDAR_QUERY" } });
+
+    const injectedScope = await app.inject({ method: "GET", url: "/v1/calendar?workspaceId=wsp_other" });
+    expect(injectedScope.statusCode).toBe(400);
+    expect(injectedScope.json()).toMatchObject({ error: { code: "INVALID_CALENDAR_QUERY" } });
+
+    const tooWide = await app.inject({
+      method: "GET",
+      url: "/v1/calendar?from=2026-01-01T00:00:00.000Z&to=2026-04-01T00:00:00.000Z",
+    });
+    expect(tooWide.statusCode).toBe(400);
+    expect(tooWide.json()).toMatchObject({ error: { code: "INVALID_CALENDAR_QUERY" } });
+  });
+
+  it("crée une planification interne depuis une approbation exacte, sans effet de livraison", async () => {
+    const queue = await app.inject({ method: "GET", url: "/v1/approvals/queue" });
+    const proposal = (
+      queue.json() as { data: Array<{ approvalId: string; variantId: string; payloadHash: string }> }
+    ).data.find((item) => item.variantId === "variant_lumiere_instagram");
+    const payload = { approvalId: proposal?.approvalId, expectedPayloadHash: proposal?.payloadHash };
+    const beforeToday = await app.inject({
+      method: "POST",
+      url: "/v1/ida/commands",
+      payload: { message: "IDA, prépare ma journée." },
+    });
+
+    const approved = await app.inject({
+      method: "POST",
+      url: `/v1/post-variants/${proposal?.variantId}/approve`,
+      payload,
+    });
+    expect(approved.statusCode).toBe(200);
+
+    const scheduled = await app.inject({
+      method: "POST",
+      url: `/v1/post-variants/${proposal?.variantId}/internal-schedules`,
+      payload,
+    });
+    expect(scheduled.statusCode).toBe(201);
+    expect(scheduled.json()).toMatchObject({
+      data: {
+        id: expect.stringMatching(/^ips_[a-f0-9]{32}$/),
+        variantId: "variant_lumiere_instagram",
+        postId: "post_lumiere_studio",
+        platform: "INSTAGRAM",
+        scheduledAt: "2026-09-01T18:00:00.000Z",
+        timezone: "Europe/Paris",
+        state: "SCHEDULED",
+        approvalId: proposal?.approvalId,
+        payloadHash: proposal?.payloadHash,
+        deliveryState: "NOT_CONFIGURED",
+      },
+    });
+    expect((scheduled.json() as { data: Record<string, unknown> }).data).not.toHaveProperty("caption");
+    expect((scheduled.json() as { data: Record<string, unknown> }).data).not.toHaveProperty("media");
+
+    const calendar = await app.inject({
+      method: "GET",
+      url: "/v1/calendar?view=DAY&from=2026-09-01T00:00:00.000Z&to=2026-09-02T00:00:00.000Z",
+    });
+    expect(calendar.statusCode).toBe(200);
+    expect(calendar.json()).toMatchObject({
+      data: {
+        items: [
+          expect.objectContaining({
+            kind: "INTERNAL_SCHEDULE",
+            variantId: "variant_lumiere_instagram",
+            state: "SCHEDULED_INTERNAL",
+            payloadHash: proposal?.payloadHash,
+          }),
+        ],
+      },
+    });
+
+    const afterToday = await app.inject({
+      method: "POST",
+      url: "/v1/ida/commands",
+      payload: { message: "IDA, prépare ma journée." },
+    });
+    expect((afterToday.json() as { data: { result: { items: unknown[] } } }).data.result.items).toEqual(
+      (beforeToday.json() as { data: { result: { items: unknown[] } } }).data.result.items,
+    );
+  });
+
+  it("ne touche ni scheduled_posts, ni médias, ni delivery_state lors d'une planification interne", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "ida-internal-schedule-side-effects-"));
+    const isolatedStorageDir = await mkdtemp(join(tmpdir(), "ida-internal-schedule-storage-"));
+    let isolatedApp: Awaited<ReturnType<typeof createApp>> | undefined;
+    let inspectedDatabase: DemoDatabase | undefined;
+
+    try {
+      isolatedApp = await createApp({
+        dataDir,
+        storageDir: isolatedStorageDir,
+        now: () => new Date("2026-08-30T09:00:00.000Z"),
+      });
+      const queue = await isolatedApp.inject({ method: "GET", url: "/v1/approvals/queue" });
+      const proposal = (
+        queue.json() as { data: Array<{ approvalId: string; variantId: string; payloadHash: string }> }
+      ).data.find((item) => item.variantId === "variant_lumiere_instagram");
+      const payload = { approvalId: proposal?.approvalId, expectedPayloadHash: proposal?.payloadHash };
+      expect(
+        (
+          await isolatedApp.inject({
+            method: "POST",
+            url: `/v1/post-variants/${proposal?.variantId}/approve`,
+            payload,
+          })
+        ).statusCode,
+      ).toBe(200);
+      expect(
+        (
+          await isolatedApp.inject({
+            method: "POST",
+            url: `/v1/post-variants/${proposal?.variantId}/internal-schedules`,
+            payload,
+          })
+        ).statusCode,
+      ).toBe(201);
+      await isolatedApp.close();
+      isolatedApp = undefined;
+
+      inspectedDatabase = await DemoDatabase.open({ dataDir, seed: false });
+      const scheduledPosts = await inspectedDatabase.pglite.query<{ count: number }>(
+        `SELECT COUNT(*)::int AS count FROM scheduled_posts WHERE workspace_id = 'wsp_demo_aless'`,
+      );
+      const variant = await inspectedDatabase.pglite.query<{ deliveryState: string }>(
+        `
+          SELECT delivery_state AS "deliveryState"
+          FROM post_variants
+          WHERE id = 'variant_lumiere_instagram'
+        `,
+      );
+      const media = await inspectedDatabase.pglite.query<{ status: string; usageCount: number }>(
+        `
+          SELECT status, usage_count AS "usageCount"
+          FROM media_assets
+          WHERE id = 'med_studio_light'
+        `,
+      );
+      const schedules = await inspectedDatabase.pglite.query<{ count: number }>(
+        `SELECT COUNT(*)::int AS count FROM internal_post_schedules WHERE state = 'SCHEDULED'`,
+      );
+
+      expect(scheduledPosts.rows[0]?.count).toBe(1);
+      expect(variant.rows[0]).toMatchObject({ deliveryState: "NOT_CONFIGURED" });
+      expect(media.rows[0]).toMatchObject({ status: "UNUSED", usageCount: 0 });
+      expect(schedules.rows[0]?.count).toBe(1);
+    } finally {
+      await inspectedDatabase?.close();
+      await isolatedApp?.close();
+      await rm(dataDir, { recursive: true, force: true });
+      await rm(isolatedStorageDir, { recursive: true, force: true });
+    }
+  });
+
+  it("refuse l'injection, les préconditions obsolètes et une date approuvée indisponible", async () => {
+    const queue = await app.inject({ method: "GET", url: "/v1/approvals/queue" });
+    const proposal = (
+      queue.json() as { data: Array<{ approvalId: string; variantId: string; payloadHash: string }> }
+    ).data.find((item) => item.variantId === "variant_lumiere_instagram");
+    const payload = { approvalId: proposal?.approvalId, expectedPayloadHash: proposal?.payloadHash };
+
+    const unapproved = await app.inject({
+      method: "POST",
+      url: `/v1/post-variants/${proposal?.variantId}/internal-schedules`,
+      payload,
+    });
+    expect(unapproved.statusCode).toBe(409);
+    expect(unapproved.json()).toMatchObject({ error: { code: "SCHEDULE_STALE_APPROVAL" } });
+
+    const approved = await app.inject({
+      method: "POST",
+      url: `/v1/post-variants/${proposal?.variantId}/approve`,
+      payload,
+    });
+    expect(approved.statusCode).toBe(200);
+
+    const injected = await app.inject({
+      method: "POST",
+      url: `/v1/post-variants/${proposal?.variantId}/internal-schedules`,
+      payload: { ...payload, scheduledAt: "2026-12-01T18:00:00.000Z", timezone: "UTC", actorUserId: "usr_other" },
+    });
+    expect(injected.statusCode).toBe(400);
+    expect(injected.json()).toMatchObject({ error: { code: "INVALID_INTERNAL_SCHEDULE" } });
+
+    const staleHash = await app.inject({
+      method: "POST",
+      url: `/v1/post-variants/${proposal?.variantId}/internal-schedules`,
+      payload: { approvalId: proposal?.approvalId, expectedPayloadHash: `sha256:${"0".repeat(64)}` },
+    });
+    expect(staleHash.statusCode).toBe(409);
+    expect(staleHash.json()).toMatchObject({ error: { code: "SCHEDULE_STALE_APPROVAL" } });
+
+    const calendar = await app.inject({ method: "GET", url: "/v1/calendar?view=WEEK" });
+    const past = (
+      calendar.json() as {
+        data: { items: Array<{ variantId: string; approvalId: string; payloadHash: string }> };
+      }
+    ).data.items.find((item) => item.variantId === "variant_afterimage_youtube");
+    const unavailable = await app.inject({
+      method: "POST",
+      url: "/v1/post-variants/variant_afterimage_youtube/internal-schedules",
+      payload: { approvalId: past?.approvalId, expectedPayloadHash: past?.payloadHash },
+    });
+    expect(unavailable.statusCode).toBe(409);
+    expect(unavailable.json()).toMatchObject({ error: { code: "SCHEDULE_TIME_UNAVAILABLE" } });
+
+    const otherWorkspace = await app.inject({
+      method: "POST",
+      url: "/v1/post-variants/variant_other_instagram/internal-schedules",
+      payload: { approvalId: "approval_other_instagram", expectedPayloadHash: `sha256:${"a".repeat(64)}` },
+    });
+    expect(otherWorkspace.statusCode).toBe(404);
+    expect(otherWorkspace.json()).toMatchObject({ error: { code: "POST_VARIANT_NOT_FOUND" } });
+  });
+
+  it("rend un retry de planification exact idempotent, même après l'horaire", async () => {
+    let currentNow = new Date("2026-08-30T09:00:00.000Z");
+    const retryApp = await createApp({
+      dataDir: "memory://",
+      storageDir,
+      now: () => currentNow,
+    });
+
+    try {
+      const queue = await retryApp.inject({ method: "GET", url: "/v1/approvals/queue" });
+      const proposal = (
+        queue.json() as { data: Array<{ approvalId: string; variantId: string; payloadHash: string }> }
+      ).data.find((item) => item.variantId === "variant_lumiere_instagram");
+      const payload = { approvalId: proposal?.approvalId, expectedPayloadHash: proposal?.payloadHash };
+      await retryApp.inject({ method: "POST", url: `/v1/post-variants/${proposal?.variantId}/approve`, payload });
+
+      const first = await retryApp.inject({
+        method: "POST",
+        url: `/v1/post-variants/${proposal?.variantId}/internal-schedules`,
+        payload,
+      });
+      expect(first.statusCode).toBe(201);
+      const firstId = (first.json() as { data: { id: string } }).data.id;
+
+      currentNow = new Date("2026-09-02T09:00:00.000Z");
+      const retry = await retryApp.inject({
+        method: "POST",
+        url: `/v1/post-variants/${proposal?.variantId}/internal-schedules`,
+        payload,
+      });
+      expect(retry.statusCode).toBe(200);
+      expect(retry.json()).toMatchObject({ data: { id: firstId, state: "SCHEDULED" } });
+    } finally {
+      await retryApp.close();
+    }
+  });
+
+  it("conserve un unique snapshot actif lors de deux demandes concurrentes exactes", async () => {
+    const queue = await app.inject({ method: "GET", url: "/v1/approvals/queue" });
+    const proposal = (
+      queue.json() as { data: Array<{ approvalId: string; variantId: string; payloadHash: string }> }
+    ).data.find((item) => item.variantId === "variant_lumiere_instagram");
+    const payload = { approvalId: proposal?.approvalId, expectedPayloadHash: proposal?.payloadHash };
+    expect(
+      (await app.inject({ method: "POST", url: `/v1/post-variants/${proposal?.variantId}/approve`, payload }))
+        .statusCode,
+    ).toBe(200);
+
+    const results = await Promise.all([
+      app.inject({
+        method: "POST",
+        url: `/v1/post-variants/${proposal?.variantId}/internal-schedules`,
+        payload,
+      }),
+      app.inject({
+        method: "POST",
+        url: `/v1/post-variants/${proposal?.variantId}/internal-schedules`,
+        payload,
+      }),
+    ]);
+
+    expect(results.map((result) => result.statusCode).sort()).toEqual([200, 201]);
+    expect(new Set(results.map((result) => (result.json() as { data: { id: string } }).data.id)).size).toBe(1);
+  });
+
+  it("bloque un même créneau plateforme tout en conservant le scope de la variante", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "ida-internal-schedule-conflict-"));
+    const isolatedStorageDir = await mkdtemp(join(tmpdir(), "ida-internal-schedule-storage-"));
+    let setupDatabase: DemoDatabase | undefined;
+    let conflictApp: Awaited<ReturnType<typeof createApp>> | undefined;
+
+    try {
+      setupDatabase = await DemoDatabase.open({ dataDir });
+      // La seconde variante reste REQUESTED afin que la migration de hash au
+      // redémarrage recalcule le snapshot canonique avec le même créneau et la
+      // même plateforme. Aucun endpoint de production ne rend ces champs
+      // éditables dans cette tranche.
+      await setupDatabase.pglite.query(
+        `
+          UPDATE post_variants
+          SET
+            platform_id = 'platform_instagram',
+            planned_at = '2026-09-01T18:00:00.000Z',
+            payload_hash = $1
+          WHERE id = 'variant_lumiere_tiktok'
+            AND workspace_id = 'wsp_demo_aless'
+            AND approval_state = 'REQUESTED'
+        `,
+        [`sha256:${"f".repeat(64)}`],
+      );
+      await setupDatabase.pglite.query(
+        `
+          UPDATE approvals
+          SET payload_hash = $1
+          WHERE id = 'approval_lumiere_tiktok'
+            AND workspace_id = 'wsp_demo_aless'
+            AND state = 'REQUESTED'
+        `,
+        [`sha256:${"f".repeat(64)}`],
+      );
+      await setupDatabase.close();
+      setupDatabase = undefined;
+
+      conflictApp = await createApp({
+        dataDir,
+        storageDir: isolatedStorageDir,
+        now: () => new Date("2026-08-30T09:00:00.000Z"),
+      });
+      const queue = await conflictApp.inject({ method: "GET", url: "/v1/approvals/queue" });
+      const proposals = (
+        queue.json() as { data: Array<{ approvalId: string; variantId: string; payloadHash: string }> }
+      ).data;
+      const instagram = proposals.find((item) => item.variantId === "variant_lumiere_instagram");
+      const tiktokAtInstagramSlot = proposals.find((item) => item.variantId === "variant_lumiere_tiktok");
+
+      for (const proposal of [instagram, tiktokAtInstagramSlot]) {
+        const approved = await conflictApp.inject({
+          method: "POST",
+          url: `/v1/post-variants/${proposal?.variantId}/approve`,
+          payload: { approvalId: proposal?.approvalId, expectedPayloadHash: proposal?.payloadHash },
+        });
+        expect(approved.statusCode).toBe(200);
+      }
+
+      const first = await conflictApp.inject({
+        method: "POST",
+        url: `/v1/post-variants/${instagram?.variantId}/internal-schedules`,
+        payload: { approvalId: instagram?.approvalId, expectedPayloadHash: instagram?.payloadHash },
+      });
+      expect(first.statusCode).toBe(201);
+
+      const conflict = await conflictApp.inject({
+        method: "POST",
+        url: `/v1/post-variants/${tiktokAtInstagramSlot?.variantId}/internal-schedules`,
+        payload: {
+          approvalId: tiktokAtInstagramSlot?.approvalId,
+          expectedPayloadHash: tiktokAtInstagramSlot?.payloadHash,
+        },
+      });
+      expect(conflict.statusCode).toBe(409);
+      expect(conflict.json()).toMatchObject({ error: { code: "SCHEDULE_CONFLICT" } });
+    } finally {
+      await setupDatabase?.close();
+      await conflictApp?.close();
+      await rm(dataDir, { recursive: true, force: true });
+      await rm(isolatedStorageDir, { recursive: true, force: true });
     }
   });
 

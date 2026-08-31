@@ -89,6 +89,38 @@ export interface ApprovalQueueItem {
   deliveryState: ApprovalDeliveryState;
 }
 
+export type EditorialCalendarView = "DAY" | "WEEK" | "MONTH";
+
+export type EditorialCalendarItemKind = "INTERNAL_SCHEDULE" | "APPROVED_VARIANT";
+
+export type EditorialCalendarItemState = "SCHEDULED_INTERNAL" | "READY_TO_SCHEDULE";
+
+export interface EditorialCalendarRange {
+  from: string;
+  to: string;
+  view: EditorialCalendarView;
+  timezone: string;
+}
+
+export interface EditorialCalendarItem {
+  id: string;
+  kind: EditorialCalendarItemKind;
+  variantId: string;
+  postId: string;
+  postTitle: string;
+  platform: string;
+  scheduledAt: string;
+  timezone: string;
+  state: EditorialCalendarItemState;
+  approvalId: string;
+  payloadHash: string;
+}
+
+export interface EditorialCalendarSnapshot {
+  range: EditorialCalendarRange;
+  items: EditorialCalendarItem[];
+}
+
 export interface MediaUploadInput {
   file: File;
   description?: string;
@@ -659,6 +691,126 @@ export async function rejectPostVariant(
   expectedPayloadHash: string,
 ): Promise<void> {
   await postApiJson(`/v1/post-variants/${encodeURIComponent(variantId)}/reject`, {
+    approvalId,
+    expectedPayloadHash,
+  });
+}
+
+function editorialCalendarView(value: unknown): EditorialCalendarView {
+  if (value === "DAY" || value === "WEEK" || value === "MONTH") {
+    return value;
+  }
+
+  throw new IdaApiError("La vue du calendrier retournée par IDA API est invalide.");
+}
+
+function editorialCalendarItemKind(value: unknown): EditorialCalendarItemKind {
+  if (value === "INTERNAL_SCHEDULE" || value === "APPROVED_VARIANT") {
+    return value;
+  }
+
+  throw new IdaApiError("Le type d’élément calendrier retourné par IDA API est invalide.");
+}
+
+function editorialCalendarItemState(value: unknown): EditorialCalendarItemState {
+  if (value === "SCHEDULED_INTERNAL" || value === "READY_TO_SCHEDULE") {
+    return value;
+  }
+
+  throw new IdaApiError("L’état calendrier retourné par IDA API est invalide.");
+}
+
+function toEditorialCalendarItem(record: Record<string, unknown>): EditorialCalendarItem {
+  const id = readString(record.id);
+  const variantId = readString(record.variantId);
+  const postId = readString(record.postId);
+  const postTitle = readString(record.postTitle);
+  const platform = readString(record.platform);
+  const scheduledAt = readString(record.scheduledAt);
+  const timezone = readString(record.timezone);
+  const approvalId = readString(record.approvalId);
+  const payloadHash = readString(record.payloadHash);
+
+  if (
+    !id ||
+    !variantId ||
+    !postId ||
+    !postTitle ||
+    !platform ||
+    !scheduledAt ||
+    !timezone ||
+    !approvalId ||
+    !payloadHash
+  ) {
+    throw new IdaApiError("Un élément du calendrier IDA API n’a pas le format attendu.");
+  }
+
+  return {
+    id,
+    kind: editorialCalendarItemKind(record.kind),
+    variantId,
+    postId,
+    postTitle,
+    platform,
+    scheduledAt,
+    timezone,
+    state: editorialCalendarItemState(record.state),
+    approvalId,
+    payloadHash,
+  };
+}
+
+function toEditorialCalendarSnapshot(payload: unknown): EditorialCalendarSnapshot {
+  const data = readDataObject(payload, "/v1/calendar");
+  const range = readRecord(data.range);
+  const from = readString(range.from);
+  const to = readString(range.to);
+  const timezone = readString(range.timezone);
+
+  if (!from || !to || !timezone) {
+    throw new IdaApiError("La plage calendrier retournée par IDA API n’a pas le format attendu.");
+  }
+
+  if (!Array.isArray(data.items)) {
+    throw new IdaApiError("La liste calendrier retournée par IDA API est invalide.");
+  }
+
+  return {
+    range: {
+      from,
+      to,
+      timezone,
+      view: editorialCalendarView(range.view),
+    },
+    items: data.items.map((item) => toEditorialCalendarItem(readRecord(item))),
+  };
+}
+
+export async function fetchEditorialCalendar(input: {
+  view: EditorialCalendarView;
+  from?: string;
+  to?: string;
+}): Promise<EditorialCalendarSnapshot> {
+  const query = new URLSearchParams({ view: input.view });
+
+  if ((input.from === undefined) !== (input.to === undefined)) {
+    throw new IdaApiError("Les bornes du calendrier doivent être fournies ensemble.");
+  }
+
+  if (input.from && input.to) {
+    query.set("from", input.from);
+    query.set("to", input.to);
+  }
+
+  return toEditorialCalendarSnapshot(await getApiJson(`/v1/calendar?${query.toString()}`));
+}
+
+export async function scheduleApprovedPostVariant(
+  variantId: string,
+  approvalId: string,
+  expectedPayloadHash: string,
+): Promise<void> {
+  await postApiJson(`/v1/post-variants/${encodeURIComponent(variantId)}/internal-schedules`, {
     approvalId,
     expectedPayloadHash,
   });

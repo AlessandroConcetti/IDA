@@ -300,6 +300,39 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApprovalQueueResponse'
+  /v1/calendar:
+    get:
+      operationId: getEditorialCalendar
+      summary: Projette le calendrier éditorial interne
+      description: >-
+        Retourne les snapshots de planification interne encore valides et les
+        variantes APPROVED prêtes à planifier. Les bornes from/to sont
+        obligatoires ensemble, forment une plage [from, to) d'au plus 62 jours
+        et sont dérivées dans le fuseau du workspace lorsqu'elles sont absentes.
+        Aucun payload éditorial, média, compte ou secret n'est exposé.
+      parameters:
+        - name: view
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/CalendarView'
+        - name: from
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          description: Projection bornée et triée du calendrier du workspace
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CalendarResponse'
+        '400':
+          $ref: '#/components/responses/InvalidCalendarQuery'
   /v1/post-variants/{variantId}/approve:
     post:
       operationId: approvePostVariant
@@ -366,6 +399,47 @@ paths:
           $ref: '#/components/responses/PostVariantNotFound'
         '409':
           description: Payload obsolète ou décision finale opposée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v1/post-variants/{variantId}/internal-schedules:
+    post:
+      operationId: scheduleApprovedPostVariantInternally
+      summary: Crée un snapshot de planification interne d'une variante approuvée
+      description: >-
+        Revalide l'approbation et le hash canonique dans le workspace serveur,
+        puis copie exclusivement l'horaire et le fuseau approuvés. Cette route
+        ne crée ni livraison, ni publication, ni appel réseau externe.
+      parameters:
+        - $ref: '#/components/parameters/PostVariantId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InternalPostScheduleRequest'
+      responses:
+        '201':
+          description: Snapshot interne créé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalPostScheduleResponse'
+        '200':
+          description: Retry exact d'un snapshot actif existant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalPostScheduleResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInternalPostSchedule'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/PostVariantNotFound'
+        '409':
+          description: Approbation obsolète, date indisponible ou créneau en conflit
           content:
             application/json:
               schema:
@@ -558,6 +632,18 @@ components:
             $ref: '#/components/schemas/ErrorResponse'
     ApprovalDecisionFinal:
       description: Une décision terminale opposée est déjà enregistrée
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InvalidCalendarQuery:
+      description: Query calendrier inconnue, bornes incomplètes ou fenêtre supérieure à 62 jours
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InvalidInternalPostSchedule:
+      description: Corps de planification interne invalide ou tentative d'injecter date, fuseau, scope, acteur ou état
       content:
         application/json:
           schema:
@@ -1082,6 +1168,86 @@ components:
       properties:
         data:
           $ref: '#/components/schemas/PostVariantDecision'
+    CalendarView:
+      enum: [DAY, WEEK, MONTH]
+    CalendarRange:
+      type: object
+      additionalProperties: false
+      required: [view, from, to, timezone]
+      properties:
+        view:
+          $ref: '#/components/schemas/CalendarView'
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        timezone: { type: string, minLength: 1, maxLength: 120 }
+    CalendarItem:
+      type: object
+      additionalProperties: false
+      required: [id, kind, variantId, postId, postTitle, platform, scheduledAt, timezone, state, approvalId, payloadHash]
+      properties:
+        id: { type: string, minLength: 1 }
+        kind: { enum: [INTERNAL_SCHEDULE, APPROVED_VARIANT] }
+        variantId: { type: string, minLength: 1 }
+        postId: { type: string, minLength: 1 }
+        postTitle: { type: string, minLength: 1, maxLength: 240 }
+        platform: { enum: [INSTAGRAM, TIKTOK, YOUTUBE, FACEBOOK] }
+        scheduledAt: { type: string, format: date-time }
+        timezone: { type: string, minLength: 1, maxLength: 120 }
+        state: { enum: [SCHEDULED_INTERNAL, READY_TO_SCHEDULE] }
+        approvalId: { type: string, minLength: 1 }
+        payloadHash:
+          type: string
+          pattern: '^sha256:[a-f0-9]{64}$'
+    CalendarData:
+      type: object
+      additionalProperties: false
+      required: [range, items]
+      properties:
+        range:
+          $ref: '#/components/schemas/CalendarRange'
+        items:
+          type: array
+          maxItems: 200
+          items:
+            $ref: '#/components/schemas/CalendarItem'
+    CalendarResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/CalendarData'
+    InternalPostScheduleRequest:
+      type: object
+      additionalProperties: false
+      required: [approvalId, expectedPayloadHash]
+      properties:
+        approvalId: { type: string, minLength: 1 }
+        expectedPayloadHash:
+          type: string
+          pattern: '^sha256:[a-f0-9]{64}$'
+    InternalPostSchedule:
+      type: object
+      additionalProperties: false
+      required: [id, variantId, postId, platform, scheduledAt, timezone, state, approvalId, payloadHash, deliveryState]
+      properties:
+        id: { type: string, minLength: 1 }
+        variantId: { type: string, minLength: 1 }
+        postId: { type: string, minLength: 1 }
+        platform: { enum: [INSTAGRAM, TIKTOK, YOUTUBE, FACEBOOK] }
+        scheduledAt: { type: string, format: date-time }
+        timezone: { type: string, minLength: 1, maxLength: 120 }
+        state: { enum: [SCHEDULED, CANCELLED] }
+        approvalId: { type: string, minLength: 1 }
+        payloadHash:
+          type: string
+          pattern: '^sha256:[a-f0-9]{64}$'
+        deliveryState: { const: NOT_CONFIGURED }
+    InternalPostScheduleResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/InternalPostSchedule'
     TaskStatus:
       enum: [TODO, IN_PROGRESS, DONE, CANCELLED]
     Task:

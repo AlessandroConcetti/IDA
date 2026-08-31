@@ -23,7 +23,8 @@ Le premier runtime est une API Fastify locale sur `http://127.0.0.1:8787`, conso
 | `GET /v1/system/status` | Livrée | États factuels de la tranche locale ; les intégrations absentes sont `WARNING` ou `DISCONNECTED`. |
 | `GET/PATCH /v1/artist-profile`, `/v1/releases`, `GET/POST /v1/tracks`, `GET/POST /v1/media`, `GET /v1/memories` | Livrées | Données de démonstration isolées par workspace côté serveur. L’Artist Brain, la création bornée d’un morceau Music Brain et l’import local privé d’un média passent par des outils `WRITE` allowlistés ; `GET /v1/media?status=UNUSED` est supporté. |
 | `POST /v1/memories/proposals`, `POST /v1/memories/:memoryId/confirm`, `POST /v1/memories/:memoryId/reject` | Livrées | Flux de mémoire consentie : une préférence commence forcément à `PENDING` et seule une décision humaine explicite peut la faire passer à `CONFIRMED` ou `REJECTED`. |
-| `GET /v1/approvals/queue`, `POST /v1/post-variants/:variantId/approve`, `POST /v1/post-variants/:variantId/reject` | Livrées | Approval Center local : propositions seedées en `REQUESTED`, préconditionnées par un hash de payload et décidées humainement ; aucune programmation ni publication n’en découle. |
+| `GET /v1/approvals/queue`, `POST /v1/post-variants/:variantId/approve`, `POST /v1/post-variants/:variantId/reject` | Livrées | Approval Center local : propositions seedées en `REQUESTED`, préconditionnées par un hash de payload et décidées humainement ; aucune programmation ni publication n’en découle seule. |
+| `GET /v1/calendar`, `POST /v1/post-variants/:variantId/internal-schedules` | Livrées | Calendrier éditorial et planification interne d’une variante déjà approuvée ; aucun job, compte social, adaptateur ou appel réseau n’est créé. |
 | `GET/POST /v1/tasks`, `POST /v1/tasks/:taskId/complete` | Livrées | Task Center local : création interne en `TODO`, finalisation explicite et idempotente, toujours isolées au workspace serveur. |
 | `GET /v1/social/platforms` | Livrée | Capacités déclaratives de démonstration ; aucune connexion sociale n’est créée. |
 | `POST /v1/ida/commands` | Livrée | Corps `{ "message": "…" }` ; commandes déterministes de lecture pour la journée, les contenus inutilisés et l’état système. |
@@ -87,6 +88,40 @@ La commande retourne un objet `data` contenant la commande structurée, les outi
 - La transition atomique est `REQUESTED → APPROVED` ou `REQUESTED → REJECTED`. Une même décision est idempotente : elle retourne `200` sans nouvelle date ni nouvel audit. Une décision opposée est finale et répond `409 APPROVAL_DECISION_FINAL`.
 - Une décision laisse toujours `deliveryState` à `NOT_CONFIGURED`. Elle ne touche ni `scheduled_posts`, ni les statuts/compteurs des médias, ni jobs, OAuth, compte social, adaptateur ou réseau externe. `plannedAt`, lorsqu’il existe, est uniquement une date proposée.
 - Un audit append-only `post_variant.approved` ou `post_variant.rejected` contient seulement les identifiants, l’état et le hash ; il ne recopie ni caption, ni hashtags, ni rationale, ni donnée de stockage.
+
+### Calendrier éditorial et planification interne
+
+`GET /v1/calendar` accepte uniquement la query stricte `view?: DAY|WEEK|MONTH`, `from?: ISO-8601` et `to?: ISO-8601`. Les deux bornes doivent être fournies ensemble, décrivent une plage demi-ouverte `[from, to)` d’au plus 62 jours et sont toujours renvoyées normalisées avec la vue et le fuseau du workspace :
+
+```json
+{
+  "data": {
+    "range": {
+      "view": "WEEK",
+      "from": "2026-08-23T22:00:00.000Z",
+      "to": "2026-08-30T22:00:00.000Z",
+      "timezone": "Europe/Paris"
+    },
+    "items": []
+  }
+}
+```
+
+Sans bornes, le serveur dérive jour, semaine (lundi inclus) ou mois dans le fuseau du workspace à partir de son horloge injectée. La projection est limitée à 200 éléments, triée de façon stable, et n’expose que `id`, `kind`, `variantId`, `postId`, `postTitle`, `platform`, `scheduledAt`, `timezone`, `state`, `approvalId` et `payloadHash`. Elle contient les snapshots internes encore valides (`INTERNAL_SCHEDULE` / `SCHEDULED_INTERNAL`) et les variantes `APPROVED` prêtes à planifier (`APPROVED_VARIANT` / `READY_TO_SCHEDULE`). Caption, hashtags, médias, clés de stockage, comptes et secrets sont absents.
+
+`POST /v1/post-variants/:variantId/internal-schedules` accepte strictement le même couple de préconditions :
+
+```json
+{
+  "approvalId": "approval_…",
+  "expectedPayloadHash": "sha256:…"
+}
+```
+
+- Le serveur exige une variante et une approbation `APPROVED` dans son workspace, recalcule le payload canonique et vérifie que les trois hashes (client, approval, variante) correspondent. Il reprend uniquement `plannedAt` et `timezone` du payload approuvé ; le client ne peut ni choisir date, fuseau, plateforme, acteur ni état. Les corps invalides répondent `400 INVALID_INTERNAL_SCHEDULE`, une variante étrangère `404 POST_VARIANT_NOT_FOUND`, et une approbation ou un hash obsolète `409 SCHEDULE_STALE_APPROVAL`.
+- Une date absente ou non future selon la même horloge serveur répond `409 SCHEDULE_TIME_UNAVAILABLE`. Un seul snapshot actif est permis par variante et le même couple `(platform_id, scheduled_at)` est exclusif dans un workspace ; ces collisions répondent `409 SCHEDULE_CONFLICT`. Deux plateformes distinctes peuvent utiliser le même instant.
+- Le premier succès retourne `201`; le retry exact d’un snapshot actif retourne `200`, y compris après l’horaire, sans nouvelle écriture. La réponse sûre contient `id`, variante, post, plateforme, date, fuseau, état `SCHEDULED`, approbation, hash et `deliveryState: NOT_CONFIGURED`.
+- La route autorise uniquement l’outil allowlisté `schedule_approved_post_variant` (`CALENDAR` / `APPROVAL_REQUIRED`) avec la preuve déjà résolue de l’approbation humaine. Elle écrit un audit redacted `post_variant.internal_scheduled`, mais ne modifie jamais `scheduled_posts`, les médias, `delivery_state`, approvals, jobs, OAuth, adaptateurs sociaux ou réseau externe.
 
 ### Task Center : finalisation contrôlée
 
@@ -298,7 +333,7 @@ POST   /v1/post-variants/:variantId/regenerate
 POST   /v1/post-variants/:variantId/request-approval
 POST   /v1/post-variants/:variantId/approve
 POST   /v1/post-variants/:variantId/reject
-POST   /v1/post-variants/:variantId/schedule
+POST   /v1/post-variants/:variantId/internal-schedules
 
 GET    /v1/calendar?from=:iso&to=:iso&view=day|week|month
 GET    /v1/calendar/conflicts?from=:iso&to=:iso

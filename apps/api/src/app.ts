@@ -8,6 +8,12 @@ import {
   approvalQueueItemSchema,
   artistProfileSchema,
   artistProfileUpdateSchema,
+  type CalendarView,
+  calendarItemSchema,
+  calendarQuerySchema,
+  calendarRangeSchema,
+  calendarResponseSchema,
+  internalPostScheduleSchema,
   mediaAssetSchema,
   mediaImportSchema,
   mediaStatusSchema,
@@ -18,6 +24,7 @@ import {
   postVariantDecisionParamsSchema,
   postVariantDecisionRequestSchema,
   postVariantDecisionSchema,
+  postVariantInternalScheduleRequestSchema,
   releaseSchema,
   socialPlatformCapabilitySchema,
   taskCompleteParamsSchema,
@@ -34,8 +41,10 @@ import {
   type ApprovalDecision,
   type ApprovalQueueItem,
   type ArtistProfile,
+  type CalendarItem,
   DemoDatabase,
   type DemoDatabaseOptions,
+  type InternalPostSchedule,
   type MediaAsset,
   type Memory,
   type MemoryDecision,
@@ -127,6 +136,163 @@ function timestampFromDate(value: string | null, fallback: string): string | und
   return new Date(`${value}T00:00:00.000Z`).toISOString() || fallback;
 }
 
+type ZonedDateParts = {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  second: number;
+};
+
+type ResolvedCalendarRange = {
+  view: CalendarView;
+  from: string;
+  to: string;
+  timezone: string;
+};
+
+const maximumCalendarWindowMilliseconds = 62 * 24 * 60 * 60 * 1_000;
+
+function localDateParts(date: Date, timezone: string): ZonedDateParts {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const values = new Map(parts.map((part) => [part.type, part.value]));
+
+  return {
+    year: Number(values.get("year")),
+    month: Number(values.get("month")),
+    day: Number(values.get("day")),
+    hour: Number(values.get("hour")),
+    minute: Number(values.get("minute")),
+    second: Number(values.get("second")),
+  };
+}
+
+function zonedDateTimeToIso(parts: ZonedDateParts, timezone: string): string {
+  // La date civile de la vue doit être calculée dans le fuseau du workspace,
+  // puis convertie en UTC. L'itération recalcule l'offset après le premier
+  // essai, y compris autour d'un changement d'heure.
+  const targetAsUtc = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
+  let instant = targetAsUtc;
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const observed = localDateParts(new Date(instant), timezone);
+    const observedAsUtc = Date.UTC(
+      observed.year,
+      observed.month - 1,
+      observed.day,
+      observed.hour,
+      observed.minute,
+      observed.second,
+    );
+    const nextInstant = targetAsUtc - (observedAsUtc - instant);
+
+    if (nextInstant === instant) {
+      break;
+    }
+
+    instant = nextInstant;
+  }
+
+  return new Date(instant).toISOString();
+}
+
+function addUtcDays(parts: ZonedDateParts, days: number): ZonedDateParts {
+  const date = new Date(Date.UTC(parts.year, parts.month - 1, parts.day + days));
+
+  return {
+    year: date.getUTCFullYear(),
+    month: date.getUTCMonth() + 1,
+    day: date.getUTCDate(),
+    hour: 0,
+    minute: 0,
+    second: 0,
+  };
+}
+
+function defaultCalendarRange(now: Date, timezone: string, view: CalendarView): ResolvedCalendarRange {
+  const localNow = localDateParts(now, timezone);
+  let start: ZonedDateParts = {
+    year: localNow.year,
+    month: localNow.month,
+    day: localNow.day,
+    hour: 0,
+    minute: 0,
+    second: 0,
+  };
+  let end: ZonedDateParts;
+
+  if (view === "DAY") {
+    end = addUtcDays(start, 1);
+  } else if (view === "WEEK") {
+    const weekday = new Date(Date.UTC(start.year, start.month - 1, start.day)).getUTCDay();
+    start = addUtcDays(start, -((weekday + 6) % 7));
+    end = addUtcDays(start, 7);
+  } else {
+    start = { ...start, day: 1 };
+    const firstOfNextMonth = new Date(Date.UTC(start.year, start.month, 1));
+    end = {
+      year: firstOfNextMonth.getUTCFullYear(),
+      month: firstOfNextMonth.getUTCMonth() + 1,
+      day: 1,
+      hour: 0,
+      minute: 0,
+      second: 0,
+    };
+  }
+
+  return {
+    view,
+    from: zonedDateTimeToIso(start, timezone),
+    to: zonedDateTimeToIso(end, timezone),
+    timezone,
+  };
+}
+
+function resolveCalendarRange(
+  query: { view?: CalendarView; from?: string; to?: string },
+  now: Date,
+  timezone: string,
+): ResolvedCalendarRange {
+  const view = query.view ?? "WEEK";
+
+  if (query.from === undefined || query.to === undefined) {
+    try {
+      return defaultCalendarRange(now, timezone, view);
+    } catch {
+      throw new CalendarQueryInputError();
+    }
+  }
+
+  const fromMilliseconds = Date.parse(query.from);
+  const toMilliseconds = Date.parse(query.to);
+
+  if (
+    !Number.isFinite(fromMilliseconds) ||
+    !Number.isFinite(toMilliseconds) ||
+    toMilliseconds <= fromMilliseconds ||
+    toMilliseconds - fromMilliseconds > maximumCalendarWindowMilliseconds
+  ) {
+    throw new CalendarQueryInputError();
+  }
+
+  return {
+    view,
+    from: new Date(fromMilliseconds).toISOString(),
+    to: new Date(toMilliseconds).toISOString(),
+    timezone,
+  };
+}
+
 class ArtistProfileInputError extends Error {
   readonly statusCode = 400;
   readonly code = "INVALID_ARTIST_PROFILE";
@@ -187,6 +353,24 @@ class ApprovalDecisionInputError extends Error {
 
   constructor() {
     super("La décision d'approbation est invalide.");
+  }
+}
+
+class InternalPostScheduleInputError extends Error {
+  readonly statusCode = 400;
+  readonly code = "INVALID_INTERNAL_SCHEDULE";
+
+  constructor() {
+    super("La demande de planification interne est invalide.");
+  }
+}
+
+class CalendarQueryInputError extends Error {
+  readonly statusCode = 400;
+  readonly code = "INVALID_CALENDAR_QUERY";
+
+  constructor() {
+    super("La fenêtre du calendrier est invalide.");
   }
 }
 
@@ -502,6 +686,37 @@ function toPostVariantDecisionResponse(decision: PostVariantDecision) {
   });
 }
 
+function toCalendarItemResponse(item: CalendarItem) {
+  return calendarItemSchema.parse({
+    id: item.id,
+    kind: item.kind,
+    variantId: item.variantId,
+    postId: item.postId,
+    postTitle: item.postTitle,
+    platform: item.platform,
+    scheduledAt: item.scheduledAt,
+    timezone: item.timezone,
+    state: item.state,
+    approvalId: item.approvalId,
+    payloadHash: item.payloadHash,
+  });
+}
+
+function toInternalPostScheduleResponse(schedule: InternalPostSchedule) {
+  return internalPostScheduleSchema.parse({
+    id: schedule.id,
+    variantId: schedule.variantId,
+    postId: schedule.postId,
+    platform: schedule.platform,
+    scheduledAt: schedule.scheduledAt,
+    timezone: schedule.timezone,
+    state: schedule.state,
+    approvalId: schedule.approvalId,
+    payloadHash: schedule.payloadHash,
+    deliveryState: schedule.deliveryState,
+  });
+}
+
 export async function createApp(options: CreateAppOptions = {}): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   const database = await DemoDatabase.open(options);
@@ -519,6 +734,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     { toolKey: "create_track", moduleKey: "MUSIC", permission: "WRITE" },
     { toolKey: "import_media", moduleKey: "CONTENT", permission: "WRITE" },
     { toolKey: "decide_post_variant", moduleKey: "CONTENT", permission: "APPROVAL_REQUIRED" },
+    { toolKey: "schedule_approved_post_variant", moduleKey: "CALENDAR", permission: "APPROVAL_REQUIRED" },
   ]);
 
   await app.register(cors, {
@@ -560,6 +776,12 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     }
 
     if (error instanceof ApprovalDecisionInputError) {
+      return reply.status(error.statusCode).send({
+        error: { code: error.code, message: error.message },
+      });
+    }
+
+    if (error instanceof InternalPostScheduleInputError || error instanceof CalendarQueryInputError) {
       return reply.status(error.statusCode).send({
         error: { code: error.code, message: error.message },
       });
@@ -770,6 +992,129 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     }
 
     return { data: toPostVariantDecisionResponse(result.decision) };
+  };
+
+  const scheduleApprovedPostVariant = async (request: FastifyRequest, reply: FastifyReply) => {
+    const params = postVariantDecisionParamsSchema.safeParse(request.params);
+    const body = postVariantInternalScheduleRequestSchema.safeParse(request.body);
+
+    if (!params.success || !body.success) {
+      throw new InternalPostScheduleInputError();
+    }
+
+    // Une seule horloge injectée est capturée pour la précondition, la preuve
+    // d'autorisation et la revérification transactionnelle. Le client ne peut
+    // jamais fournir l'horaire ou le fuseau de la planification.
+    const actionNow = serverNow().toISOString();
+    const precondition = await database.prepareInternalPostSchedule(
+      demoContext.workspaceId,
+      params.data.variantId,
+      body.data.approvalId,
+      body.data.expectedPayloadHash,
+      actionNow,
+    );
+
+    if (precondition.kind === "not-found") {
+      return reply.status(404).send({
+        error: { code: "POST_VARIANT_NOT_FOUND", message: "Variante introuvable dans ce workspace." },
+      });
+    }
+
+    if (precondition.kind === "stale") {
+      return reply.status(409).send({
+        error: {
+          code: "SCHEDULE_STALE_APPROVAL",
+          message: "L'approbation ou le payload ne correspond plus à la variante approuvée courante.",
+        },
+      });
+    }
+
+    if (precondition.kind === "time-unavailable") {
+      return reply.status(409).send({
+        error: {
+          code: "SCHEDULE_TIME_UNAVAILABLE",
+          message: "La date proposée est absente, invalide ou déjà écoulée.",
+        },
+      });
+    }
+
+    if (precondition.kind === "conflict") {
+      return reply.status(409).send({
+        error: { code: "SCHEDULE_CONFLICT", message: "Ce créneau de planification interne est déjà occupé." },
+      });
+    }
+
+    if (precondition.kind === "already-scheduled") {
+      return { data: toInternalPostScheduleResponse(precondition.schedule) };
+    }
+
+    // La preuve est créée uniquement à partir de l'approbation déjà résolue
+    // dans le workspace serveur. Les deux valeurs sont immuables après la
+    // décision APPROVED et ne viennent jamais du corps HTTP.
+    if (!precondition.snapshot.approvalDecidedBy || !precondition.snapshot.approvalDecidedAt) {
+      return reply.status(409).send({
+        error: {
+          code: "SCHEDULE_STALE_APPROVAL",
+          message: "L'approbation approuvée ne possède plus de preuve humaine exploitable.",
+        },
+      });
+    }
+
+    toolGateway.assertAuthorized({
+      toolKey: "schedule_approved_post_variant",
+      moduleKey: "CALENDAR",
+      permission: "APPROVAL_REQUIRED",
+      explicitApproval: {
+        approvalId: precondition.snapshot.approvalId,
+        approvedBy: precondition.snapshot.approvalDecidedBy,
+        approvedAt: precondition.snapshot.approvalDecidedAt,
+      },
+    });
+
+    const result = await database.createInternalPostSchedule(
+      demoContext.workspaceId,
+      demoContext.userId,
+      params.data.variantId,
+      body.data.approvalId,
+      body.data.expectedPayloadHash,
+      actionNow,
+    );
+
+    if (result.kind === "not-found") {
+      return reply.status(404).send({
+        error: { code: "POST_VARIANT_NOT_FOUND", message: "Variante introuvable dans ce workspace." },
+      });
+    }
+
+    if (result.kind === "stale") {
+      return reply.status(409).send({
+        error: {
+          code: "SCHEDULE_STALE_APPROVAL",
+          message: "L'approbation ou le payload ne correspond plus à la variante approuvée courante.",
+        },
+      });
+    }
+
+    if (result.kind === "time-unavailable") {
+      return reply.status(409).send({
+        error: {
+          code: "SCHEDULE_TIME_UNAVAILABLE",
+          message: "La date proposée est absente, invalide ou déjà écoulée.",
+        },
+      });
+    }
+
+    if (result.kind === "conflict") {
+      return reply.status(409).send({
+        error: { code: "SCHEDULE_CONFLICT", message: "Ce créneau de planification interne est déjà occupé." },
+      });
+    }
+
+    if (result.kind === "already-scheduled") {
+      return { data: toInternalPostScheduleResponse(result.schedule) };
+    }
+
+    return reply.status(201).send({ data: toInternalPostScheduleResponse(result.schedule) });
   };
 
   app.get("/health", async () => ({
@@ -1003,12 +1348,40 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     return { data: approvals.map(toApprovalQueueItemResponse) };
   });
 
+  app.get("/v1/calendar", async (request) => {
+    const query = calendarQuerySchema.safeParse(request.query);
+
+    if (!query.success) {
+      throw new CalendarQueryInputError();
+    }
+
+    const timezone = await database.getWorkspaceTimezone(demoContext.workspaceId);
+
+    if (!timezone) {
+      throw new CalendarQueryInputError();
+    }
+
+    const range = resolveCalendarRange(query.data, serverNow(), timezone);
+    const items = await database.listCalendarItems(demoContext.workspaceId, range.from, range.to);
+
+    return calendarResponseSchema.parse({
+      data: {
+        range: calendarRangeSchema.parse(range),
+        items: items.map(toCalendarItemResponse),
+      },
+    });
+  });
+
   app.post("/v1/post-variants/:variantId/approve", async (request, reply) =>
     decidePostVariant(request, reply, "APPROVED"),
   );
 
   app.post("/v1/post-variants/:variantId/reject", async (request, reply) =>
     decidePostVariant(request, reply, "REJECTED"),
+  );
+
+  app.post("/v1/post-variants/:variantId/internal-schedules", async (request, reply) =>
+    scheduleApprovedPostVariant(request, reply),
   );
 
   app.get("/v1/tasks", async () => {

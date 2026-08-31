@@ -435,6 +435,102 @@ export const postVariantDecisionSchema = z.object({
 
 export type PostVariantDecision = z.infer<typeof postVariantDecisionSchema>;
 
+// Calendrier éditorial et planification interne --------------------------------
+//
+// Une planification interne est un snapshot append-only de la variante
+// approuvée. Elle ne constitue ni une publication, ni une livraison vers une
+// plateforme : le contrat ne transporte donc aucun compte, média, caption ou
+// secret de connecteur.
+export const calendarViewSchema = z.enum(["DAY", "WEEK", "MONTH"]);
+export type CalendarView = z.infer<typeof calendarViewSchema>;
+
+export const calendarQuerySchema = z
+  .object({
+    view: calendarViewSchema.optional(),
+    from: timestampSchema.optional(),
+    to: timestampSchema.optional(),
+  })
+  .strict()
+  .refine((query) => (query.from === undefined) === (query.to === undefined), {
+    message: "Les bornes from et to doivent être fournies ensemble.",
+  });
+
+export type CalendarQuery = z.infer<typeof calendarQuerySchema>;
+
+export const calendarRangeSchema = z.object({
+  view: calendarViewSchema,
+  from: timestampSchema,
+  to: timestampSchema,
+  timezone: timezoneSchema,
+});
+
+export type CalendarRange = z.infer<typeof calendarRangeSchema>;
+
+export const calendarItemKindSchema = z.enum(["INTERNAL_SCHEDULE", "APPROVED_VARIANT"]);
+export type CalendarItemKind = z.infer<typeof calendarItemKindSchema>;
+
+export const calendarItemStateSchema = z.enum(["SCHEDULED_INTERNAL", "READY_TO_SCHEDULE"]);
+export type CalendarItemState = z.infer<typeof calendarItemStateSchema>;
+
+// Projection volontairement réduite : elle permet de rendre le calendrier
+// sans rendre à nouveau accessible le payload qui a été approuvé.
+export const calendarItemSchema = z.object({
+  id: entityIdSchema,
+  kind: calendarItemKindSchema,
+  variantId: entityIdSchema,
+  postId: entityIdSchema,
+  postTitle: postTitleSchema,
+  platform: socialPlatformSchema,
+  scheduledAt: timestampSchema,
+  timezone: timezoneSchema,
+  state: calendarItemStateSchema,
+  approvalId: entityIdSchema,
+  payloadHash: payloadHashSchema,
+});
+
+export type CalendarItem = z.infer<typeof calendarItemSchema>;
+
+export const calendarDataSchema = z.object({
+  range: calendarRangeSchema,
+  items: z.array(calendarItemSchema).max(200),
+});
+
+export const calendarResponseSchema = z.object({
+  data: calendarDataSchema,
+});
+
+export type CalendarResponse = z.infer<typeof calendarResponseSchema>;
+
+// La route de planification n'accepte que les deux préconditions déjà liées
+// à l'approbation. Date, fuseau, plateforme, acteur et état sont dérivés du
+// snapshot résolu côté serveur.
+export const postVariantInternalScheduleRequestSchema = z
+  .object({
+    approvalId: entityIdSchema,
+    expectedPayloadHash: payloadHashSchema,
+  })
+  .strict();
+
+export type PostVariantInternalScheduleRequest = z.infer<typeof postVariantInternalScheduleRequestSchema>;
+
+export const internalPostScheduleStateSchema = z.enum(["SCHEDULED", "CANCELLED"]);
+export type InternalPostScheduleState = z.infer<typeof internalPostScheduleStateSchema>;
+
+export const internalPostScheduleSchema = z.object({
+  id: entityIdSchema,
+  variantId: entityIdSchema,
+  postId: entityIdSchema,
+  platform: socialPlatformSchema,
+  scheduledAt: timestampSchema,
+  timezone: timezoneSchema,
+  state: internalPostScheduleStateSchema,
+  approvalId: entityIdSchema,
+  payloadHash: payloadHashSchema,
+  deliveryState: postDeliveryStateSchema,
+});
+
+export type InternalPostSchedule = z.infer<typeof internalPostScheduleSchema>;
+
 export const socialPlatformCapabilitySchema = z.object({
   platform: socialPlatformSchema,
   apiVersion: z.string().trim().min(1),

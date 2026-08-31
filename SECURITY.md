@@ -105,6 +105,12 @@ Le runtime local ne livre qu’une décision interne sur une variante seedée. L
 
 La preuve transmise au `ToolGateway` est construite après cette résolution avec l’approbation serveur, l’acteur serveur et l’instant serveur. En `LOCAL_DEMO`, l’acteur est fixe : ce mécanisme établit la frontière applicative et ne constitue pas encore une authentification humaine de production. Une décision conserve strictement `NOT_CONFIGURED` comme état de livraison. Elle n’écrit ni `scheduled_posts`, ni médias, jobs, tokens, OAuth, comptes sociaux ou adaptateur réseau.
 
+### Calendrier et planification interne locale
+
+`POST /v1/post-variants/:variantId/internal-schedules` ne reçoit que `approvalId` et `expectedPayloadHash`, tous deux strictement validés. Avant l’outil et dans la transaction, le serveur vérifie le scope de la variante, l’état `APPROVED` de la variante et de son approbation, l’égalité du hash client/approval/variante et le recalcul canonique courant. Il copie ensuite exclusivement la date et le fuseau déjà approuvés ; aucune valeur d’horaire, de plateforme, d’acteur, d’état ou de livraison client n’est acceptée. Une date absente ou passée est refusée et le retry exact d’un snapshot actif reste idempotent sans réécriture.
+
+La preuve `CALENDAR` / `APPROVAL_REQUIRED` est construite avec l’identifiant, l’auteur et l’instant de l’approbation résolue côté serveur. L’outil `schedule_approved_post_variant` est limité au gateway de cette route et n’est pas une capacité de `ida-core`. Les contraintes transactionnelles interdisent un second snapshot actif par variante ou un second créneau plateforme au même instant dans le workspace; les snapshots date/fuseau/approval/hash sont immuables. La route ne peut ni publier, ni créer une livraison, ni modifier `scheduled_posts`, `delivery_state`, les médias, OAuth, jobs, comptes ou réseau. Elle écrit uniquement l’audit redacted `post_variant.internal_scheduled` (identifiants, hash, date, fuseau, état).
+
 ## 6. OAuth, secrets et connecteurs
 
 - Séparer `SocialAccount` (identité et état public du compte) de `SocialCredential` (jetons chiffrés et métadonnées d’expiration).

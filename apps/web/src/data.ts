@@ -62,13 +62,6 @@ export interface MediaAsset {
   tone: "violet" | "coral" | "blue";
 }
 
-export interface CalendarItem {
-  time: string;
-  title: string;
-  platform: string;
-  status: "APPROVAL" | "SCHEDULED" | "DRAFT";
-}
-
 export interface SocialCapability {
   name: string;
   state: "READY" | "PLANNED" | "NOT_CONNECTED";
@@ -238,12 +231,6 @@ export const mediaAssets: MediaAsset[] = [
     detail: "0:19 · hook · demain 18:00",
     tone: "coral",
   },
-];
-
-export const calendarItems: CalendarItem[] = [
-  { time: "11:00", title: "Valider les trois propositions", platform: "IDA", status: "APPROVAL" },
-  { time: "18:00", title: "Hook — Afterimage", platform: "Instagram", status: "SCHEDULED" },
-  { time: "20:30", title: "Studio moment", platform: "TikTok", status: "DRAFT" },
 ];
 
 export const systemServices: SystemService[] = [
