@@ -744,9 +744,11 @@ export const idaCommandStateSchema = z.enum([
 
 export type IdaCommandState = z.infer<typeof idaCommandStateSchema>;
 
+export const idaCommandMessageSchema = z.string().trim().min(1).max(4_000);
+
 export const idaCommandInputSchema = z.object({
   workspaceId: entityIdSchema,
-  message: z.string().trim().min(1),
+  message: idaCommandMessageSchema,
   intent: idaCommandIntentSchema.default("UNKNOWN"),
   parameters: z.record(z.string(), z.unknown()).default({}),
 });
@@ -762,6 +764,69 @@ export const idaCommandSchema = idaCommandInputSchema.extend({
 });
 
 export type IdaCommand = z.infer<typeof idaCommandSchema>;
+
+// Historique local des commandes ------------------------------------------
+//
+// Une commande terminée peut être rejouée dans l'interface depuis le même
+// workspace. Ce registre ne représente pas encore une conversation générale
+// et ne contient ni résultat d'outil, ni trace de modèle, ni paramètres, ni
+// payload externe. Il ne crée jamais de mémoire durable par lui-même.
+export const idaCommandRunSchema = z
+  .object({
+    id: entityIdSchema,
+    intent: idaCommandIntentSchema,
+    state: idaCommandStateSchema,
+    requestedPermission: permissionLevelSchema,
+    message: idaCommandMessageSchema,
+    responseMessage: z.string().trim().min(1).max(4_000),
+    createdAt: timestampSchema,
+  })
+  .strict();
+
+export type IdaCommandRun = z.infer<typeof idaCommandRunSchema>;
+
+export const idaCommandRunCursorSchema = z
+  .object({
+    createdAt: timestampSchema,
+    id: entityIdSchema,
+  })
+  .strict();
+
+export type IdaCommandRunCursor = z.infer<typeof idaCommandRunCursorSchema>;
+
+export const idaCommandRunListQuerySchema = z
+  .object({
+    limit: z.coerce.number().int().min(1).max(30).optional(),
+    cursor: z
+      .string()
+      .min(1)
+      .max(512)
+      .regex(/^[A-Za-z0-9_-]+$/u)
+      .optional(),
+  })
+  .strict();
+
+export type IdaCommandRunListQuery = z.infer<typeof idaCommandRunListQuerySchema>;
+
+export const idaCommandRunPageSchema = z
+  .object({
+    items: z.array(idaCommandRunSchema).max(30),
+    nextCursor: z
+      .string()
+      .min(1)
+      .max(512)
+      .regex(/^[A-Za-z0-9_-]+$/u)
+      .optional(),
+  })
+  .strict();
+
+export const idaCommandRunListResponseSchema = z
+  .object({
+    data: idaCommandRunPageSchema,
+  })
+  .strict();
+
+export type IdaCommandRunListResponse = z.infer<typeof idaCommandRunListResponseSchema>;
 
 export const explicitApprovalSchema = z.object({
   approvalId: entityIdSchema,

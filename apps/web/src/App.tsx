@@ -21,11 +21,13 @@ import {
   fetchCampaigns,
   fetchDashboardSnapshot,
   fetchEditorialCalendar,
+  fetchIdaCommandRuns,
   fetchMediaAssets,
   fetchMemories,
   fetchReleases,
   fetchTasks,
   IdaApiError,
+  type IdaCommandRunRecord,
   isApiConfigured,
   type MediaSearchInput,
   type MediaSearchType,
@@ -86,6 +88,23 @@ const initialMessages: ConversationMessage[] = [
     meta: "IDA · command center",
   },
 ];
+
+function commandRunsToMessages(commandRuns: IdaCommandRunRecord[]): ConversationMessage[] {
+  return [...commandRuns].reverse().flatMap((commandRun) => [
+    {
+      id: `command-${commandRun.id}-user`,
+      role: "user" as const,
+      content: commandRun.message,
+      meta: "You",
+    },
+    {
+      id: `command-${commandRun.id}-assistant`,
+      role: "assistant" as const,
+      content: commandRun.responseMessage,
+      meta: `IDA · ${commandRun.state}`,
+    },
+  ]);
+}
 
 const localDashboard: DashboardSnapshot = {
   systemServices: localSystemServices,
@@ -189,8 +208,16 @@ function CommandComposer({
   );
 }
 
-function ConversationPanel({ messages }: { messages: ConversationMessage[] }) {
-  const latest = messages.slice(-3);
+function ConversationPanel({
+  messages,
+  limit = 3,
+  contextLabel = "Dernières réponses",
+}: {
+  messages: ConversationMessage[];
+  limit?: number;
+  contextLabel?: string;
+}) {
+  const latest = messages.slice(-limit);
 
   return (
     <section className="panel conversation-panel" aria-labelledby="conversation-title">
@@ -199,7 +226,7 @@ function ConversationPanel({ messages }: { messages: ConversationMessage[] }) {
           <p className="eyebrow">LIVE CONTEXT</p>
           <h2 id="conversation-title">Conversation</h2>
         </div>
-        <span className="quiet-label">Dernières réponses</span>
+        <span className="quiet-label">{contextLabel}</span>
       </div>
       <div className="conversation-stream" aria-live="polite">
         {latest.map((message) => (
@@ -3035,7 +3062,7 @@ function SystemView({ dashboard, source }: { dashboard: DashboardSnapshot; sourc
 function IdaView({ messages }: { messages: ConversationMessage[] }) {
   return (
     <div className="page-grid ida-view">
-      <ConversationPanel messages={messages} />
+      <ConversationPanel messages={messages} limit={24} contextLabel="Historique privé" />
       <section className="panel helper-panel">
         <p className="eyebrow">COMMAND POLICY</p>
         <h2>Every action has a boundary.</h2>
@@ -3178,6 +3205,37 @@ function App() {
         setDashboard(localDashboard);
         setDashboardSource("local");
         setDashboardNotice(`Aperçu local : ${reason}`);
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    if (!isApiConfigured) {
+      return () => {
+        isCurrent = false;
+      };
+    }
+
+    // Les commandes terminées sont restaurées séparément des données du
+    // dashboard : un échec de cette lecture ne doit pas masquer le hub ni
+    // transformer l'historique local en mémoire persistante.
+    void fetchIdaCommandRuns({ limit: 12 })
+      .then((page) => {
+        if (!isCurrent || page.items.length === 0) {
+          return;
+        }
+
+        const restoredMessages = commandRunsToMessages(page.items);
+        setMessages((current) => (current.every((message) => message.id === "welcome") ? restoredMessages : current));
+      })
+      .catch(() => {
+        // Une API antérieure ou indisponible conserve simplement l'accueil
+        // éphémère. Aucun message n'est inventé ni envoyé en mode fallback.
       });
 
     return () => {

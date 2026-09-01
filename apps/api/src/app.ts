@@ -21,6 +21,10 @@ import {
   campaignReleaseLinkParamsSchema,
   campaignReleaseLinkSchema,
   campaignSchema,
+  idaCommandRunCursorSchema,
+  idaCommandRunListQuerySchema,
+  idaCommandRunListResponseSchema,
+  idaCommandRunSchema,
   internalPostScheduleSchema,
   mediaAssetSchema,
   mediaImportSchema,
@@ -52,6 +56,7 @@ import {
   type ArtistProfile,
   type CalendarItem,
   type Campaign,
+  type CommandRunHistoryEntry,
   DemoDatabase,
   type DemoDatabaseOptions,
   type InternalPostSchedule,
@@ -419,6 +424,15 @@ class ActivityLogQueryInputError extends Error {
   }
 }
 
+class CommandRunHistoryQueryInputError extends Error {
+  readonly statusCode = 400;
+  readonly code = "INVALID_COMMAND_HISTORY_QUERY";
+
+  constructor() {
+    super("La pagination de l’historique des commandes est invalide.");
+  }
+}
+
 class MediaImportError extends Error {
   constructor(
     readonly statusCode: number,
@@ -709,6 +723,37 @@ function decodeActivityLogCursor(cursor: string) {
   }
 }
 
+function toCommandRunHistoryResponse(commandRun: CommandRunHistoryEntry) {
+  return idaCommandRunSchema.parse({
+    id: commandRun.id,
+    intent: commandRun.intent,
+    state: commandRun.state,
+    requestedPermission: commandRun.requestedPermission,
+    message: commandRun.message,
+    responseMessage: commandRun.responseMessage,
+    createdAt: commandRun.createdAt,
+  });
+}
+
+function encodeCommandRunHistoryCursor(cursor: { createdAt: string; id: string }): string {
+  return Buffer.from(JSON.stringify(idaCommandRunCursorSchema.parse(cursor)), "utf8").toString("base64url");
+}
+
+function decodeCommandRunHistoryCursor(cursor: string) {
+  try {
+    const decoded = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as unknown;
+    const parsed = idaCommandRunCursorSchema.safeParse(decoded);
+
+    if (!parsed.success) {
+      throw new Error("Cursor invalide.");
+    }
+
+    return parsed.data;
+  } catch {
+    throw new CommandRunHistoryQueryInputError();
+  }
+}
+
 function toMemoryResponse(memory: Memory) {
   return memorySchema.parse({
     id: memory.id,
@@ -882,7 +927,8 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
       error instanceof InternalPostScheduleInputError ||
       error instanceof CalendarQueryInputError ||
       error instanceof MediaListQueryInputError ||
-      error instanceof ActivityLogQueryInputError
+      error instanceof ActivityLogQueryInputError ||
+      error instanceof CommandRunHistoryQueryInputError
     ) {
       return reply.status(error.statusCode).send({
         error: { code: error.code, message: error.message },
@@ -1651,6 +1697,29 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
         }),
       ),
     };
+  });
+
+  app.get("/v1/ida/command-runs", async (request) => {
+    const query = idaCommandRunListQuerySchema.safeParse(request.query);
+
+    if (!query.success) {
+      throw new CommandRunHistoryQueryInputError();
+    }
+
+    // L'historique ne peut pas sélectionner un workspace ou un acteur, ni
+    // demander le résultat complet d'un outil. Le curseur est validé avant
+    // la requête.
+    const page = await database.listCommandRuns(demoContext.workspaceId, demoContext.userId, {
+      limit: query.data.limit,
+      ...(query.data.cursor ? { cursor: decodeCommandRunHistoryCursor(query.data.cursor) } : {}),
+    });
+
+    return idaCommandRunListResponseSchema.parse({
+      data: {
+        items: page.items.map(toCommandRunHistoryResponse),
+        ...(page.nextCursor ? { nextCursor: encodeCommandRunHistoryCursor(page.nextCursor) } : {}),
+      },
+    });
   });
 
   app.post("/v1/ida/commands", async (request) => ({ data: await core.execute(request.body) }));

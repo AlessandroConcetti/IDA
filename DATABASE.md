@@ -91,7 +91,7 @@ Les transitions de consentement actuelles sont uniquement `PENDING → CONFIRMED
 |---|---|---|
 | `conversations` | `id`, `workspace_id`, `user_id`, `title`, `last_message_at`, `archived_at?` | Historique synchronisé entre desktop et mobile. |
 | `messages` | `id`, `conversation_id`, `role`, `content`, `attachments_json`, `created_at` | Messages `USER`, `ASSISTANT`, `TOOL`, `SYSTEM`. Les secrets et payloads sensibles ne sont jamais ajoutés à `content`. |
-| `command_runs` | `id`, `workspace_id`, `conversation_id?`, `source_message_id?`, `intent`, `state`, `input_snapshot`, `result_snapshot`, `correlation_id` | Exécution d’une commande naturelle et lien vers les agents/outils appelés. |
+| `command_runs` | Runtime local : `id`, `workspace_id`, `actor_user_id`, `input_message`, `response_message`, `intent`, `state`, `requested_permission`, `created_at`, `completed_at` | Registre privé, borné et uniquement local des paires de messages `READ / COMPLETED` du même acteur/workspace. La cible de production pourra le relier à une conversation, des agents et des exécutions d’outil via des tables séparées. |
 | `prompts` | `id`, `key`, `version`, `purpose`, `template`, `is_active` | Versionne les prompts contrôlés par le produit. Unique sur `(key, version)`. |
 | `agent_runs` | `id`, `command_run_id`, `agent_key`, `input_summary`, `output_summary`, `state`, `duration_ms` | Journalise le routage sans donner de pouvoir direct aux agents. |
 | `tools` | `id`, `key`, `version`, `permission_level`, `input_schema_version`, `is_active` | Catalogue déclaratif des outils autorisés. Le code reste la source de vérité des implémentations. |
@@ -99,9 +99,11 @@ Les transitions de consentement actuelles sont uniquement `PENDING → CONFIRMED
 | `activity_logs` | Runtime local : `id`, `workspace_id`, `actor_user_id`, `action`, `entity_type`, `entity_id`, `payload`, `created_at` | Journal append-only pour audit, diagnostic et explication des actions d’IDA. Le `payload` reste interne ; il n’est pas une réponse API. Une évolution de production pourra ajouter des métadonnées redacted, corrélation et acteurs système sans modifier la projection utilisateur. |
 | `system_events` | `id`, `workspace_id?`, `component`, `severity`, `code`, `message`, `details_redacted`, `resolved_at?` | État et incidents : IA, stockage, scheduler, intégrations. |
 
-États de `command_runs` : `RECEIVED`, `PLANNING`, `AWAITING_APPROVAL`, `EXECUTING`, `COMPLETED`, `FAILED`, `CANCELLED`.
+États de `command_runs` : `RECEIVED`, `UNDERSTOOD`, `PLANNED`, `AWAITING_APPROVAL`, `EXECUTING`, `COMPLETED`, `FAILED`, `CANCELLED`. Le runtime local n’écrit et ne liste pour l’instant que `COMPLETED`.
 
 Dans le runtime local, `GET /v1/activity-logs` n’est pas un accès brut à `activity_logs` : il projette seulement `id`, `action`, `entity_type`, `entity_id` et `created_at`, dans le workspace résolu côté serveur. Son allowlist couvre les actions Phase 1 des campagnes, tracks, médias, mémoires, variantes de post et tâches ; les actions inconnues ou futures, dont Finance/Banque, ne sont pas visibles par défaut. Le `payload`, l’acteur et le workspace ne sont jamais sélectionnés pour cette réponse, et une lecture n’ajoute pas d’événement d’audit.
+
+Dans ce même runtime, `command_runs` garde au plus 4&nbsp;000 caractères pour la demande et la réponse affichable d’IDA. Aucun résultat détaillé d’outil, paramètre, prompt, payload externe, trace de modèle ou contenu de mémoire n’est enregistré. L’index `(workspace_id, actor_user_id, created_at DESC, id DESC)` sert à la pagination par cléset ; la valeur de curseur interne conserve les microsecondes afin que deux commandes proches ne soient ni perdues ni répétées. Une écriture réussie produit l’audit redacted `command.completed` avec seulement intention, état et permission ; cette action n’est pas visible dans la projection utilisateur. Le registre reste distinct de la future conversation complète et ne constitue jamais une mémoire durable.
 
 ### Contenu, approbation, calendrier et tâches
 

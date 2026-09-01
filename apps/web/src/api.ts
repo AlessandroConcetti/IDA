@@ -6,6 +6,26 @@ export interface IdaCommandResult {
   state?: string;
 }
 
+export interface IdaCommandRunRecord {
+  id: string;
+  intent: string;
+  state: string;
+  requestedPermission: string;
+  message: string;
+  responseMessage: string;
+  createdAt: string;
+}
+
+export interface IdaCommandRunPage {
+  items: IdaCommandRunRecord[];
+  nextCursor?: string;
+}
+
+export interface IdaCommandRunListInput {
+  limit?: number;
+  cursor?: string;
+}
+
 export interface DashboardSnapshot {
   systemServices: SystemService[];
   tracks: Track[];
@@ -252,6 +272,46 @@ function extractResult(payload: unknown): IdaCommandResult {
   };
 }
 
+function toIdaCommandRun(record: Record<string, unknown>): IdaCommandRunRecord {
+  const id = readString(record.id);
+  const intent = readString(record.intent);
+  const state = readString(record.state);
+  const requestedPermission = readString(record.requestedPermission);
+  const message = readString(record.message);
+  const responseMessage = readString(record.responseMessage);
+  const createdAt = readString(record.createdAt);
+
+  if (
+    !id ||
+    !intent ||
+    !state ||
+    !requestedPermission ||
+    !message ||
+    !responseMessage ||
+    !createdAt ||
+    Number.isNaN(Date.parse(createdAt))
+  ) {
+    throw new IdaApiError("Une commande enregistrée par IDA est invalide.");
+  }
+
+  return { id, intent, state, requestedPermission, message, responseMessage, createdAt };
+}
+
+function toIdaCommandRunPage(payload: unknown): IdaCommandRunPage {
+  const data = readDataObject(payload, "/v1/ida/command-runs");
+
+  if (!Array.isArray(data.items) || !data.items.every(isRecord)) {
+    throw new IdaApiError("La réponse /v1/ida/command-runs n’a pas le format attendu.");
+  }
+
+  const nextCursor = readString(data.nextCursor);
+
+  return {
+    items: data.items.map(toIdaCommandRun),
+    ...(nextCursor === undefined ? {} : { nextCursor }),
+  };
+}
+
 function extractErrorMessage(payload: unknown, status: number): string {
   if (isRecord(payload)) {
     const data = isRecord(payload.data) ? payload.data : {};
@@ -273,6 +333,17 @@ export async function submitIdaCommand(text: string): Promise<IdaCommandResult> 
       source: "web",
     }),
   );
+}
+
+export async function fetchIdaCommandRuns(input: IdaCommandRunListInput = {}): Promise<IdaCommandRunPage> {
+  const query = new URLSearchParams();
+  query.set("limit", String(input.limit ?? 12));
+
+  if (input.cursor) {
+    query.set("cursor", input.cursor);
+  }
+
+  return toIdaCommandRunPage(await getApiJson(`/v1/ida/command-runs?${query.toString()}`));
 }
 
 async function postApiJson(path: string, body?: unknown): Promise<unknown> {

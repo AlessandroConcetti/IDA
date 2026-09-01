@@ -87,6 +87,7 @@ describe("IDA API — première tranche Phase 1", () => {
       "/v1/modules",
       "/v1/system/status",
       "/v1/activity-logs",
+      "/v1/ida/command-runs",
       "/v1/artist-profile",
       "/v1/releases",
       "/v1/campaigns",
@@ -227,6 +228,279 @@ describe("IDA API — première tranche Phase 1", () => {
       const after = await setupDatabase.pglite.query<{ count: number }>(`
         SELECT COUNT(*)::int AS count
         FROM activity_logs
+        WHERE workspace_id IN ('wsp_demo_aless', 'wsp_other')
+      `);
+      expect(after.rows[0]?.count).toBe(before.rows[0]?.count);
+    } finally {
+      await setupDatabase?.close();
+      await isolatedApp?.close();
+      await rm(dataDir, { recursive: true, force: true });
+    }
+  });
+
+  it("persiste une commande terminée sans en faire une mémoire ni une trace d’outil", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "ida-command-history-persist-"));
+    let firstApp: Awaited<ReturnType<typeof createApp>> | undefined;
+    let restartedApp: Awaited<ReturnType<typeof createApp>> | undefined;
+    let inspectedDatabase: DemoDatabase | undefined;
+
+    try {
+      firstApp = await createApp({
+        dataDir,
+        storageDir,
+        now: () => new Date("2026-09-01T12:00:00.000Z"),
+      });
+      const invalid = await firstApp.inject({
+        method: "POST",
+        url: "/v1/ida/commands",
+        payload: { message: "x".repeat(4_001) },
+      });
+      expect(invalid.statusCode).toBe(400);
+      expect(invalid.json()).toMatchObject({ error: { code: "INVALID_COMMAND" } });
+
+      const before = await firstApp.inject({ method: "GET", url: "/v1/ida/command-runs" });
+      expect(before.statusCode).toBe(200);
+      expect(before.json()).toMatchObject({ data: { items: [] } });
+
+      const submitted = await firstApp.inject({
+        method: "POST",
+        url: "/v1/ida/commands",
+        payload: { message: "IDA, montre-moi mes contenus inutilisés." },
+      });
+      expect(submitted.statusCode).toBe(200);
+      const submittedBody = submitted.json() as {
+        data: { commandRunId: string; state: string; command: { id: string }; message: string };
+      };
+      expect(submittedBody.data).toMatchObject({
+        commandRunId: submittedBody.data.command.id,
+        state: "COMPLETED",
+        message: expect.stringContaining("contenu"),
+      });
+
+      const listed = await firstApp.inject({ method: "GET", url: "/v1/ida/command-runs?limit=12" });
+      expect(listed.statusCode).toBe(200);
+      const listedBody = listed.json() as {
+        data: {
+          items: Array<{
+            id: string;
+            intent: string;
+            state: string;
+            requestedPermission: string;
+            message: string;
+            responseMessage: string;
+            createdAt: string;
+          }>;
+        };
+      };
+      expect(listedBody.data.items).toEqual([
+        expect.objectContaining({
+          id: submittedBody.data.commandRunId,
+          intent: "LIST_UNUSED_CONTENT",
+          state: "COMPLETED",
+          requestedPermission: "READ",
+          message: "IDA, montre-moi mes contenus inutilisés.",
+          responseMessage: submittedBody.data.message,
+        }),
+      ]);
+      const serializedListed = JSON.stringify(listedBody);
+      for (const forbiddenValue of ["wsp_demo_aless", "usr_demo_aless", "tools", "result", "parameters", "payload"]) {
+        expect(serializedListed).not.toContain(forbiddenValue);
+      }
+
+      await firstApp.close();
+      firstApp = undefined;
+      restartedApp = await createApp({ dataDir, storageDir });
+      const afterRestart = await restartedApp.inject({ method: "GET", url: "/v1/ida/command-runs?limit=12" });
+      expect(afterRestart.statusCode).toBe(200);
+      expect((afterRestart.json() as { data: { items: Array<{ id: string; message: string }> } }).data.items).toEqual([
+        expect.objectContaining({
+          id: submittedBody.data.commandRunId,
+          message: "IDA, montre-moi mes contenus inutilisés.",
+        }),
+      ]);
+      const projectedAudit = await restartedApp.inject({ method: "GET", url: "/v1/activity-logs?limit=30" });
+      expect(projectedAudit.statusCode).toBe(200);
+      expect(JSON.stringify(projectedAudit.json())).not.toContain(submittedBody.data.commandRunId);
+
+      await restartedApp.close();
+      restartedApp = undefined;
+      inspectedDatabase = await DemoDatabase.open({ dataDir, seed: false });
+      const persisted = await inspectedDatabase.pglite.query<{ count: number }>(`
+        SELECT COUNT(*)::int AS count
+        FROM command_runs
+        WHERE workspace_id = 'wsp_demo_aless'
+      `);
+      const activities = await inspectedDatabase.pglite.query<{ count: number }>(`
+        SELECT COUNT(*)::int AS count
+        FROM activity_logs
+        WHERE workspace_id = 'wsp_demo_aless'
+      `);
+      expect(persisted.rows[0]?.count).toBe(1);
+      expect(activities.rows[0]?.count).toBe(1);
+      const audit = await inspectedDatabase.pglite.query<{
+        action: string;
+        entityType: string;
+        entityId: string;
+        payload: string;
+      }>(
+        `
+          SELECT
+            action,
+            entity_type AS "entityType",
+            entity_id AS "entityId",
+            payload::text AS payload
+          FROM activity_logs
+          WHERE workspace_id = 'wsp_demo_aless'
+        `,
+      );
+      expect(audit.rows).toEqual([
+        expect.objectContaining({
+          action: "command.completed",
+          entityType: "COMMAND_RUN",
+          entityId: submittedBody.data.commandRunId,
+          payload: expect.stringContaining('"requestedPermission":"READ"'),
+        }),
+      ]);
+      expect(audit.rows[0]?.payload).not.toContain("contenus inutilisés");
+      expect(audit.rows[0]?.payload).not.toContain(submittedBody.data.message);
+    } finally {
+      await inspectedDatabase?.close();
+      await restartedApp?.close();
+      await firstApp?.close();
+      await rm(dataDir, { recursive: true, force: true });
+    }
+  });
+
+  it("liste un historique de commandes borné, stable et isolé par acteur et workspace", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "ida-command-history-page-"));
+    let setupDatabase: DemoDatabase | undefined;
+    let isolatedApp: Awaited<ReturnType<typeof createApp>> | undefined;
+
+    try {
+      setupDatabase = await DemoDatabase.open({ dataDir });
+      await setupDatabase.pglite.exec(`
+        INSERT INTO command_runs (
+          id, workspace_id, actor_user_id, input_message, response_message,
+          intent, state, requested_permission, created_at, completed_at
+        )
+        VALUES
+          (
+            'cmd_history_z', 'wsp_demo_aless', 'usr_demo_aless', 'PRIVATE_DEMO_MESSAGE_Z', 'PRIVATE_DEMO_RESPONSE_Z',
+            'PREPARE_DAY', 'COMPLETED', 'READ', '2026-09-01T12:00:00.123900Z', '2026-09-01T12:00:00.123900Z'
+          ),
+          (
+            'cmd_history_y', 'wsp_demo_aless', 'usr_demo_aless', 'PRIVATE_DEMO_MESSAGE_Y', 'PRIVATE_DEMO_RESPONSE_Y',
+            'LIST_UNUSED_CONTENT', 'COMPLETED', 'READ', '2026-09-01T12:00:00.123500Z', '2026-09-01T12:00:00.123500Z'
+          ),
+          (
+            'cmd_history_precision_x', 'wsp_demo_aless', 'usr_demo_aless', 'PRIVATE_DEMO_MESSAGE_X', 'PRIVATE_DEMO_RESPONSE_X',
+            'UNKNOWN', 'COMPLETED', 'READ', '2026-09-01T12:00:00.123100Z', '2026-09-01T12:00:00.123100Z'
+          ),
+          (
+            'cmd_history_old', 'wsp_demo_aless', 'usr_demo_aless', 'PRIVATE_DEMO_MESSAGE_OLD', 'PRIVATE_DEMO_RESPONSE_OLD',
+            'UNKNOWN', 'COMPLETED', 'READ', '2026-09-01T11:59:00.000Z', '2026-09-01T11:59:00.000Z'
+          ),
+          (
+            'cmd_history_failed', 'wsp_demo_aless', 'usr_demo_aless', 'PRIVATE_FAILED_MESSAGE', 'PRIVATE_FAILED_RESPONSE',
+            'UNKNOWN', 'FAILED', 'READ', '2026-09-01T12:02:00.000Z', '2026-09-01T12:02:00.000Z'
+          ),
+          (
+            'cmd_history_write', 'wsp_demo_aless', 'usr_demo_aless', 'PRIVATE_WRITE_MESSAGE', 'PRIVATE_WRITE_RESPONSE',
+            'UNKNOWN', 'COMPLETED', 'WRITE', '2026-09-01T12:03:00.000Z', '2026-09-01T12:03:00.000Z'
+          ),
+          (
+            'cmd_history_publish', 'wsp_demo_aless', 'usr_demo_aless', 'PRIVATE_PUBLISH_MESSAGE', 'PRIVATE_PUBLISH_RESPONSE',
+            'UNKNOWN', 'COMPLETED', 'PUBLISH', '2026-09-01T12:04:00.000Z', '2026-09-01T12:04:00.000Z'
+          ),
+          (
+            'cmd_history_other_actor', 'wsp_demo_aless', 'usr_other', 'PRIVATE_OTHER_ACTOR_MESSAGE', 'PRIVATE_OTHER_ACTOR_RESPONSE',
+            'UNKNOWN', 'COMPLETED', 'READ', '2026-09-01T12:05:00.000Z', '2026-09-01T12:05:00.000Z'
+          ),
+          (
+            'cmd_history_other_workspace', 'wsp_other', 'usr_other', 'PRIVATE_OTHER_MESSAGE', 'PRIVATE_OTHER_RESPONSE',
+            'UNKNOWN', 'COMPLETED', 'READ', '2026-09-01T12:01:00.000Z', '2026-09-01T12:01:00.000Z'
+          );
+      `);
+      const before = await setupDatabase.pglite.query<{ count: number }>(`
+        SELECT COUNT(*)::int AS count
+        FROM command_runs
+        WHERE workspace_id IN ('wsp_demo_aless', 'wsp_other')
+      `);
+      await setupDatabase.close();
+      setupDatabase = undefined;
+
+      isolatedApp = await createApp({ dataDir, storageDir });
+      const invalidQueries = [
+        "/v1/ida/command-runs?workspaceId=wsp_other",
+        "/v1/ida/command-runs?limit=0",
+        "/v1/ida/command-runs?limit=1&limit=2",
+        "/v1/ida/command-runs?cursor=eyJmb28iOiJiYXIifQ",
+        `/v1/ida/command-runs?cursor=${"a".repeat(513)}`,
+      ];
+
+      for (const url of invalidQueries) {
+        const response = await isolatedApp.inject({ method: "GET", url });
+        expect(response.statusCode, url).toBe(400);
+        expect(response.json()).toMatchObject({ error: { code: "INVALID_COMMAND_HISTORY_QUERY" } });
+      }
+
+      const first = await isolatedApp.inject({ method: "GET", url: "/v1/ida/command-runs?limit=2" });
+      expect(first.statusCode).toBe(200);
+      const firstBody = first.json() as {
+        data: {
+          items: Array<{ id: string; message: string; responseMessage: string; state: string }>;
+          nextCursor?: string;
+        };
+      };
+      expect(firstBody.data.items.map((item) => item.id)).toEqual(["cmd_history_z", "cmd_history_y"]);
+      expect(firstBody.data.nextCursor).toEqual(expect.any(String));
+      expect(firstBody.data.items.every((item) => item.state === "COMPLETED")).toBe(true);
+
+      const second = await isolatedApp.inject({
+        method: "GET",
+        url: `/v1/ida/command-runs?limit=2&cursor=${encodeURIComponent(firstBody.data.nextCursor ?? "")}`,
+      });
+      expect(second.statusCode).toBe(200);
+      const secondBody = second.json() as {
+        data: { items: Array<{ id: string; message: string }>; nextCursor?: string };
+      };
+      expect(secondBody.data.items).toEqual([
+        expect.objectContaining({ id: "cmd_history_precision_x", message: "PRIVATE_DEMO_MESSAGE_X" }),
+        expect.objectContaining({ id: "cmd_history_old", message: "PRIVATE_DEMO_MESSAGE_OLD" }),
+      ]);
+      expect(secondBody.data.nextCursor).toBeUndefined();
+
+      const serializedHistory = JSON.stringify({ firstBody, secondBody });
+      for (const forbiddenValue of [
+        "wsp_demo_aless",
+        "usr_demo_aless",
+        "PRIVATE_OTHER_MESSAGE",
+        "PRIVATE_FAILED_MESSAGE",
+        "PRIVATE_WRITE_MESSAGE",
+        "PRIVATE_PUBLISH_MESSAGE",
+        "PRIVATE_OTHER_ACTOR_MESSAGE",
+        "payload",
+        "result",
+        "tools",
+        "parameters",
+        "completedAt",
+      ]) {
+        expect(serializedHistory).not.toContain(forbiddenValue);
+      }
+      const listedIds = [...firstBody.data.items, ...secondBody.data.items].map((item) => item.id);
+      expect(new Set(listedIds).size).toBe(4);
+      expect(listedIds).not.toContain("cmd_history_failed");
+      expect(listedIds).not.toContain("cmd_history_write");
+      expect(listedIds).not.toContain("cmd_history_publish");
+      expect(listedIds).not.toContain("cmd_history_other_actor");
+      expect(listedIds).not.toContain("cmd_history_other_workspace");
+
+      await isolatedApp.close();
+      isolatedApp = undefined;
+      setupDatabase = await DemoDatabase.open({ dataDir, seed: false });
+      const after = await setupDatabase.pglite.query<{ count: number }>(`
+        SELECT COUNT(*)::int AS count
+        FROM command_runs
         WHERE workspace_id IN ('wsp_demo_aless', 'wsp_other')
       `);
       expect(after.rows[0]?.count).toBe(before.rows[0]?.count);

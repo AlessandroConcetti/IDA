@@ -669,10 +669,50 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SocialPlatformListResponse'
+  /v1/ida/command-runs:
+    get:
+      operationId: listIdaCommandRuns
+      summary: Retourne l’historique privé des commandes IDA terminées
+      description: |
+        Retourne uniquement les paires de messages de commandes READ /
+        COMPLETED du même acteur dans le workspace résolu par le serveur.
+        Ne retourne ni résultat d’outil,
+        ni paramètres, ni prompt, ni payload, ni acteur ou workspace.
+        Cette lecture n’écrit aucun audit et ne rejoue pas une commande.
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+            default: 20
+        - name: cursor
+          in: query
+          required: false
+          description: Curseur opaque Base64URL de continuation.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 512
+            pattern: '^[A-Za-z0-9_-]+$'
+      responses:
+        '200':
+          description: Page de commandes terminées du workspace autorisé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IdaCommandRunListResponse'
+        '400':
+          $ref: '#/components/responses/InvalidCommandHistoryQuery'
+        '403':
+          $ref: '#/components/responses/Forbidden'
   /v1/ida/commands:
     post:
       operationId: executeIdaCommand
       summary: Exécute une commande IDA déterministe et en lecture seule
+      description: Une commande READ / COMPLETED est ajoutée à l’historique privé local, avec audit redacted sans texte libre, sans résultat détaillé d’outil ni mémoire implicite.
       requestBody:
         required: true
         content:
@@ -727,6 +767,12 @@ components:
   responses:
     InvalidCommand:
       description: Corps de commande ou filtre invalide
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InvalidCommandHistoryQuery:
+      description: Query d’historique inconnue, dupliquée ou pagination invalide
       content:
         application/json:
           schema:
@@ -1636,6 +1682,56 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SocialPlatformCapability'
+    IdaCommandIntent:
+      type: string
+      enum: [UNKNOWN, PREPARE_DAY, SEARCH_MEDIA, SEARCH_TRACK, LIST_UNUSED_CONTENT, CREATE_POST, UPDATE_POST, SCHEDULE_POST, ANALYZE_PERFORMANCE, CREATE_CAMPAIGN, GET_CALENDAR, CONNECT_SOCIAL_ACCOUNT, EXPLAIN_PROPOSAL, SAVE_MEMORY]
+    IdaCommandState:
+      type: string
+      enum: [RECEIVED, UNDERSTOOD, PLANNED, AWAITING_APPROVAL, EXECUTING, COMPLETED, FAILED, CANCELLED]
+    IdaCommandRun:
+      type: object
+      additionalProperties: false
+      required: [id, intent, state, requestedPermission, message, responseMessage, createdAt]
+      properties:
+        id: { type: string }
+        intent:
+          $ref: '#/components/schemas/IdaCommandIntent'
+        state:
+          $ref: '#/components/schemas/IdaCommandState'
+        requestedPermission:
+          enum: [READ, WRITE, APPROVAL_REQUIRED, PUBLISH, SYSTEM]
+        message:
+          type: string
+          minLength: 1
+          maxLength: 4000
+        responseMessage:
+          type: string
+          minLength: 1
+          maxLength: 4000
+        createdAt:
+          type: string
+          format: date-time
+    IdaCommandRunPage:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 30
+          items:
+            $ref: '#/components/schemas/IdaCommandRun'
+        nextCursor:
+          type: string
+          minLength: 1
+          maxLength: 512
+          pattern: '^[A-Za-z0-9_-]+$'
+    IdaCommandRunListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/IdaCommandRunPage'
     IdaCommandRequest:
       type: object
       required: [message]
@@ -1651,8 +1747,11 @@ components:
       properties:
         data:
           type: object
-          required: [command, kind, message, tools, result]
+          required: [commandRunId, state, command, kind, message, tools, result]
           properties:
+            commandRunId: { type: string }
+            state:
+              const: COMPLETED
             command:
               type: object
               required: [id, workspaceId, message, intent, state, requestedPermission, createdAt, updatedAt]

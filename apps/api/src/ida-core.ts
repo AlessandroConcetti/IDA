@@ -33,6 +33,8 @@ export type CommandToolUse = {
 
 export type CommandResponse = {
   command: IdaCommand;
+  commandRunId: string;
+  state: IdaCommand["state"];
   kind: DeterministicCommandKind;
   message: string;
   tools: CommandToolUse[];
@@ -41,6 +43,18 @@ export type CommandResponse = {
     system?: SystemStatus[];
   };
 };
+
+type CommandCompletion = Omit<CommandResponse, "command" | "commandRunId" | "state">;
+
+const idaCoreAllowedTools = [
+  { toolKey: "get_today", moduleKey: "TASKS", permission: "READ" },
+  { toolKey: "search_unused_media", moduleKey: "CONTENT", permission: "READ" },
+  { toolKey: "get_system_status", moduleKey: "SYSTEM", permission: "READ" },
+  { toolKey: "describe_supported_commands", moduleKey: "IDA", permission: "READ" },
+  // L'écriture locale n'est pas exposée dans la réponse de commande. Elle
+  // doit néanmoins rester explicitement allowlistée côté serveur.
+  { toolKey: "persist_command_history", moduleKey: "IDA", permission: "WRITE" },
+] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -123,10 +137,39 @@ export class DeterministicIdaCore {
 
   constructor(
     private readonly database: DemoDatabase,
-    gateway = new ToolGateway(),
+    gateway = new ToolGateway(undefined, idaCoreAllowedTools),
     private readonly now: () => Date = () => new Date(),
   ) {
     this.gateway = gateway;
+  }
+
+  private async complete(command: IdaCommand, completion: CommandCompletion): Promise<CommandResponse> {
+    const response: CommandResponse = {
+      command,
+      commandRunId: command.id,
+      state: command.state,
+      ...completion,
+    };
+
+    // Une commande réussie reste consultable pour le même acteur du même
+    // workspace après un rechargement. Le registre retient seulement la paire
+    // user/IDA, jamais le résultat détaillé des outils ni une mémoire durable.
+    this.gateway.assertAuthorized({
+      toolKey: "persist_command_history",
+      moduleKey: "IDA",
+      permission: "WRITE",
+    });
+    await this.database.createCommandRun(demoContext.workspaceId, demoContext.userId, {
+      id: command.id,
+      intent: command.intent,
+      state: command.state,
+      requestedPermission: command.requestedPermission,
+      message: command.message,
+      responseMessage: response.message,
+      createdAt: command.createdAt,
+    });
+
+    return response;
   }
 
   async execute(body: unknown): Promise<CommandResponse> {
@@ -159,8 +202,7 @@ export class DeterministicIdaCore {
         this.gateway.assertAuthorized({ toolKey: tool.key, moduleKey: tool.moduleKey, permission: tool.permission });
         const items = await this.database.listToday(demoContext.workspaceId);
 
-        return {
-          command,
+        return this.complete(command, {
           kind: classified.kind,
           message:
             items.length === 0
@@ -168,15 +210,14 @@ export class DeterministicIdaCore {
               : `Aujourd’hui, tu as ${items.length} élément${items.length > 1 ? "s" : ""} à suivre dans IDA.`,
           tools: [tool],
           result: { items },
-        };
+        });
       }
       case "UNUSED_CONTENT": {
         const tool: CommandToolUse = { key: "search_unused_media", moduleKey: "CONTENT", permission: "READ" };
         this.gateway.assertAuthorized({ toolKey: tool.key, moduleKey: tool.moduleKey, permission: tool.permission });
         const items = await this.database.listMedia(demoContext.workspaceId, { status: "UNUSED" });
 
-        return {
-          command,
+        return this.complete(command, {
           kind: classified.kind,
           message:
             items.length === 0
@@ -184,34 +225,32 @@ export class DeterministicIdaCore {
               : `J’ai trouvé ${items.length} contenu${items.length > 1 ? "s" : ""} inutilisé${items.length > 1 ? "s" : ""} à exploiter.`,
           tools: [tool],
           result: { items },
-        };
+        });
       }
       case "SYSTEM": {
         const tool: CommandToolUse = { key: "get_system_status", moduleKey: "SYSTEM", permission: "READ" };
         this.gateway.assertAuthorized({ toolKey: tool.key, moduleKey: tool.moduleKey, permission: tool.permission });
         const system = currentSystemStatus(timestamp);
 
-        return {
-          command,
+        return this.complete(command, {
           kind: classified.kind,
           message:
             "IDA est en mode démo local : la base est prête, les intégrations externes ne sont pas encore connectées.",
           tools: [tool],
           result: { system },
-        };
+        });
       }
       case "HELP": {
         const tool: CommandToolUse = { key: "describe_supported_commands", moduleKey: "IDA", permission: "READ" };
         this.gateway.assertAuthorized({ toolKey: tool.key, moduleKey: tool.moduleKey, permission: tool.permission });
 
-        return {
-          command,
+        return this.complete(command, {
           kind: classified.kind,
           message:
             "Je peux actuellement résumer ta journée, lister les contenus inutilisés et expliquer l’état du système. Essaie : « Qu’est-ce que j’ai aujourd’hui ? »",
           tools: [tool],
           result: {},
-        };
+        });
       }
     }
   }

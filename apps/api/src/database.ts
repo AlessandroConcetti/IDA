@@ -10,6 +10,8 @@ import type {
   ArtistProfileUpdate,
   CampaignCreate,
   CampaignReleaseLink,
+  IdaCommandRun,
+  IdaCommandRunCursor,
   MediaImport,
   MediaListQuery,
   MemoryProposalCreate,
@@ -196,6 +198,17 @@ export type ActivityLogEntry = {
 export type ActivityLogPage = {
   items: ActivityLogEntry[];
   nextCursor?: ActivityLogCursor;
+};
+
+// Le texte d'une commande appartient au workspace, mais sa valeur de tri
+// reste interne pour ne jamais perdre de microsecondes entre deux pages.
+export type CommandRunHistoryEntry = IdaCommandRun & {
+  cursorCreatedAt: string;
+};
+
+export type CommandRunHistoryPage = {
+  items: CommandRunHistoryEntry[];
+  nextCursor?: IdaCommandRunCursor;
 };
 
 export type ApprovalMedia = {
@@ -527,6 +540,19 @@ function toActivityLogEntry(row: ScalarRow): ActivityLogEntry {
     action: asString(row.action) as ActivityLogAction,
     entityType: asString(row.entityType) as ActivityLogEntityType,
     entityId: asString(row.entityId),
+    createdAt: asTimestamp(row.createdAt) ?? "1970-01-01T00:00:00.000Z",
+    cursorCreatedAt: asString(row.cursorCreatedAt),
+  };
+}
+
+function toCommandRunHistoryEntry(row: ScalarRow): CommandRunHistoryEntry {
+  return {
+    id: asString(row.id),
+    intent: asString(row.intent) as IdaCommandRun["intent"],
+    state: asString(row.state) as IdaCommandRun["state"],
+    requestedPermission: asString(row.requestedPermission) as IdaCommandRun["requestedPermission"],
+    message: asString(row.message),
+    responseMessage: asString(row.responseMessage),
     createdAt: asTimestamp(row.createdAt) ?? "1970-01-01T00:00:00.000Z",
     cursorCreatedAt: asString(row.cursorCreatedAt),
   };
@@ -938,6 +964,137 @@ export class DemoDatabase {
     );
     const hasNextPage = result.rows.length > limit;
     const items = result.rows.slice(0, limit).map(toActivityLogEntry);
+    const lastItem = items.at(-1);
+
+    return {
+      items,
+      ...(hasNextPage && lastItem
+        ? {
+            nextCursor: {
+              createdAt: lastItem.cursorCreatedAt,
+              id: lastItem.id,
+            },
+          }
+        : {}),
+    };
+  }
+
+  async createCommandRun(workspaceId: string, actorUserId: string, run: IdaCommandRun): Promise<void> {
+    if (run.state !== "COMPLETED" || run.requestedPermission !== "READ") {
+      throw new Error("Le registre local n’accepte que les commandes READ terminées.");
+    }
+
+    // Cette écriture garde uniquement la paire de messages nécessaire pour
+    // réhydrater l'historique local. Les résultats d'outils, paramètres,
+    // prompts et payloads ne sont ni stockés ici, ni recopiés dans l'audit.
+    // L'audit associé reste redacted et n'est jamais projeté dans la timeline.
+    await this.pglite.transaction(async (transaction) => {
+      await transaction.query(
+        `
+        INSERT INTO command_runs (
+          id,
+          workspace_id,
+          actor_user_id,
+          input_message,
+          response_message,
+          intent,
+          state,
+          requested_permission,
+          created_at,
+          completed_at
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)
+        `,
+        [
+          run.id,
+          workspaceId,
+          actorUserId,
+          run.message,
+          run.responseMessage,
+          run.intent,
+          run.state,
+          run.requestedPermission,
+          run.createdAt,
+        ],
+      );
+      await transaction.query(
+        `
+          INSERT INTO activity_logs (
+            id,
+            workspace_id,
+            actor_user_id,
+            action,
+            entity_type,
+            entity_id,
+            payload,
+            created_at
+          )
+          VALUES ($1, $2, $3, 'command.completed', 'COMMAND_RUN', $4, $5::json, $6)
+        `,
+        [
+          `act_${randomUUID().replaceAll("-", "")}`,
+          workspaceId,
+          actorUserId,
+          run.id,
+          JSON.stringify({
+            intent: run.intent,
+            state: run.state,
+            requestedPermission: run.requestedPermission,
+          }),
+          run.createdAt,
+        ],
+      );
+    });
+  }
+
+  async listCommandRuns(
+    workspaceId: string,
+    actorUserId: string,
+    options: { limit?: number; cursor?: IdaCommandRunCursor } = {},
+  ): Promise<CommandRunHistoryPage> {
+    const limit = options.limit ?? 20;
+    const values: unknown[] = [workspaceId, actorUserId];
+    const whereClauses = [
+      "command_run.workspace_id = $1",
+      "command_run.actor_user_id = $2",
+      "command_run.state = 'COMPLETED'",
+      "command_run.requested_permission = 'READ'",
+    ];
+
+    if (options.cursor) {
+      values.push(options.cursor.createdAt, options.cursor.id);
+      const createdAtPlaceholder = `$${values.length - 1}`;
+      const idPlaceholder = `$${values.length}`;
+      whereClauses.push(
+        `(command_run.created_at < ${createdAtPlaceholder} OR (command_run.created_at = ${createdAtPlaceholder} AND command_run.id < ${idPlaceholder}))`,
+      );
+    }
+
+    values.push(limit + 1);
+    const limitPlaceholder = `$${values.length}`;
+    const result = await this.pglite.query<ScalarRow>(
+      `
+        SELECT
+          command_run.id,
+          command_run.intent,
+          command_run.state,
+          command_run.requested_permission AS "requestedPermission",
+          command_run.input_message AS message,
+          command_run.response_message AS "responseMessage",
+          command_run.created_at AS "createdAt",
+          to_char(
+            command_run.created_at AT TIME ZONE 'UTC',
+            'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+          ) AS "cursorCreatedAt"
+        FROM command_runs command_run
+        WHERE ${whereClauses.join("\n          AND ")}
+        ORDER BY command_run.created_at DESC, command_run.id DESC
+        LIMIT ${limitPlaceholder}
+      `,
+      values,
+    );
+    const hasNextPage = result.rows.length > limit;
+    const items = result.rows.slice(0, limit).map(toCommandRunHistoryEntry);
     const lastItem = items.at(-1);
 
     return {
@@ -3202,6 +3359,44 @@ export class DemoDatabase {
         created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
 
+      -- Historique privé des commandes locales terminées. Il ne remplace pas
+      -- encore les conversations : aucun résultat d'outil, prompt, paramètre
+      -- ou payload n'y est retenu, et aucune mémoire n'en découle.
+      CREATE TABLE IF NOT EXISTS command_runs (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL REFERENCES workspaces(id),
+        actor_user_id TEXT NOT NULL REFERENCES users(id),
+        input_message TEXT NOT NULL,
+        response_message TEXT NOT NULL,
+        intent TEXT NOT NULL,
+        state TEXT NOT NULL,
+        requested_permission TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL,
+        completed_at TIMESTAMPTZ NOT NULL,
+        CONSTRAINT command_runs_input_message_length_check
+          CHECK (char_length(input_message) BETWEEN 1 AND 4000),
+        CONSTRAINT command_runs_response_message_length_check
+          CHECK (char_length(response_message) BETWEEN 1 AND 4000),
+        CONSTRAINT command_runs_intent_check CHECK (
+          intent IN (
+            'UNKNOWN', 'PREPARE_DAY', 'SEARCH_MEDIA', 'SEARCH_TRACK',
+            'LIST_UNUSED_CONTENT', 'CREATE_POST', 'UPDATE_POST',
+            'SCHEDULE_POST', 'ANALYZE_PERFORMANCE', 'CREATE_CAMPAIGN',
+            'GET_CALENDAR', 'CONNECT_SOCIAL_ACCOUNT', 'EXPLAIN_PROPOSAL',
+            'SAVE_MEMORY'
+          )
+        ),
+        CONSTRAINT command_runs_state_check CHECK (
+          state IN (
+            'RECEIVED', 'UNDERSTOOD', 'PLANNED', 'AWAITING_APPROVAL',
+            'EXECUTING', 'COMPLETED', 'FAILED', 'CANCELLED'
+          )
+        ),
+        CONSTRAINT command_runs_permission_check
+          CHECK (requested_permission IN ('READ', 'WRITE', 'APPROVAL_REQUIRED', 'PUBLISH', 'SYSTEM')),
+        CONSTRAINT command_runs_completed_after_created_check CHECK (completed_at >= created_at)
+      );
+
       CREATE INDEX IF NOT EXISTS idx_releases_workspace_date
         ON releases (workspace_id, release_date);
       CREATE INDEX IF NOT EXISTS idx_campaigns_workspace_status_created
@@ -3212,6 +3407,10 @@ export class DemoDatabase {
         ON activity_logs (workspace_id, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_activity_logs_workspace_created_id
         ON activity_logs (workspace_id, created_at DESC, id DESC);
+      CREATE INDEX IF NOT EXISTS idx_command_runs_workspace_created_id
+        ON command_runs (workspace_id, created_at DESC, id DESC);
+      CREATE INDEX IF NOT EXISTS idx_command_runs_workspace_actor_created_id
+        ON command_runs (workspace_id, actor_user_id, created_at DESC, id DESC);
       CREATE INDEX IF NOT EXISTS idx_media_workspace_status
         ON media_assets (workspace_id, status);
       CREATE INDEX IF NOT EXISTS idx_media_asset_tags_tag_asset

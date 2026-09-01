@@ -29,9 +29,9 @@ Le premier runtime est une API Fastify locale sur `http://127.0.0.1:8787`, conso
 | `GET /v1/calendar`, `POST /v1/post-variants/:variantId/internal-schedules` | Livrées | Calendrier éditorial et planification interne d’une variante déjà approuvée ; aucun job, compte social, adaptateur ou appel réseau n’est créé. |
 | `GET/POST /v1/tasks`, `POST /v1/tasks/:taskId/complete` | Livrées | Task Center local : création interne en `TODO`, finalisation explicite et idempotente, toujours isolées au workspace serveur. |
 | `GET /v1/social/platforms` | Livrée | Capacités déclaratives de démonstration ; aucune connexion sociale n’est créée. |
-| `POST /v1/ida/commands` | Livrée | Corps `{ "message": "…" }` ; commandes déterministes de lecture pour la journée, les contenus inutilisés et l’état système. |
+| `POST /v1/ida/commands`, `GET /v1/ida/command-runs` | Livrées | Commandes déterministes de lecture et historique privé, borné et paginé de leurs paires de messages terminées. |
 
-La commande retourne un objet `data` contenant la commande structurée, les outils de lecture autorisés et un résultat. À l’exception de la modification interne de l’Artist Brain, de la création Music Brain bornée, de l’import local privé, du flux de consentement mémoire, du registre de briefs de campagne, de l’Approval Center et du Task Center décrits ci-dessous, toute mutation, publication, intégration externe ou accès financier est hors de cette tranche et reste refusée par conception.
+La commande retourne un objet `data` contenant la commande structurée, les outils de lecture autorisés et un résultat. Une commande réussie ajoute aussi une entrée privée de réhydratation, sans résultat détaillé d’outil, ainsi qu’un audit redacted sans texte libre qui reste invisible dans la timeline. À l’exception de cette écriture locale, de la modification interne de l’Artist Brain, de la création Music Brain bornée, de l’import local privé, du flux de consentement mémoire, du registre de briefs de campagne, de l’Approval Center et du Task Center décrits ci-dessous, toute mutation, publication, intégration externe ou accès financier est hors de cette tranche et reste refusée par conception.
 
 ### Timeline d’activité System en lecture seule
 
@@ -40,6 +40,16 @@ La commande retourne un objet `data` contenant la commande structurée, les outi
 La réponse est bornée à `{ data: { items, nextCursor? } }`. Chaque item contient exactement `id`, `action`, `entityType`, `entityId` et `createdAt`. Le scope est imposé par le serveur et la pagination par cléset suit `created_at DESC, id DESC` : elle ne calcule aucun total et reste stable lorsque plusieurs entrées partagent le même instant.
 
 La projection ne sélectionne ni ne retourne le `payload` d’audit, `actor_user_id`, `workspace_id`, caption, préférence, hash, token, chemin, média privé ou détail libre. Seules les actions actuellement prévues par la tranche locale sont visibles : `campaign.created`, `campaign.release_linked`, `campaign.release_unlinked`, `track.created`, `media.imported`, `memory.proposed`, `memory.confirmed`, `memory.rejected`, `post_variant.approved`, `post_variant.rejected`, `post_variant.internal_scheduled`, `task.created` et `task.completed`. La consultation est sans effet : elle ne crée aucun nouvel audit. Les futurs domaines, notamment Finance et Banque, restent invisibles jusqu’à la définition et la revue d’une projection dédiée.
+
+### Historique privé des commandes IDA
+
+`POST /v1/ida/commands` reçoit `message` (texte non vide, au plus 4&nbsp;000 caractères) et exécute uniquement les commandes de lecture déterministes présentes dans la tranche locale. Une exécution terminée retourne aussi `commandRunId` et `state` au niveau de `data`, puis enregistre seulement la paire de messages utilisateur/IDA pour le même acteur du workspace résolu côté serveur. L’écriture passe par un outil interne allowlisté `IDA / WRITE` et laisse un audit `command.completed` redacted (intention, état et permission seulement), non projeté dans la timeline.
+
+`GET /v1/ida/command-runs` réhydrate cet historique avec `limit` (entier de `1` à `30`, `20` par défaut) et un `cursor` opaque Base64URL. Les paramètres sont stricts : tout paramètre inconnu, dupliqué — dont `workspaceId` —, toute limite ou tout curseur invalide répond `400 INVALID_COMMAND_HISTORY_QUERY`. La pagination par cléset suit `created_at DESC, id DESC` et conserve la précision microseconde du curseur, sans total ni offset.
+
+La réponse contient exactement `{ data: { items, nextCursor? } }`. Chaque item contient `id`, `intent`, `state`, `requestedPermission`, `message`, `responseMessage` et `createdAt`. Elle ne retourne ni acteur, ni workspace, ni paramètres, ni prompt, ni payload, ni résultat d’outil, ni identifiant de complétion. Seules les commandes `COMPLETED / READ` du même acteur et workspace serveur apparaissent ; une lecture n’ajoute pas d’activité et ne rejoue aucune commande.
+
+Ce registre n’est pas encore un historique conversationnel général : il ne sauvegarde pas les pièces jointes, le raisonnement, les appels d’outil ou le contexte de modèle, et il ne crée jamais de mémoire permanente. La route ne consomme pas encore de clé d’idempotence : un retry HTTP réussi crée donc une nouvelle entrée. Les contrôles de rétention, suppression, chiffrement de production et synchronisation multi-appareils réelle restent liés à l’identité/workspace de production, hors du runtime local.
 
 ### Artist Brain local éditable
 
@@ -336,8 +346,7 @@ GET    /v1/conversations/:conversationId/messages
 POST   /v1/conversations/:conversationId/messages
 
 POST   /v1/ida/commands
-GET    /v1/ida/command-runs/:commandRunId
-POST   /v1/ida/command-runs/:commandRunId/cancel
+GET    /v1/ida/command-runs
 
 GET    /v1/memories
 POST   /v1/memories/proposals
@@ -347,9 +356,9 @@ PATCH  /v1/memories/:memoryId
 DELETE /v1/memories/:memoryId
 ```
 
-`POST /v1/ida/commands` reçoit un texte ou une transcription et renvoie soit une réponse immédiate, soit un `commandRun` à suivre. Le statut peut être transmis ensuite par polling, SSE ou WebSocket lorsque cette capacité sera ajoutée.
+`POST /v1/ida/commands` reçoit actuellement un texte et renvoie une réponse déterministe immédiate, accompagnée d’un `commandRunId` et de l’état `COMPLETED`. `GET /v1/ida/command-runs` rend ensuite les dernières paires de messages terminées du même acteur et workspace. La transcription vocale, les exécutions longues, le détail par identifiant, l’annulation et les transports polling/SSE/WebSocket restent des capacités cibles, pas des routes livrées.
 
-Exemple de réponse asynchrone :
+Exemple de capacité cible asynchrone (non livrée) :
 
 ```json
 {
