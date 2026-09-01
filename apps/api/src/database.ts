@@ -5,6 +5,7 @@ import { PGlite } from "@electric-sql/pglite";
 import type {
   ArtistProfile as ArtistProfileContract,
   ArtistProfileUpdate,
+  CampaignCreate,
   MediaImport,
   MediaListQuery,
   MemoryProposalCreate,
@@ -139,6 +140,24 @@ export type TaskCompletionResult =
   | { kind: "already-completed"; task: Task }
   | { kind: "not-found" }
   | { kind: "not-actionable"; status: string };
+
+// Un brief de campagne ne porte volontairement ni release, ni dates, ni
+// piliers : ces associations arriveront avec leurs propres invariants plutôt
+// que comme un payload de création polymorphe.
+export type Campaign = {
+  id: string;
+  projectId: string;
+  name: string;
+  objective: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CampaignCreateResult =
+  | { kind: "created"; campaign: Campaign }
+  | { kind: "duplicate" }
+  | { kind: "project-not-found" };
 
 export type ApprovalMedia = {
   id: string;
@@ -439,6 +458,22 @@ function toTask(row: ScalarRow): Task {
     dueAt: asTimestamp(row.dueAt),
     completedBy: asNullableString(row.completedBy),
     completedAt: asTimestamp(row.completedAt),
+    createdAt: asTimestamp(row.createdAt) ?? "1970-01-01T00:00:00.000Z",
+    updatedAt: asTimestamp(row.updatedAt) ?? "1970-01-01T00:00:00.000Z",
+  };
+}
+
+function normalizeCampaignName(value: string): string {
+  return value.normalize("NFKC").trim().toLocaleLowerCase("fr-FR");
+}
+
+function toCampaign(row: ScalarRow): Campaign {
+  return {
+    id: asString(row.id),
+    projectId: asString(row.projectId),
+    name: asString(row.name),
+    objective: asString(row.objective),
+    status: asString(row.status),
     createdAt: asTimestamp(row.createdAt) ?? "1970-01-01T00:00:00.000Z",
     updatedAt: asTimestamp(row.updatedAt) ?? "1970-01-01T00:00:00.000Z",
   };
@@ -802,6 +837,111 @@ export class DemoDatabase {
       status: asString(row.status),
       description: asNullableString(row.description),
     }));
+  }
+
+  async listCampaigns(workspaceId: string): Promise<Campaign[]> {
+    const result = await this.pglite.query<ScalarRow>(
+      `
+        SELECT
+          id,
+          artist_project_id AS "projectId",
+          name,
+          objective,
+          status,
+          created_at AS "createdAt",
+          updated_at AS "updatedAt"
+        FROM campaigns
+        WHERE workspace_id = $1
+        ORDER BY created_at DESC, id DESC
+      `,
+      [workspaceId],
+    );
+
+    return result.rows.map(toCampaign);
+  }
+
+  async createCampaign(workspaceId: string, actorUserId: string, input: CampaignCreate): Promise<CampaignCreateResult> {
+    return this.pglite.transaction(async (transaction) => {
+      const projectResult = await transaction.query<ScalarRow>(
+        `
+          SELECT id
+          FROM artist_projects
+          WHERE workspace_id = $1
+          ORDER BY created_at ASC
+          LIMIT 1
+        `,
+        [workspaceId],
+      );
+      const project = projectResult.rows[0];
+
+      if (!project) {
+        return { kind: "project-not-found" };
+      }
+
+      const projectId = asString(project.id);
+      const normalizedName = normalizeCampaignName(input.name);
+
+      // La comparaison est normalisée côté serveur afin que deux variantes de
+      // casse ou de forme Unicode ne créent pas deux briefs équivalents.
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const campaignId = `cmp_${randomUUID().replaceAll("-", "")}`;
+        const result = await transaction.query<ScalarRow>(
+          `
+            INSERT INTO campaigns (
+              id, workspace_id, artist_project_id, name, normalized_name, objective, status
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, 'DRAFT')
+            ON CONFLICT DO NOTHING
+            RETURNING
+              id,
+              artist_project_id AS "projectId",
+              name,
+              objective,
+              status,
+              created_at AS "createdAt",
+              updated_at AS "updatedAt"
+          `,
+          [campaignId, workspaceId, projectId, input.name, normalizedName, input.objective],
+        );
+        const row = result.rows[0];
+
+        if (row) {
+          const campaign = toCampaign(row);
+          await transaction.query(
+            `
+              INSERT INTO activity_logs (id, workspace_id, actor_user_id, action, entity_type, entity_id, payload)
+              VALUES ($1, $2, $3, 'campaign.created', 'CAMPAIGN', $4, $5::json)
+            `,
+            [
+              `act_${randomUUID().replaceAll("-", "")}`,
+              workspaceId,
+              actorUserId,
+              campaign.id,
+              JSON.stringify({ status: campaign.status }),
+            ],
+          );
+
+          return { kind: "created", campaign };
+        }
+
+        const duplicate = await transaction.query<ScalarRow>(
+          `
+            SELECT id
+            FROM campaigns
+            WHERE workspace_id = $1
+              AND normalized_name = $2
+            LIMIT 1
+          `,
+          [workspaceId, normalizedName],
+        );
+
+        if (duplicate.rows[0]) {
+          return { kind: "duplicate" };
+        }
+      }
+
+      throw new Error("Impossible de générer un identifiant unique pour la campagne.");
+    });
   }
 
   async listTracks(workspaceId: string): Promise<Track[]> {
@@ -2562,6 +2702,23 @@ export class DemoDatabase {
         created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
 
+      -- Campaign Brief Registry : le brief reste interne. Les associations
+      -- release/contenu/calendrier et les piliers arriveront avec leurs
+      -- propres tables et autorisations, jamais par des colonnes implicites.
+      CREATE TABLE IF NOT EXISTS campaigns (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL REFERENCES workspaces(id),
+        artist_project_id TEXT NOT NULL REFERENCES artist_projects(id),
+        name TEXT NOT NULL,
+        normalized_name TEXT NOT NULL,
+        objective TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'DRAFT',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (workspace_id, normalized_name),
+        CONSTRAINT campaigns_status_check CHECK (status IN ('DRAFT', 'ACTIVE', 'PAUSED', 'COMPLETED', 'ARCHIVED'))
+      );
+
       CREATE TABLE IF NOT EXISTS tracks (
         id TEXT PRIMARY KEY,
         workspace_id TEXT NOT NULL REFERENCES workspaces(id),
@@ -2767,6 +2924,8 @@ export class DemoDatabase {
 
       CREATE INDEX IF NOT EXISTS idx_releases_workspace_date
         ON releases (workspace_id, release_date);
+      CREATE INDEX IF NOT EXISTS idx_campaigns_workspace_status_created
+        ON campaigns (workspace_id, status, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_tracks_workspace_status
         ON tracks (workspace_id, status);
       CREATE INDEX IF NOT EXISTS idx_activity_logs_workspace_created
@@ -3071,6 +3230,27 @@ export class DemoDatabase {
             ('rel_afterimage', $1, 'prj_demo_aless', 'Afterimage', 'EP', '2026-06-06', 'Aural Motion', 'RELEASED', 'EP publié au début de l''été.'),
             ('rel_other_workspace', 'wsp_other', 'prj_other_workspace', 'Private Release', 'SINGLE', '2026-10-01', 'Other', 'UNRELEASED', 'Donnée hors workspace démo.')
           ON CONFLICT (id) DO NOTHING
+        `,
+        [demoWorkspace.id],
+      );
+      await transaction.query(
+        `
+          INSERT INTO campaigns (
+            id, workspace_id, artist_project_id, name, normalized_name, objective, status, created_at, updated_at
+          )
+          VALUES
+            (
+              'cmp_lumiere_noire', $1, 'prj_demo_aless', 'Lumière Noire — préparation',
+              'lumière noire — préparation',
+              'Préparer un brief éditorial cohérent avant de relier la campagne à une release et à ses contenus.',
+              'DRAFT', '2026-08-29T10:00:00Z', '2026-08-29T10:00:00Z'
+            ),
+            (
+              'cmp_other_workspace', 'wsp_other', 'prj_other_workspace', 'Private campaign',
+              'private campaign', 'Brief privé hors du workspace démo.',
+              'DRAFT', '2026-08-29T11:00:00Z', '2026-08-29T11:00:00Z'
+            )
+          ON CONFLICT DO NOTHING
         `,
         [demoWorkspace.id],
       );

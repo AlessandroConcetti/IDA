@@ -164,6 +164,8 @@ La mémoire permanente reste opt-in : IDA demande confirmation avant de stocker 
 
 Le Task Center local applique les mêmes bornes : création strictement `TODO`, scope et acteur résolus côté serveur, et finalisation sans corps uniquement via `TODO|IN_PROGRESS → DONE`. Un retry de finalisation sur `DONE` est idempotent et ne réécrit ni données ni audit ; les autres états finaux sont non actionnables. Les outils `TASKS` / `WRITE` sont allowlistés, une tâche hors workspace répond comme absente, et les audits `task.created` / `task.completed` n’embarquent ni titre ni description.
 
+Le Campaign Brief Registry local accepte seulement `name` et `objective` sous `CAMPAIGNS` / `WRITE`. Le serveur impose workspace, projet, acteur, identifiant et état `DRAFT`, normalise le nom pour empêcher les doublons équivalents, et ne renvoie jamais le brief d’un autre workspace. L’audit `campaign.created` est append-only et redacted : l’identifiant est porté par l’événement et le payload ne contient que l’état, jamais le nom ni l’objectif. Cette écriture ne touche ni releases, contenus, posts, calendrier, tâches, médias, comptes sociaux, OAuth, notification, scheduler ou réseau ; l’ajout futur de ces relations devra obtenir ses propres contrats, tests de permissions et autorisations.
+
 L’Approval Center local ajoute seulement `post_variant.approved` et `post_variant.rejected` au journal append-only. Leurs payloads redacted contiennent les IDs, les états et le hash, jamais caption, hashtags, rationale, clé de stockage, chemin ou média privé. Une variante ou une approbation hors workspace répond comme absente ; une précondition erronée n’inscrit aucun audit.
 
 ## 10. Exploitation, sauvegardes et environnements

@@ -6,8 +6,9 @@ info:
     Contrat du runtime de développement local. Il expose uniquement des données
     de démonstration, des commandes IDA déterministes en lecture seule, une
     modification interne bornée de l’Artist Brain, une création Music Brain
-    strictement contrôlée, un flux de mémoire consentie local, un Approval
-    Center interne sans livraison et un Task Center interne contrôlé.
+    strictement contrôlée, un registre de briefs de campagne internes, un flux
+    de mémoire consentie local, un Approval Center interne sans livraison et
+    un Task Center interne contrôlé.
 servers:
   - url: http://127.0.0.1:8787
     description: API locale de développement
@@ -108,6 +109,50 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ReleaseListResponse'
+  /v1/campaigns:
+    get:
+      operationId: listCampaignBriefs
+      summary: Liste les briefs de campagne internes du workspace local
+      description: >-
+        Lecture isolée au workspace résolu côté serveur. Les briefs ne portent
+        encore ni release, ni date, ni pilier, ni contenu ou effet externe.
+      responses:
+        '200':
+          description: Briefs de campagne internes dans un ordre stable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CampaignListResponse'
+    post:
+      operationId: createCampaignBrief
+      summary: Crée un brief de campagne interne DRAFT
+      description: >-
+        Accepte uniquement name et objective. Le serveur impose workspace,
+        projet, acteur, identifiant et état DRAFT puis passe par l'outil
+        allowlisté create_campaign avec CAMPAIGNS/WRITE. Cette route ne crée
+        aucun lien de release, contenu, calendrier, tâche, notification ou
+        appel externe.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CampaignCreateRequest'
+      responses:
+        '201':
+          description: Brief de campagne DRAFT créé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CampaignResponse'
+        '400':
+          $ref: '#/components/responses/InvalidCampaign'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/CampaignAlreadyExists'
   /v1/tracks:
     get:
       operationId: listTracks
@@ -617,6 +662,18 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
+    InvalidCampaign:
+      description: Corps Campaign Brief invalide ou tentative de définir le scope, le projet, l'acteur ou l'état client
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    CampaignAlreadyExists:
+      description: Un brief avec le même nom normalisé existe déjà dans ce workspace
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
     InvalidMediaImport:
       description: Formulaire media invalide, champ inattendu ou tentative de définir le scope client
       content:
@@ -965,6 +1022,43 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Release'
+    CampaignStatus:
+      enum: [DRAFT, ACTIVE, PAUSED, COMPLETED, ARCHIVED]
+    Campaign:
+      type: object
+      additionalProperties: false
+      required: [id, workspaceId, artistProjectId, name, objective, status, createdAt, updatedAt]
+      properties:
+        id: { type: string, minLength: 1 }
+        workspaceId: { type: string, minLength: 1 }
+        artistProjectId: { type: string, minLength: 1 }
+        name: { type: string, minLength: 1, maxLength: 240 }
+        objective: { type: string, minLength: 1, maxLength: 2000 }
+        status:
+          $ref: '#/components/schemas/CampaignStatus'
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    CampaignCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [name, objective]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 240 }
+        objective: { type: string, minLength: 1, maxLength: 2000 }
+    CampaignResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/Campaign'
+    CampaignListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Campaign'
     Track:
       type: object
       required: [id, workspaceId, artistProjectId, title, artistCredit, status, createdAt, updatedAt]

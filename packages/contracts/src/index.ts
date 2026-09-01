@@ -360,6 +360,43 @@ export const taskCompleteParamsSchema = z
   })
   .strict();
 
+// Campaign Brief Registry --------------------------------------------------
+//
+// Cette première tranche conserve uniquement le brief créatif interne. Les
+// liens vers une release, les dates, piliers, contenus et transitions de
+// campagne seront ajoutés par des contrats dédiés, plutôt que d'être acceptés
+// prématurément comme champs libres.
+export const campaignStatusSchema = z.enum(["DRAFT", "ACTIVE", "PAUSED", "COMPLETED", "ARCHIVED"]);
+export type CampaignStatus = z.infer<typeof campaignStatusSchema>;
+
+const campaignNameSchema = z.string().trim().min(1).max(240);
+const campaignObjectiveSchema = z.string().trim().min(1).max(2_000);
+
+export const campaignSchema = z.object({
+  id: entityIdSchema,
+  workspaceId: entityIdSchema,
+  artistProjectId: entityIdSchema,
+  name: campaignNameSchema,
+  objective: campaignObjectiveSchema,
+  status: campaignStatusSchema,
+  createdAt: timestampSchema,
+  updatedAt: timestampSchema,
+});
+
+export type Campaign = z.infer<typeof campaignSchema>;
+
+// Le client soumet seulement le brief. L'état initial DRAFT, le scope, le
+// projet, l'acteur, les dates et l'identifiant sont toujours imposés côté
+// serveur.
+export const campaignCreateSchema = z
+  .object({
+    name: campaignNameSchema,
+    objective: campaignObjectiveSchema,
+  })
+  .strict();
+
+export type CampaignCreate = z.infer<typeof campaignCreateSchema>;
+
 export const socialPlatformSchema = z.enum(["INSTAGRAM", "TIKTOK", "YOUTUBE", "FACEBOOK"]);
 export type SocialPlatform = z.infer<typeof socialPlatformSchema>;
 

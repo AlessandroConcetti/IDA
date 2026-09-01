@@ -13,6 +13,8 @@ import {
   calendarQuerySchema,
   calendarRangeSchema,
   calendarResponseSchema,
+  campaignCreateSchema,
+  campaignSchema,
   internalPostScheduleSchema,
   mediaAssetSchema,
   mediaImportSchema,
@@ -42,6 +44,7 @@ import {
   type ApprovalQueueItem,
   type ArtistProfile,
   type CalendarItem,
+  type Campaign,
   DemoDatabase,
   type DemoDatabaseOptions,
   type InternalPostSchedule,
@@ -346,6 +349,15 @@ class TaskCompletionInputError extends Error {
   }
 }
 
+class CampaignInputError extends Error {
+  readonly statusCode = 400;
+  readonly code = "INVALID_CAMPAIGN";
+
+  constructor() {
+    super("Les champs transmis pour la campagne sont invalides.");
+  }
+}
+
 class ApprovalDecisionInputError extends Error {
   readonly statusCode = 400;
   readonly code = "INVALID_APPROVAL_DECISION";
@@ -627,6 +639,19 @@ function toTrackResponse(track: Track) {
   });
 }
 
+function toCampaignResponse(campaign: Campaign) {
+  return campaignSchema.parse({
+    id: campaign.id,
+    workspaceId: demoContext.workspaceId,
+    artistProjectId: campaign.projectId,
+    name: campaign.name,
+    objective: campaign.objective,
+    status: campaign.status,
+    createdAt: campaign.createdAt,
+    updatedAt: campaign.updatedAt,
+  });
+}
+
 function toMemoryResponse(memory: Memory) {
   return memorySchema.parse({
     id: memory.id,
@@ -740,6 +765,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     { toolKey: "create_task", moduleKey: "TASKS", permission: "WRITE" },
     { toolKey: "complete_task", moduleKey: "TASKS", permission: "WRITE" },
     { toolKey: "create_track", moduleKey: "MUSIC", permission: "WRITE" },
+    { toolKey: "create_campaign", moduleKey: "CAMPAIGNS", permission: "WRITE" },
     { toolKey: "import_media", moduleKey: "CONTENT", permission: "WRITE" },
     { toolKey: "decide_post_variant", moduleKey: "CONTENT", permission: "APPROVAL_REQUIRED" },
     { toolKey: "schedule_approved_post_variant", moduleKey: "CALENDAR", permission: "APPROVAL_REQUIRED" },
@@ -777,7 +803,11 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
       });
     }
 
-    if (error instanceof TaskInputError || error instanceof TaskCompletionInputError) {
+    if (
+      error instanceof TaskInputError ||
+      error instanceof TaskCompletionInputError ||
+      error instanceof CampaignInputError
+    ) {
       return reply.status(error.statusCode).send({
         error: { code: error.code, message: error.message },
       });
@@ -1220,6 +1250,45 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
         }),
       ),
     };
+  });
+
+  app.get("/v1/campaigns", async () => {
+    const campaigns = await database.listCampaigns(demoContext.workspaceId);
+
+    return { data: campaigns.map(toCampaignResponse) };
+  });
+
+  app.post("/v1/campaigns", async (request, reply) => {
+    const input = campaignCreateSchema.safeParse(request.body);
+
+    if (!input.success) {
+      throw new CampaignInputError();
+    }
+
+    toolGateway.assertAuthorized({
+      toolKey: "create_campaign",
+      moduleKey: "CAMPAIGNS",
+      permission: "WRITE",
+    });
+
+    // Cette route n'enregistre qu'un brief interne DRAFT. Scope, projet,
+    // acteur, identifiant et état sont toujours dérivés côté serveur ; aucun
+    // contenu, calendrier, compte social ou action externe n'est touché.
+    const result = await database.createCampaign(demoContext.workspaceId, demoContext.userId, input.data);
+
+    if (result.kind === "project-not-found") {
+      return reply.status(404).send({
+        error: { code: "ARTIST_PROJECT_NOT_FOUND", message: "Projet artistique introuvable." },
+      });
+    }
+
+    if (result.kind === "duplicate") {
+      return reply.status(409).send({
+        error: { code: "CAMPAIGN_ALREADY_EXISTS", message: "Une campagne avec ce nom existe déjà dans ce workspace." },
+      });
+    }
+
+    return reply.status(201).send({ data: toCampaignResponse(result.campaign) });
   });
 
   app.get("/v1/tracks", async () => {

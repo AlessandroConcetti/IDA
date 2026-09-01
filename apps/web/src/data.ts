@@ -134,7 +134,7 @@ export const sectionCopy: Record<NavigationId, { eyebrow: string; title: string;
   campaigns: {
     eyebrow: "CAMPAIGNS",
     title: "Shape the story.",
-    description: "Transforme une release en campagne cohérente.",
+    description: "Pose un brief créatif clair avant de relier les contenus et la release.",
   },
   analytics: {
     eyebrow: "ANALYTICS",

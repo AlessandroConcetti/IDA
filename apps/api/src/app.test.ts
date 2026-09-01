@@ -88,6 +88,7 @@ describe("IDA API — première tranche Phase 1", () => {
       "/v1/system/status",
       "/v1/artist-profile",
       "/v1/releases",
+      "/v1/campaigns",
       "/v1/tracks",
       "/v1/media",
       "/v1/memories",
@@ -431,6 +432,199 @@ describe("IDA API — première tranche Phase 1", () => {
         (track) => track.workspaceId === "wsp_demo_aless",
       ),
     ).toBe(true);
+  });
+
+  it("liste les Campaign Briefs uniquement dans le workspace serveur", async () => {
+    const response = await app.inject({ method: "GET", url: "/v1/campaigns?workspaceId=wsp_other" });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      data: Array<{ id: string; workspaceId: string; artistProjectId: string; name: string; status: string }>;
+    };
+
+    expect(body.data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "cmp_lumiere_noire",
+          workspaceId: "wsp_demo_aless",
+          artistProjectId: "prj_demo_aless",
+          status: "DRAFT",
+        }),
+      ]),
+    );
+    expect(body.data.some((campaign) => campaign.id === "cmp_other_workspace")).toBe(false);
+    expect(body.data.some((campaign) => campaign.name === "Private campaign")).toBe(false);
+    expect(body.data.every((campaign) => campaign.workspaceId === "wsp_demo_aless")).toBe(true);
+  });
+
+  it("crée un Campaign Brief DRAFT strictement scoped et bloque les doublons normalisés", async () => {
+    const invalid = await app.inject({
+      method: "POST",
+      url: "/v1/campaigns",
+      payload: {
+        id: "cmp_client",
+        workspaceId: "wsp_other",
+        artistProjectId: "prj_other_workspace",
+        actorUserId: "usr_other",
+        status: "ACTIVE",
+        name: "Tentative de campagne forcée",
+        objective: "Forcer un état et un scope externes.",
+      },
+    });
+
+    expect(invalid.statusCode).toBe(400);
+    expect(invalid.json()).toMatchObject({ error: { code: "INVALID_CAMPAIGN" } });
+
+    const created = await app.inject({
+      method: "POST",
+      url: "/v1/campaigns",
+      payload: {
+        name: "Lumière Noire — automne",
+        objective: "Centraliser le brief créatif avant tout plan de contenu.",
+      },
+    });
+
+    expect(created.statusCode).toBe(201);
+    const campaign = (
+      created.json() as {
+        data: {
+          id: string;
+          workspaceId: string;
+          artistProjectId: string;
+          name: string;
+          objective: string;
+          status: string;
+          createdAt: string;
+          updatedAt: string;
+        };
+      }
+    ).data;
+    expect(campaign).toMatchObject({
+      id: expect.stringMatching(/^cmp_[a-f0-9]{32}$/),
+      workspaceId: "wsp_demo_aless",
+      artistProjectId: "prj_demo_aless",
+      name: "Lumière Noire — automne",
+      objective: "Centraliser le brief créatif avant tout plan de contenu.",
+      status: "DRAFT",
+    });
+    expect(Number.isNaN(Date.parse(campaign.createdAt))).toBe(false);
+    expect(Number.isNaN(Date.parse(campaign.updatedAt))).toBe(false);
+    expect((campaign as Record<string, unknown>).normalizedName).toBeUndefined();
+
+    const duplicate = await app.inject({
+      method: "POST",
+      url: "/v1/campaigns",
+      payload: {
+        name: "  lumiÈre noire — AUTOMNE  ",
+        objective: "Ce brief ne doit jamais créer un second enregistrement.",
+      },
+    });
+    expect(duplicate.statusCode).toBe(409);
+    expect(duplicate.json()).toMatchObject({ error: { code: "CAMPAIGN_ALREADY_EXISTS" } });
+
+    const listing = await app.inject({ method: "GET", url: "/v1/campaigns" });
+    expect(listing.statusCode).toBe(200);
+    expect(
+      (listing.json() as { data: Array<{ id: string }> }).data.filter((item) => item.id === campaign.id),
+    ).toHaveLength(1);
+  });
+
+  it("journalise un Campaign Brief sans toucher aux ressources éditoriales ou sociales", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "ida-campaign-brief-"));
+    const isolatedStorageDir = await mkdtemp(join(tmpdir(), "ida-campaign-brief-storage-"));
+    let setupDatabase: DemoDatabase | undefined;
+    let isolatedApp: Awaited<ReturnType<typeof createApp>> | undefined;
+    let inspectedDatabase: DemoDatabase | undefined;
+
+    type CampaignBoundaryCounts = {
+      campaigns: number;
+      posts: number;
+      postVariants: number;
+      approvals: number;
+      media: number;
+      tasks: number;
+      scheduledPosts: number;
+      internalSchedules: number;
+      socialPlatforms: number;
+    };
+
+    const countBoundaryResources = async (database: DemoDatabase): Promise<CampaignBoundaryCounts> => {
+      const result = await database.pglite.query<CampaignBoundaryCounts>(`
+        SELECT
+          (SELECT COUNT(*)::int FROM campaigns WHERE workspace_id = 'wsp_demo_aless') AS campaigns,
+          (SELECT COUNT(*)::int FROM posts WHERE workspace_id = 'wsp_demo_aless') AS posts,
+          (SELECT COUNT(*)::int FROM post_variants WHERE workspace_id = 'wsp_demo_aless') AS "postVariants",
+          (SELECT COUNT(*)::int FROM approvals WHERE workspace_id = 'wsp_demo_aless') AS approvals,
+          (SELECT COUNT(*)::int FROM media_assets WHERE workspace_id = 'wsp_demo_aless') AS media,
+          (SELECT COUNT(*)::int FROM tasks WHERE workspace_id = 'wsp_demo_aless') AS tasks,
+          (SELECT COUNT(*)::int FROM scheduled_posts WHERE workspace_id = 'wsp_demo_aless') AS "scheduledPosts",
+          (SELECT COUNT(*)::int FROM internal_post_schedules WHERE workspace_id = 'wsp_demo_aless') AS "internalSchedules",
+          (SELECT COUNT(*)::int FROM social_platforms) AS "socialPlatforms"
+      `);
+
+      return result.rows[0] as CampaignBoundaryCounts;
+    };
+
+    try {
+      setupDatabase = await DemoDatabase.open({ dataDir });
+      const before = await countBoundaryResources(setupDatabase);
+      await setupDatabase.close();
+      setupDatabase = undefined;
+
+      isolatedApp = await createApp({ dataDir, storageDir: isolatedStorageDir });
+      const created = await isolatedApp.inject({
+        method: "POST",
+        url: "/v1/campaigns",
+        payload: {
+          name: "Brief audit campagne",
+          objective: "Vérifier les frontières avant toute extension de campagne.",
+        },
+      });
+      expect(created.statusCode).toBe(201);
+      const campaignId = (created.json() as { data: { id: string } }).data.id;
+      await isolatedApp.close();
+      isolatedApp = undefined;
+
+      inspectedDatabase = await DemoDatabase.open({ dataDir, seed: false });
+      const after = await countBoundaryResources(inspectedDatabase);
+      expect(after).toEqual({ ...before, campaigns: before.campaigns + 1 });
+
+      const audit = await inspectedDatabase.pglite.query<{
+        action: string;
+        entityType: string;
+        entityId: string;
+        payload: string;
+      }>(
+        `
+          SELECT
+            action,
+            entity_type AS "entityType",
+            entity_id AS "entityId",
+            payload::text AS payload
+          FROM activity_logs
+          WHERE workspace_id = 'wsp_demo_aless'
+            AND action = 'campaign.created'
+            AND entity_id = $1
+        `,
+        [campaignId],
+      );
+
+      expect(audit.rows).toHaveLength(1);
+      expect(audit.rows[0]).toMatchObject({
+        action: "campaign.created",
+        entityType: "CAMPAIGN",
+        entityId: campaignId,
+      });
+      expect(audit.rows[0]?.payload).toContain('"status":"DRAFT"');
+      expect(audit.rows[0]?.payload).not.toContain("Brief audit campagne");
+      expect(audit.rows[0]?.payload).not.toContain("Vérifier les frontières");
+    } finally {
+      await setupDatabase?.close();
+      await isolatedApp?.close();
+      await inspectedDatabase?.close();
+      await rm(dataDir, { recursive: true, force: true });
+      await rm(isolatedStorageDir, { recursive: true, force: true });
+    }
   });
 
   it("met à jour et persiste l’Artist Brain avec un outil WRITE sans écraser les autres champs", async () => {

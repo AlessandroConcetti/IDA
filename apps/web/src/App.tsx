@@ -2,8 +2,12 @@ import { type DragEvent, type FormEvent, useEffect, useMemo, useRef, useState } 
 import {
   type ApprovalQueueItem,
   approvePostVariant,
+  type CampaignCreateInput,
+  type CampaignRecord,
+  type CampaignStatus,
   completeTask,
   confirmMemory,
+  createCampaign,
   createTask,
   createTrack,
   type DashboardSnapshot,
@@ -12,6 +16,7 @@ import {
   type EditorialCalendarView,
   fetchApprovalQueue,
   fetchArtistBrain,
+  fetchCampaigns,
   fetchDashboardSnapshot,
   fetchEditorialCalendar,
   fetchMediaAssets,
@@ -1612,31 +1617,212 @@ function CalendarView() {
   );
 }
 
+type CampaignForm = {
+  name: string;
+  objective: string;
+};
+
+const emptyCampaignForm: CampaignForm = {
+  name: "",
+  objective: "",
+};
+
+function campaignStatusLabel(status: CampaignStatus): string {
+  const labels: Record<CampaignStatus, string> = {
+    DRAFT: "BROUILLON",
+    ACTIVE: "ACTIVE",
+    PAUSED: "EN PAUSE",
+    COMPLETED: "TERMINÉE",
+    ARCHIVED: "ARCHIVÉE",
+  };
+
+  return labels[status];
+}
+
+function formatCampaignDate(value: string): string {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.valueOf())) {
+    return "Date inconnue";
+  }
+
+  return new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short", year: "numeric" }).format(date);
+}
+
 function CampaignsView() {
+  const [campaigns, setCampaigns] = useState<CampaignRecord[]>([]);
+  const [source, setSource] = useState<"loading" | "api" | "unavailable">("loading");
+  const [form, setForm] = useState<CampaignForm>(emptyCampaignForm);
+  const [notice, setNotice] = useState("Chargement des briefs de campagne IDA…");
+  const [noticeState, setNoticeState] = useState<"default" | "success" | "error">("default");
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    void fetchCampaigns()
+      .then((items) => {
+        if (!isCurrent) {
+          return;
+        }
+
+        setCampaigns(items);
+        setSource("api");
+        setNotice(
+          items.length
+            ? `${items.length} brief${items.length > 1 ? "s" : ""} interne${items.length > 1 ? "s" : ""} chargé${items.length > 1 ? "s" : ""}.`
+            : "Aucun brief de campagne n’est encore enregistré.",
+        );
+        setNoticeState("default");
+      })
+      .catch((error: unknown) => {
+        if (!isCurrent) {
+          return;
+        }
+
+        const reason = error instanceof IdaApiError ? error.message : "IDA API est indisponible.";
+        setSource("unavailable");
+        setNotice(`Les briefs de campagne ne peuvent pas être chargés : ${reason}`);
+        setNoticeState("error");
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, []);
+
+  function updateField(field: keyof CampaignForm, value: string) {
+    setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const name = form.name.trim();
+    const objective = form.objective.trim();
+
+    if (!name || !objective) {
+      setNotice("Le nom et l’objectif sont nécessaires pour créer un brief de campagne.");
+      setNoticeState("error");
+      return;
+    }
+
+    const input: CampaignCreateInput = { name, objective };
+    setIsSaving(true);
+
+    try {
+      const campaign = await createCampaign(input);
+      setCampaigns((current) => [campaign, ...current.filter((item) => item.id !== campaign.id)]);
+      setSource("api");
+      setForm(emptyCampaignForm);
+      setNotice(`« ${campaign.name} » est enregistré comme brief interne en brouillon.`);
+      setNoticeState("success");
+    } catch (error: unknown) {
+      const reason = error instanceof IdaApiError ? error.message : "IDA API est indisponible.";
+      setNotice(`Le brief n’a pas été enregistré : ${reason}`);
+      setNoticeState("error");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
   return (
     <div className="page-grid campaigns-view">
-      <section className="panel campaign-card">
+      <section className="panel wide-panel campaign-registry-card" aria-labelledby="campaign-registry-title">
         <div className="panel-heading">
           <div>
-            <p className="eyebrow">ACTIVE CAMPAIGN</p>
-            <h2>Next release</h2>
+            <p className="eyebrow">CAMPAIGN BRIEFS</p>
+            <h2 id="campaign-registry-title">Plan before pushing.</h2>
           </div>
-          <span className="status-tag scheduled">IN PREP</span>
+          <span className="status-tag demo">INTERNAL ONLY</span>
         </div>
-        <p className="campaign-objective">
-          Build anticipation through a studio hook, an artwork moment and a release reminder.
+        <p className="campaign-registry-intro">
+          Ces briefs organisent l’intention créative. Ils ne créent ni contenu, ni calendrier, ni tâche, ni action
+          sociale.
         </p>
-        <div className="campaign-pillars">
-          <span>Teaser</span>
-          <span>Studio</span>
-          <span>Artwork</span>
-          <span>Release</span>
+        <p className={`campaign-registry-notice ${noticeState}`} role="status">
+          <span aria-hidden="true" />
+          {notice}
+        </p>
+
+        {source === "loading" ? <p className="campaign-registry-empty">Chargement des briefs de campagne…</p> : null}
+        {source === "unavailable" ? (
+          <p className="campaign-registry-empty">La liste réapparaîtra lorsque l’API IDA sera disponible.</p>
+        ) : null}
+        {source === "api" && campaigns.length === 0 ? (
+          <p className="campaign-registry-empty">Commence par poser l’objectif créatif de ta prochaine campagne.</p>
+        ) : null}
+
+        <div className="campaign-registry-list" aria-live="polite">
+          {campaigns.map((campaign) => (
+            <article className="campaign-brief" key={campaign.id}>
+              <div className="campaign-brief-heading">
+                <div>
+                  <p>BRIEF INTERNE · {formatCampaignDate(campaign.createdAt)}</p>
+                  <h3>{campaign.name}</h3>
+                </div>
+                <span className={`campaign-status-tag ${campaign.status.toLocaleLowerCase("en-US")}`}>
+                  {campaignStatusLabel(campaign.status)}
+                </span>
+              </div>
+              <p>{campaign.objective}</p>
+            </article>
+          ))}
         </div>
       </section>
-      <section className="panel helper-panel">
-        <p className="eyebrow">CAMPAIGN MANAGER</p>
-        <h2>Plan before pushing.</h2>
-        <p>IDA pourra proposer les piliers et leurs contenus ; la stratégie restera validée par toi.</p>
+
+      <section className="panel campaign-create-card" aria-labelledby="campaign-create-title">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">NEW BRIEF</p>
+            <h2 id="campaign-create-title">Start with intent.</h2>
+          </div>
+          <span className="quiet-label">DRAFT ONLY</span>
+        </div>
+        <p className="campaign-create-intro">
+          IDA crée uniquement un brouillon local. Les releases, dates, piliers et contenus seront reliés dans une
+          prochaine tranche contrôlée.
+        </p>
+        <form className="campaign-create-form" noValidate onSubmit={handleSubmit}>
+          <label className="campaign-create-field">
+            <span>Nom</span>
+            <input
+              value={form.name}
+              onChange={(event) => updateField("name", event.target.value)}
+              placeholder="Ex. Lumière Noire — préparation"
+              maxLength={240}
+              required
+              disabled={isSaving || source !== "api"}
+            />
+          </label>
+          <label className="campaign-create-field">
+            <span>Objectif</span>
+            <textarea
+              value={form.objective}
+              onChange={(event) => updateField("objective", event.target.value)}
+              placeholder="Quelle intention la campagne doit-elle servir ?"
+              maxLength={2000}
+              rows={4}
+              required
+              disabled={isSaving || source !== "api"}
+            />
+          </label>
+          <div className="campaign-create-actions">
+            <p>Le workspace, le projet et l’état initial sont imposés côté serveur.</p>
+            <button className="send-button" type="submit" disabled={isSaving || source !== "api"}>
+              {isSaving ? "ENREGISTREMENT…" : "CREATE DRAFT"}
+              <span aria-hidden="true">↗</span>
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <section className="panel helper-panel campaign-boundary-card">
+        <p className="eyebrow">NEXT BOUNDARY</p>
+        <h2>Structure before automation.</h2>
+        <p>
+          Le Campaign Manager, les piliers, les liens de release et les recommandations IA restent désactivés tant que
+          leurs contrats, permissions et validations ne sont pas définis.
+        </p>
       </section>
     </div>
   );

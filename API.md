@@ -22,6 +22,7 @@ Le premier runtime est une API Fastify locale sur `http://127.0.0.1:8787`, conso
 | `GET /v1/modules` | Livrée | Registre des modules visibles du Command Center. |
 | `GET /v1/system/status` | Livrée | États factuels de la tranche locale ; les intégrations absentes sont `WARNING` ou `DISCONNECTED`. |
 | `GET/PATCH /v1/artist-profile`, `/v1/releases`, `GET/POST /v1/tracks`, `GET/POST /v1/media`, `GET /v1/memories` | Livrées | Données de démonstration isolées par workspace côté serveur. L’Artist Brain, la création bornée d’un morceau Music Brain et l’import local privé d’un média passent par des outils `WRITE` allowlistés ; `GET /v1/media` filtre localement par texte, statut, type et tag. |
+| `GET/POST /v1/campaigns` | Livrées | Registre local de briefs de campagne internes. La création force `DRAFT` via l’outil `create_campaign` (`CAMPAIGNS` / `WRITE`) et ne lie encore ni release, ni date, ni pilier, ni contenu. |
 | `POST /v1/memories/proposals`, `POST /v1/memories/:memoryId/confirm`, `POST /v1/memories/:memoryId/reject` | Livrées | Flux de mémoire consentie : une préférence commence forcément à `PENDING` et seule une décision humaine explicite peut la faire passer à `CONFIRMED` ou `REJECTED`. |
 | `GET /v1/approvals/queue`, `POST /v1/post-variants/:variantId/approve`, `POST /v1/post-variants/:variantId/reject` | Livrées | Approval Center local : propositions seedées en `REQUESTED`, préconditionnées par un hash de payload et décidées humainement ; aucune programmation ni publication n’en découle seule. |
 | `GET /v1/calendar`, `POST /v1/post-variants/:variantId/internal-schedules` | Livrées | Calendrier éditorial et planification interne d’une variante déjà approuvée ; aucun job, compte social, adaptateur ou appel réseau n’est créé. |
@@ -29,7 +30,7 @@ Le premier runtime est une API Fastify locale sur `http://127.0.0.1:8787`, conso
 | `GET /v1/social/platforms` | Livrée | Capacités déclaratives de démonstration ; aucune connexion sociale n’est créée. |
 | `POST /v1/ida/commands` | Livrée | Corps `{ "message": "…" }` ; commandes déterministes de lecture pour la journée, les contenus inutilisés et l’état système. |
 
-La commande retourne un objet `data` contenant la commande structurée, les outils de lecture autorisés et un résultat. À l’exception de la modification interne de l’Artist Brain, de la création Music Brain bornée, de l’import local privé, du flux de consentement mémoire, de l’Approval Center et du Task Center décrits ci-dessous, toute mutation, publication, intégration externe ou accès financier est hors de cette tranche et reste refusée par conception.
+La commande retourne un objet `data` contenant la commande structurée, les outils de lecture autorisés et un résultat. À l’exception de la modification interne de l’Artist Brain, de la création Music Brain bornée, de l’import local privé, du flux de consentement mémoire, du registre de briefs de campagne, de l’Approval Center et du Task Center décrits ci-dessous, toute mutation, publication, intégration externe ou accès financier est hors de cette tranche et reste refusée par conception.
 
 ### Artist Brain local éditable
 
@@ -48,6 +49,22 @@ La commande retourne un objet `data` contenant la commande structurée, les outi
 - L’écriture passe exclusivement par l’outil interne allowlisté `create_track` (`MUSIC`, `WRITE`). Il n’y a ni upload, ni association à un média, ni effet social ou externe.
 - L’identifiant `trk_…` est généré côté serveur, la clé primaire le protège contre les collisions et une activité append-only `track.created` est ajoutée dans le journal local.
 - Les valeurs sont bornées (BPM strictement positif et au plus 400, 30 tags maximum, description au plus 4 000 caractères). Une création réussie retourne `201 Created` et le morceau est visible uniquement dans `GET /v1/tracks` du workspace imposé par le serveur.
+
+### Campaign Brief Registry : création locale contrôlée
+
+`GET /v1/campaigns` liste les briefs internes du workspace imposé par le serveur, dans l’ordre stable de création décroissante. `POST /v1/campaigns` accepte strictement :
+
+```json
+{
+  "name": "Lumière Noire — préparation",
+  "objective": "Poser le brief créatif avant tout plan de contenu."
+}
+```
+
+- `name` est borné à 240 caractères et `objective` à 2 000. Le corps refuse `id`, `workspaceId`, `artistProjectId`, acteur, statut, release, date, pilier ou toute propriété inconnue avec `400 INVALID_CAMPAIGN`.
+- Le serveur résout workspace, projet et acteur, génère l’identifiant `cmp_…` et force toujours l’état initial `DRAFT`. Les noms sont normalisés NFKC, trimés et comparés sans casse dans un même workspace ; un doublon répond `409 CAMPAIGN_ALREADY_EXISTS`.
+- L’écriture passe uniquement par `create_campaign` (`CAMPAIGNS` / `WRITE`). L’audit append-only `campaign.created` ne contient que l’état et l’identifiant porté par l’événement, jamais le nom ou l’objectif libres.
+- Ce brief ne crée ni release, ni date, ni pilier, ni plan de contenu, ni post, ni tâche, ni calendrier, ni notification, ni appel IA, OAuth, job, compte social ou publication. Les transitions de statut et associations sont des routes futures explicitement séparées.
 
 ### Content Library : recherche et import local privé
 
@@ -352,6 +369,8 @@ GET    /v1/tasks
 POST   /v1/tasks
 POST   /v1/tasks/:taskId/complete
 ```
+
+Dans le runtime local, seuls `GET /v1/campaigns` et `POST /v1/campaigns` sont livrés pour un **Campaign Brief Registry** interne en `DRAFT`. `GET/PATCH /v1/campaigns/:campaignId`, les liens de release, dates, piliers, plans de contenu, posts, tâches et calendrier restent des cibles ultérieures ; ils ne doivent pas être déduits de cette surface minimale.
 
 `approve` est une action humaine authentifiée. Elle enregistre le payload final, l’auteur et l’instant de décision. `schedule` ne peut pas transformer une proposition non approuvée en action publique. Tant qu’aucun adapter social n’est livré, une publication programmée reste un élément de planning interne.
 

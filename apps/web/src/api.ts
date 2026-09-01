@@ -71,6 +71,22 @@ export interface TaskCreateInput {
   dueAt?: string;
 }
 
+export type CampaignStatus = "DRAFT" | "ACTIVE" | "PAUSED" | "COMPLETED" | "ARCHIVED";
+
+export interface CampaignRecord {
+  id: string;
+  name: string;
+  objective: string;
+  status: CampaignStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CampaignCreateInput {
+  name: string;
+  objective: string;
+}
+
 export type ApprovalRequestState = "REQUESTED";
 
 export type ApprovalDeliveryState = "NOT_CONFIGURED";
@@ -450,6 +466,14 @@ function taskStatus(value: unknown): TaskStatus {
   throw new IdaApiError("L’état de tâche retourné par IDA API est invalide.");
 }
 
+function campaignStatus(value: unknown): CampaignStatus {
+  if (value === "DRAFT" || value === "ACTIVE" || value === "PAUSED" || value === "COMPLETED" || value === "ARCHIVED") {
+    return value;
+  }
+
+  throw new IdaApiError("L’état de campagne retourné par IDA API est invalide.");
+}
+
 function approvalRequestState(value: unknown): ApprovalRequestState {
   if (value === "REQUESTED") {
     return "REQUESTED";
@@ -586,6 +610,37 @@ export async function createTask(input: TaskCreateInput): Promise<TaskRecord> {
   const payload = await postApiJson("/v1/tasks", input);
 
   return toTask(readDataObjectOrDirect(payload, "/v1/tasks"));
+}
+
+function toCampaign(record: Record<string, unknown>): CampaignRecord {
+  const id = readString(record.id);
+  const name = readString(record.name);
+  const objective = readString(record.objective);
+  const createdAt = readString(record.createdAt);
+  const updatedAt = readString(record.updatedAt);
+
+  if (!id || !name || !objective || !createdAt || !updatedAt) {
+    throw new IdaApiError("La réponse campagne d’IDA API n’a pas le format attendu.");
+  }
+
+  return {
+    id,
+    name,
+    objective,
+    status: campaignStatus(record.status),
+    createdAt,
+    updatedAt,
+  };
+}
+
+export async function fetchCampaigns(): Promise<CampaignRecord[]> {
+  return readDataList(await getApiJson("/v1/campaigns"), "/v1/campaigns").map(toCampaign);
+}
+
+export async function createCampaign(input: CampaignCreateInput): Promise<CampaignRecord> {
+  const payload = await postApiJson("/v1/campaigns", input);
+
+  return toCampaign(readDataObjectOrDirect(payload, "/v1/campaigns"));
 }
 
 export async function completeTask(taskId: string): Promise<TaskRecord> {
