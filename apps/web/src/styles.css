@@ -1124,6 +1124,17 @@ h3 {
   background: #ec827a;
 }
 
+.campaign-release-source {
+  margin: -7px 0 16px;
+  color: #8990a1;
+  font-size: 0.68rem;
+  line-height: 1.45;
+}
+
+.campaign-release-source.error {
+  color: #e5a39e;
+}
+
 .campaign-registry-empty {
   margin: 16px 0 0;
   color: #9298a8;
@@ -1177,6 +1188,132 @@ h3 {
   color: #9da2b1;
   font-size: 0.73rem;
   line-height: 1.5;
+}
+
+.campaign-release-link {
+  display: grid;
+  gap: 11px;
+  margin-top: 16px;
+  padding: 13px;
+  border: 1px solid rgba(163, 151, 255, 0.14);
+  border-radius: 10px;
+  background: rgba(98, 83, 182, 0.055);
+}
+
+.campaign-release-current,
+.campaign-release-select {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.campaign-release-current > span,
+.campaign-release-select > span {
+  color: #9ca1b0;
+  font-size: 0.58rem;
+  font-weight: 740;
+  letter-spacing: 0.075em;
+}
+
+.campaign-release-current strong {
+  overflow: hidden;
+  color: #e5e3f5;
+  font-size: 0.77rem;
+  font-weight: 630;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.campaign-release-select select {
+  width: 100%;
+  min-width: 0;
+  padding: 9px 10px;
+  color: #e8e7f1;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  outline: 0;
+  background: rgba(5, 7, 11, 0.56);
+  font: inherit;
+  font-size: 0.74rem;
+  line-height: 1.35;
+}
+
+.campaign-release-select select:focus {
+  border-color: rgba(164, 152, 255, 0.72);
+  background: rgba(5, 7, 11, 0.77);
+}
+
+.campaign-release-select select:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.campaign-release-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.campaign-release-actions > p {
+  max-width: 210px;
+  margin: 0;
+  color: #9197a7;
+  font-size: 0.65rem;
+  line-height: 1.4;
+}
+
+.campaign-release-actions > div {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 7px;
+}
+
+.campaign-release-button {
+  min-height: 31px;
+  padding: 7px 9px;
+  color: #d5d2f4;
+  border: 1px solid rgba(183, 174, 255, 0.24);
+  border-radius: 7px;
+  background: rgba(129, 113, 237, 0.09);
+  cursor: pointer;
+  font-size: 0.58rem;
+  font-weight: 770;
+  letter-spacing: 0.075em;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    color 160ms ease;
+}
+
+.campaign-release-button.link:hover:not(:disabled) {
+  color: #f1efff;
+  border-color: rgba(184, 174, 255, 0.6);
+  background: rgba(135, 119, 248, 0.21);
+}
+
+.campaign-release-button.remove {
+  color: #d9ada8;
+  border-color: rgba(220, 133, 125, 0.2);
+  background: rgba(189, 94, 87, 0.075);
+}
+
+.campaign-release-button.remove:hover:not(:disabled) {
+  color: #ffd5d0;
+  border-color: rgba(231, 142, 132, 0.52);
+  background: rgba(189, 94, 87, 0.17);
+}
+
+.campaign-release-button:focus-visible {
+  outline: 2px solid rgba(182, 169, 255, 0.85);
+  outline-offset: 2px;
+}
+
+.campaign-release-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
 }
 
 .campaign-status-tag {
@@ -3271,6 +3408,7 @@ h3 {
   .artist-brain-actions,
   .music-entry-actions,
   .campaign-create-actions,
+  .campaign-release-actions,
   .content-import-actions,
   .content-library-error-state,
   .memory-proposal-actions,
@@ -3283,6 +3421,18 @@ h3 {
 
   .approval-state-stack {
     justify-content: flex-start;
+  }
+
+  .campaign-release-actions > p {
+    max-width: none;
+  }
+
+  .campaign-release-actions > div {
+    width: 100%;
+  }
+
+  .campaign-release-button {
+    flex: 1;
   }
 
   .approval-plan-line {

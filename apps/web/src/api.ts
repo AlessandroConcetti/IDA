@@ -73,11 +73,22 @@ export interface TaskCreateInput {
 
 export type CampaignStatus = "DRAFT" | "ACTIVE" | "PAUSED" | "COMPLETED" | "ARCHIVED";
 
+export interface ReleaseRecord {
+  id: string;
+  artistProjectId: string;
+  title: string;
+  releaseDate?: string;
+}
+
 export interface CampaignRecord {
   id: string;
+  artistProjectId: string;
   name: string;
   objective: string;
   status: CampaignStatus;
+  releaseId?: string;
+  releaseTitle?: string;
+  version: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -85,6 +96,11 @@ export interface CampaignRecord {
 export interface CampaignCreateInput {
   name: string;
   objective: string;
+}
+
+export interface CampaignReleaseUpdateInput {
+  releaseId: string | null;
+  expectedVersion: number;
 }
 
 export type ApprovalRequestState = "REQUESTED";
@@ -614,22 +630,60 @@ export async function createTask(input: TaskCreateInput): Promise<TaskRecord> {
 
 function toCampaign(record: Record<string, unknown>): CampaignRecord {
   const id = readString(record.id);
+  const artistProjectId = readString(record.artistProjectId);
   const name = readString(record.name);
   const objective = readString(record.objective);
+  const releaseId = readString(record.releaseId);
+  const releaseTitle = readString(record.releaseTitle);
+  const version = readNumber(record.version);
   const createdAt = readString(record.createdAt);
   const updatedAt = readString(record.updatedAt);
 
-  if (!id || !name || !objective || !createdAt || !updatedAt) {
+  if (
+    !id ||
+    !artistProjectId ||
+    !name ||
+    !objective ||
+    version === undefined ||
+    !Number.isInteger(version) ||
+    version < 1 ||
+    !createdAt ||
+    !updatedAt ||
+    (releaseTitle !== undefined && releaseId === undefined)
+  ) {
     throw new IdaApiError("La réponse campagne d’IDA API n’a pas le format attendu.");
   }
 
   return {
     id,
+    artistProjectId,
     name,
     objective,
     status: campaignStatus(record.status),
+    ...(releaseId === undefined ? {} : { releaseId }),
+    ...(releaseTitle === undefined ? {} : { releaseTitle }),
+    version,
     createdAt,
     updatedAt,
+  };
+}
+
+function toRelease(record: Record<string, unknown>): ReleaseRecord {
+  const id = readString(record.id);
+  const artistProjectId = readString(record.artistProjectId);
+  const title = readString(record.title);
+
+  if (!id || !artistProjectId || !title) {
+    throw new IdaApiError("La réponse release d’IDA API n’a pas le format attendu.");
+  }
+
+  const releaseDate = readString(record.releaseDate);
+
+  return {
+    id,
+    artistProjectId,
+    title,
+    ...(releaseDate === undefined ? {} : { releaseDate }),
   };
 }
 
@@ -637,10 +691,23 @@ export async function fetchCampaigns(): Promise<CampaignRecord[]> {
   return readDataList(await getApiJson("/v1/campaigns"), "/v1/campaigns").map(toCampaign);
 }
 
+export async function fetchReleases(): Promise<ReleaseRecord[]> {
+  return readDataList(await getApiJson("/v1/releases"), "/v1/releases").map(toRelease);
+}
+
 export async function createCampaign(input: CampaignCreateInput): Promise<CampaignRecord> {
   const payload = await postApiJson("/v1/campaigns", input);
 
   return toCampaign(readDataObjectOrDirect(payload, "/v1/campaigns"));
+}
+
+export async function updateCampaignRelease(
+  campaignId: string,
+  input: CampaignReleaseUpdateInput,
+): Promise<CampaignRecord> {
+  const payload = await patchApiJson(`/v1/campaigns/${encodeURIComponent(campaignId)}/release`, input);
+
+  return toCampaign(readDataObjectOrDirect(payload, "/v1/campaigns/:campaignId/release"));
 }
 
 export async function completeTask(taskId: string): Promise<TaskRecord> {

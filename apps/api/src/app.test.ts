@@ -529,6 +529,345 @@ describe("IDA API — première tranche Phase 1", () => {
     ).toHaveLength(1);
   });
 
+  it("rattache explicitement une Campaign Brief à sa release avec version, retry idempotent et body strict", async () => {
+    const listing = await app.inject({ method: "GET", url: "/v1/campaigns" });
+    const initial = (
+      listing.json() as {
+        data: Array<{ id: string; version: number; releaseId?: string; releaseTitle?: string }>;
+      }
+    ).data.find((campaign) => campaign.id === "cmp_lumiere_noire");
+
+    expect(initial).toMatchObject({ id: "cmp_lumiere_noire", version: 1 });
+    expect(initial?.releaseId).toBeUndefined();
+
+    const injected = await app.inject({
+      method: "PATCH",
+      url: "/v1/campaigns/cmp_lumiere_noire/release",
+      payload: { releaseId: "rel_lumiere_noire", expectedVersion: initial?.version, status: "ACTIVE" },
+    });
+    expect(injected.statusCode).toBe(400);
+    expect(injected.json()).toMatchObject({ error: { code: "INVALID_CAMPAIGN_RELEASE" } });
+
+    const foreignRelease = await app.inject({
+      method: "PATCH",
+      url: "/v1/campaigns/cmp_lumiere_noire/release",
+      payload: { releaseId: "rel_other_workspace", expectedVersion: initial?.version },
+    });
+    expect(foreignRelease.statusCode).toBe(404);
+    expect(foreignRelease.json()).toMatchObject({ error: { code: "RELEASE_NOT_FOUND" } });
+
+    const linked = await app.inject({
+      method: "PATCH",
+      url: "/v1/campaigns/cmp_lumiere_noire/release",
+      payload: { releaseId: "rel_lumiere_noire", expectedVersion: initial?.version },
+    });
+    expect(linked.statusCode).toBe(200);
+    expect(linked.json()).toMatchObject({
+      data: {
+        id: "cmp_lumiere_noire",
+        releaseId: "rel_lumiere_noire",
+        releaseTitle: "Lumière Noire",
+        version: 2,
+      },
+    });
+
+    const exactRetry = await app.inject({
+      method: "PATCH",
+      url: "/v1/campaigns/cmp_lumiere_noire/release",
+      payload: { releaseId: "rel_lumiere_noire", expectedVersion: initial?.version },
+    });
+    expect(exactRetry.statusCode).toBe(200);
+    expect(exactRetry.json()).toMatchObject({ data: { releaseId: "rel_lumiere_noire", version: 2 } });
+
+    const stale = await app.inject({
+      method: "PATCH",
+      url: "/v1/campaigns/cmp_lumiere_noire/release",
+      payload: { releaseId: null, expectedVersion: initial?.version },
+    });
+    expect(stale.statusCode).toBe(409);
+    expect(stale.json()).toMatchObject({ error: { code: "CAMPAIGN_STALE" } });
+
+    const detached = await app.inject({
+      method: "PATCH",
+      url: "/v1/campaigns/cmp_lumiere_noire/release",
+      payload: { releaseId: null, expectedVersion: 2 },
+    });
+    expect(detached.statusCode).toBe(200);
+    const detachedCampaign = (detached.json() as { data: Record<string, unknown> }).data;
+    expect(detachedCampaign).toMatchObject({ id: "cmp_lumiere_noire", version: 3 });
+    expect(detachedCampaign.releaseId).toBeUndefined();
+    expect(detachedCampaign.releaseTitle).toBeUndefined();
+
+    const detachedRetry = await app.inject({
+      method: "PATCH",
+      url: "/v1/campaigns/cmp_lumiere_noire/release",
+      payload: { releaseId: null, expectedVersion: 2 },
+    });
+    expect(detachedRetry.statusCode).toBe(200);
+    expect(detachedRetry.json()).toMatchObject({ data: { version: 3 } });
+
+    const unknownCampaign = await app.inject({
+      method: "PATCH",
+      url: "/v1/campaigns/cmp_other_workspace/release",
+      payload: { releaseId: "rel_lumiere_noire", expectedVersion: 1 },
+    });
+    expect(unknownCampaign.statusCode).toBe(404);
+    expect(unknownCampaign.json()).toMatchObject({ error: { code: "CAMPAIGN_NOT_FOUND" } });
+  });
+
+  it("empêche deux écrans de remplacer silencieusement le lien de release d'une même campagne", async () => {
+    const listing = await app.inject({ method: "GET", url: "/v1/campaigns" });
+    const campaign = (
+      listing.json() as {
+        data: Array<{ id: string; version: number }>;
+      }
+    ).data.find((item) => item.id === "cmp_lumiere_noire");
+    expect(campaign).toMatchObject({ id: "cmp_lumiere_noire", version: 1 });
+
+    const responses = await Promise.all([
+      app.inject({
+        method: "PATCH",
+        url: "/v1/campaigns/cmp_lumiere_noire/release",
+        payload: { releaseId: "rel_lumiere_noire", expectedVersion: campaign?.version },
+      }),
+      app.inject({
+        method: "PATCH",
+        url: "/v1/campaigns/cmp_lumiere_noire/release",
+        payload: { releaseId: "rel_afterimage", expectedVersion: campaign?.version },
+      }),
+    ]);
+
+    expect(responses.map((response) => response.statusCode).sort()).toEqual([200, 409]);
+    expect(responses.find((response) => response.statusCode === 409)?.json()).toMatchObject({
+      error: { code: "CAMPAIGN_STALE" },
+    });
+
+    const current = await app.inject({ method: "GET", url: "/v1/campaigns" });
+    const updated = (
+      current.json() as {
+        data: Array<{ id: string; releaseId?: string; version: number }>;
+      }
+    ).data.find((item) => item.id === "cmp_lumiere_noire");
+    expect(updated).toMatchObject({ id: "cmp_lumiere_noire", version: 2 });
+    expect(["rel_lumiere_noire", "rel_afterimage"]).toContain(updated?.releaseId);
+  });
+
+  it("refuse une release d'un autre projet et conserve des audits de lien redacted sans effet externe", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "ida-campaign-release-boundary-"));
+    const isolatedStorageDir = await mkdtemp(join(tmpdir(), "ida-campaign-release-storage-"));
+    let setupDatabase: DemoDatabase | undefined;
+    let isolatedApp: Awaited<ReturnType<typeof createApp>> | undefined;
+    let inspectedDatabase: DemoDatabase | undefined;
+
+    try {
+      setupDatabase = await DemoDatabase.open({ dataDir });
+      const before = await setupDatabase.pglite.query<{
+        posts: number;
+        variants: number;
+        schedules: number;
+        scheduledPosts: number;
+        media: number;
+      }>(`
+        SELECT
+          (SELECT COUNT(*)::int FROM posts WHERE workspace_id = 'wsp_demo_aless') AS posts,
+          (SELECT COUNT(*)::int FROM post_variants WHERE workspace_id = 'wsp_demo_aless') AS variants,
+          (SELECT COUNT(*)::int FROM internal_post_schedules WHERE workspace_id = 'wsp_demo_aless') AS schedules,
+          (SELECT COUNT(*)::int FROM scheduled_posts WHERE workspace_id = 'wsp_demo_aless') AS "scheduledPosts",
+          (SELECT COUNT(*)::int FROM media_assets WHERE workspace_id = 'wsp_demo_aless') AS media
+      `);
+      await setupDatabase.pglite.query(
+        `
+          INSERT INTO artist_projects (id, workspace_id, name, status)
+          VALUES ('prj_same_workspace_other', 'wsp_demo_aless', 'Autre projet local', 'ACTIVE')
+        `,
+      );
+      await setupDatabase.pglite.query(
+        `
+          INSERT INTO releases (
+            id, workspace_id, artist_project_id, title, release_type, release_date, label, status, description
+          )
+          VALUES (
+            'rel_same_workspace_other_project', 'wsp_demo_aless', 'prj_same_workspace_other',
+            'Release autre projet', 'SINGLE', NULL, NULL, 'UNRELEASED', NULL
+          )
+        `,
+      );
+      await expect(
+        setupDatabase.pglite.exec(`
+          INSERT INTO campaigns (
+            id, workspace_id, artist_project_id, name, normalized_name, objective, status, release_id
+          )
+          VALUES (
+            'cmp_direct_cross_workspace', 'wsp_demo_aless', 'prj_demo_aless',
+            'Lien SQL hors workspace', 'lien sql hors workspace',
+            'Cette écriture directe ne doit jamais traverser le workspace.', 'DRAFT', 'rel_other_workspace'
+          );
+        `),
+      ).rejects.toThrow(/même workspace et projet artistique/u);
+      await expect(
+        setupDatabase.pglite.exec(`
+          UPDATE campaigns
+          SET release_id = 'rel_same_workspace_other_project'
+          WHERE id = 'cmp_lumiere_noire';
+        `),
+      ).rejects.toThrow(/même workspace et projet artistique/u);
+      await setupDatabase.close();
+      setupDatabase = undefined;
+
+      isolatedApp = await createApp({ dataDir, storageDir: isolatedStorageDir });
+      const projectMismatch = await isolatedApp.inject({
+        method: "PATCH",
+        url: "/v1/campaigns/cmp_lumiere_noire/release",
+        payload: { releaseId: "rel_same_workspace_other_project", expectedVersion: 1 },
+      });
+      expect(projectMismatch.statusCode).toBe(404);
+      expect(projectMismatch.json()).toMatchObject({ error: { code: "RELEASE_NOT_FOUND" } });
+
+      const linked = await isolatedApp.inject({
+        method: "PATCH",
+        url: "/v1/campaigns/cmp_lumiere_noire/release",
+        payload: { releaseId: "rel_lumiere_noire", expectedVersion: 1 },
+      });
+      expect(linked.statusCode).toBe(200);
+      expect(linked.json()).toMatchObject({ data: { releaseId: "rel_lumiere_noire", version: 2 } });
+
+      const retry = await isolatedApp.inject({
+        method: "PATCH",
+        url: "/v1/campaigns/cmp_lumiere_noire/release",
+        payload: { releaseId: "rel_lumiere_noire", expectedVersion: 1 },
+      });
+      expect(retry.statusCode).toBe(200);
+      await isolatedApp.close();
+      isolatedApp = undefined;
+
+      inspectedDatabase = await DemoDatabase.open({ dataDir, seed: false });
+      const after = await inspectedDatabase.pglite.query<{
+        posts: number;
+        variants: number;
+        schedules: number;
+        scheduledPosts: number;
+        media: number;
+      }>(`
+        SELECT
+          (SELECT COUNT(*)::int FROM posts WHERE workspace_id = 'wsp_demo_aless') AS posts,
+          (SELECT COUNT(*)::int FROM post_variants WHERE workspace_id = 'wsp_demo_aless') AS variants,
+          (SELECT COUNT(*)::int FROM internal_post_schedules WHERE workspace_id = 'wsp_demo_aless') AS schedules,
+          (SELECT COUNT(*)::int FROM scheduled_posts WHERE workspace_id = 'wsp_demo_aless') AS "scheduledPosts",
+          (SELECT COUNT(*)::int FROM media_assets WHERE workspace_id = 'wsp_demo_aless') AS media
+      `);
+      expect(after.rows[0]).toEqual(before.rows[0]);
+
+      const audit = await inspectedDatabase.pglite.query<{
+        action: string;
+        entityId: string;
+        payload: string;
+      }>(
+        `
+          SELECT action, entity_id AS "entityId", payload::text AS payload
+          FROM activity_logs
+          WHERE workspace_id = 'wsp_demo_aless'
+            AND entity_id = 'cmp_lumiere_noire'
+            AND action IN ('campaign.release_linked', 'campaign.release_unlinked')
+          ORDER BY created_at ASC
+        `,
+      );
+      expect(audit.rows).toEqual([
+        expect.objectContaining({
+          action: "campaign.release_linked",
+          entityId: "cmp_lumiere_noire",
+          payload: '{"releaseId":"rel_lumiere_noire","version":2}',
+        }),
+      ]);
+      expect(audit.rows[0]?.payload).not.toContain("Lumière Noire");
+      expect(audit.rows[0]?.payload).not.toContain("Préparer un brief");
+    } finally {
+      await setupDatabase?.close();
+      await isolatedApp?.close();
+      await inspectedDatabase?.close();
+      await rm(dataDir, { recursive: true, force: true });
+      await rm(isolatedStorageDir, { recursive: true, force: true });
+    }
+  });
+
+  it("migre un registre de campagnes local antérieur vers le lien de release versionné et répare les liens hors scope", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "ida-campaign-release-migration-"));
+    let legacyDatabase: DemoDatabase | undefined;
+    let upgradedDatabase: DemoDatabase | undefined;
+
+    try {
+      legacyDatabase = await DemoDatabase.open({ dataDir });
+      await legacyDatabase.pglite.exec(`
+        DROP TRIGGER IF EXISTS campaigns_release_scope_guard ON campaigns;
+        ALTER TABLE campaigns DROP COLUMN release_id;
+        ALTER TABLE campaigns DROP CONSTRAINT IF EXISTS campaigns_row_version_check;
+        ALTER TABLE campaigns DROP COLUMN row_version;
+      `);
+      await legacyDatabase.close();
+      legacyDatabase = undefined;
+
+      upgradedDatabase = await DemoDatabase.open({ dataDir, seed: false });
+      const migrated = await upgradedDatabase.pglite.query<{
+        releaseId: string | null;
+        version: number;
+      }>(`
+        SELECT release_id AS "releaseId", row_version AS version
+        FROM campaigns
+        WHERE id = 'cmp_lumiere_noire'
+      `);
+      expect(migrated.rows[0]).toMatchObject({ releaseId: null, version: 1 });
+      await expect(
+        upgradedDatabase.pglite.exec(`
+          UPDATE campaigns
+          SET row_version = 0
+          WHERE id = 'cmp_lumiere_noire';
+        `),
+      ).rejects.toThrow(/campaigns_row_version_check/u);
+      await upgradedDatabase.close();
+      upgradedDatabase = undefined;
+
+      // Simule un lien écrit par un ancien chemin SQL qui n'avait pas encore
+      // la garde de scope. Le redémarrage doit le détacher avant de réinstaller
+      // cette garde, sans révéler ni déplacer la release étrangère.
+      upgradedDatabase = await DemoDatabase.open({ dataDir, seed: false });
+      await upgradedDatabase.pglite.exec(`
+        DROP TRIGGER IF EXISTS campaigns_release_scope_guard ON campaigns;
+        UPDATE campaigns
+        SET release_id = 'rel_other_workspace'
+        WHERE id = 'cmp_lumiere_noire';
+      `);
+      await upgradedDatabase.close();
+      upgradedDatabase = undefined;
+
+      upgradedDatabase = await DemoDatabase.open({ dataDir, seed: false });
+      const repaired = await upgradedDatabase.pglite.query<{
+        releaseId: string | null;
+        version: number;
+      }>(`
+        SELECT release_id AS "releaseId", row_version AS version
+        FROM campaigns
+        WHERE id = 'cmp_lumiere_noire'
+      `);
+      expect(repaired.rows[0]).toMatchObject({ releaseId: null, version: 1 });
+      await upgradedDatabase.close();
+      upgradedDatabase = undefined;
+
+      const upgradedApp = await createApp({ dataDir, storageDir });
+      try {
+        const listing = await upgradedApp.inject({ method: "GET", url: "/v1/campaigns" });
+        expect(listing.statusCode).toBe(200);
+        expect(listing.json()).toMatchObject({
+          data: [expect.objectContaining({ id: "cmp_lumiere_noire", version: 1 })],
+        });
+      } finally {
+        await upgradedApp.close();
+      }
+    } finally {
+      await legacyDatabase?.close();
+      await upgradedDatabase?.close();
+      await rm(dataDir, { recursive: true, force: true });
+    }
+  });
+
   it("journalise un Campaign Brief sans toucher aux ressources éditoriales ou sociales", async () => {
     const dataDir = await mkdtemp(join(tmpdir(), "ida-campaign-brief-"));
     const isolatedStorageDir = await mkdtemp(join(tmpdir(), "ida-campaign-brief-storage-"));

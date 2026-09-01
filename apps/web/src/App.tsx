@@ -21,6 +21,7 @@ import {
   fetchEditorialCalendar,
   fetchMediaAssets,
   fetchMemories,
+  fetchReleases,
   fetchTasks,
   IdaApiError,
   isApiConfigured,
@@ -28,6 +29,7 @@ import {
   type MediaSearchType,
   type MemoryRecord,
   proposePreferenceMemory,
+  type ReleaseRecord,
   rejectMemory,
   rejectPostVariant,
   scheduleApprovedPostVariant,
@@ -36,6 +38,7 @@ import {
   type TaskRecord,
   type TrackCreateInput,
   updateArtistBrain,
+  updateCampaignRelease,
   uploadMediaAsset,
 } from "./api";
 import {
@@ -1649,13 +1652,22 @@ function formatCampaignDate(value: string): string {
   return new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short", year: "numeric" }).format(date);
 }
 
+function releaseOptionLabel(release: ReleaseRecord): string {
+  return release.releaseDate ? `${release.title} · ${formatCampaignDate(release.releaseDate)}` : release.title;
+}
+
 function CampaignsView() {
   const [campaigns, setCampaigns] = useState<CampaignRecord[]>([]);
   const [source, setSource] = useState<"loading" | "api" | "unavailable">("loading");
+  const [releases, setReleases] = useState<ReleaseRecord[]>([]);
+  const [releaseSource, setReleaseSource] = useState<"loading" | "api" | "unavailable">("loading");
+  const [releaseNotice, setReleaseNotice] = useState("Chargement des releases disponibles…");
+  const [selectedReleaseIds, setSelectedReleaseIds] = useState<Record<string, string>>({});
   const [form, setForm] = useState<CampaignForm>(emptyCampaignForm);
   const [notice, setNotice] = useState("Chargement des briefs de campagne IDA…");
   const [noticeState, setNoticeState] = useState<"default" | "success" | "error">("default");
   const [isSaving, setIsSaving] = useState(false);
+  const [activeReleaseCampaignId, setActiveReleaseCampaignId] = useState<string | null>(null);
 
   useEffect(() => {
     let isCurrent = true;
@@ -1686,6 +1698,30 @@ function CampaignsView() {
         setNoticeState("error");
       });
 
+    void fetchReleases()
+      .then((items) => {
+        if (!isCurrent) {
+          return;
+        }
+
+        setReleases(items);
+        setReleaseSource("api");
+        setReleaseNotice(
+          items.length
+            ? `${items.length} release${items.length > 1 ? "s" : ""} disponible${items.length > 1 ? "s" : ""} pour association.`
+            : "Aucune release n’est disponible pour le moment.",
+        );
+      })
+      .catch((error: unknown) => {
+        if (!isCurrent) {
+          return;
+        }
+
+        const reason = error instanceof IdaApiError ? error.message : "IDA API est indisponible.";
+        setReleaseSource("unavailable");
+        setReleaseNotice(`Les releases ne peuvent pas être chargées : ${reason}`);
+      });
+
     return () => {
       isCurrent = false;
     };
@@ -1693,6 +1729,80 @@ function CampaignsView() {
 
   function updateField(field: keyof CampaignForm, value: string) {
     setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function updateSelectedRelease(campaignId: string, releaseId: string) {
+    setSelectedReleaseIds((current) => ({ ...current, [campaignId]: releaseId }));
+  }
+
+  async function refreshCampaignAfterConflict(campaignId: string): Promise<void> {
+    const currentCampaigns = await fetchCampaigns();
+
+    setCampaigns(currentCampaigns);
+    setSource("api");
+    setSelectedReleaseIds((current) => {
+      const next = { ...current };
+      delete next[campaignId];
+      return next;
+    });
+  }
+
+  async function handleReleaseAssociation(campaign: CampaignRecord, releaseId: string | null) {
+    if (activeReleaseCampaignId || source !== "api") {
+      return;
+    }
+
+    if (releaseId !== null && releaseSource !== "api") {
+      return;
+    }
+
+    if (releaseId === campaign.releaseId) {
+      return;
+    }
+
+    setActiveReleaseCampaignId(campaign.id);
+
+    try {
+      const updatedCampaign = await updateCampaignRelease(campaign.id, {
+        releaseId,
+        expectedVersion: campaign.version,
+      });
+      setCampaigns((current) =>
+        current.map((currentCampaign) =>
+          currentCampaign.id === updatedCampaign.id ? updatedCampaign : currentCampaign,
+        ),
+      );
+      setSelectedReleaseIds((current) => {
+        const next = { ...current };
+        delete next[campaign.id];
+        return next;
+      });
+      setNotice(
+        updatedCampaign.releaseId
+          ? `« ${updatedCampaign.name} » est liée à « ${updatedCampaign.releaseTitle ?? "la release sélectionnée"} ».`
+          : `« ${updatedCampaign.name} » n’est plus liée à une release.`,
+      );
+      setNoticeState("success");
+    } catch (error: unknown) {
+      const reason = error instanceof IdaApiError ? error.message : "IDA API est indisponible.";
+
+      if (error instanceof IdaApiError && error.status === 409) {
+        try {
+          await refreshCampaignAfterConflict(campaign.id);
+          setNotice("Cette campagne a changé entre-temps. Son état a été actualisé avant toute nouvelle action.");
+        } catch (refreshError: unknown) {
+          const refreshReason =
+            refreshError instanceof IdaApiError ? refreshError.message : "IDA API est indisponible.";
+          setNotice(`Le lien a changé, mais le brief ne peut pas être actualisé : ${refreshReason}`);
+        }
+      } else {
+        setNotice(`Le lien de release n’a pas été enregistré : ${reason}`);
+      }
+
+      setNoticeState("error");
+    } finally {
+      setActiveReleaseCampaignId(null);
+    }
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -1743,6 +1853,9 @@ function CampaignsView() {
           <span aria-hidden="true" />
           {notice}
         </p>
+        <p className={`campaign-release-source ${releaseSource === "unavailable" ? "error" : ""}`} role="status">
+          {releaseNotice}
+        </p>
 
         {source === "loading" ? <p className="campaign-registry-empty">Chargement des briefs de campagne…</p> : null}
         {source === "unavailable" ? (
@@ -1753,20 +1866,78 @@ function CampaignsView() {
         ) : null}
 
         <div className="campaign-registry-list" aria-live="polite">
-          {campaigns.map((campaign) => (
-            <article className="campaign-brief" key={campaign.id}>
-              <div className="campaign-brief-heading">
-                <div>
-                  <p>BRIEF INTERNE · {formatCampaignDate(campaign.createdAt)}</p>
-                  <h3>{campaign.name}</h3>
+          {campaigns.map((campaign) => {
+            const selectedReleaseId = selectedReleaseIds[campaign.id] ?? "";
+            const compatibleReleases = releases.filter(
+              (release) => release.artistProjectId === campaign.artistProjectId,
+            );
+            const isReleaseActionActive = activeReleaseCampaignId === campaign.id;
+            const canLinkRelease =
+              source === "api" &&
+              releaseSource === "api" &&
+              selectedReleaseId.length > 0 &&
+              selectedReleaseId !== campaign.releaseId &&
+              activeReleaseCampaignId === null;
+            const canRemoveRelease =
+              source === "api" && Boolean(campaign.releaseId) && activeReleaseCampaignId === null;
+
+            return (
+              <article className="campaign-brief" key={campaign.id} aria-busy={isReleaseActionActive}>
+                <div className="campaign-brief-heading">
+                  <div>
+                    <p>BRIEF INTERNE · {formatCampaignDate(campaign.createdAt)}</p>
+                    <h3>{campaign.name}</h3>
+                  </div>
+                  <span className={`campaign-status-tag ${campaign.status.toLocaleLowerCase("en-US")}`}>
+                    {campaignStatusLabel(campaign.status)}
+                  </span>
                 </div>
-                <span className={`campaign-status-tag ${campaign.status.toLocaleLowerCase("en-US")}`}>
-                  {campaignStatusLabel(campaign.status)}
-                </span>
-              </div>
-              <p>{campaign.objective}</p>
-            </article>
-          ))}
+                <p>{campaign.objective}</p>
+                <section className="campaign-release-link" aria-label={`Release associée à ${campaign.name}`}>
+                  <div className="campaign-release-current">
+                    <span>RELEASE ACTUELLE</span>
+                    <strong>{campaign.releaseTitle ?? "Aucune release liée."}</strong>
+                  </div>
+                  <label className="campaign-release-select">
+                    <span>CHOISIR UNE RELEASE</span>
+                    <select
+                      value={selectedReleaseId}
+                      onChange={(event) => updateSelectedRelease(campaign.id, event.target.value)}
+                      disabled={releaseSource !== "api" || activeReleaseCampaignId !== null}
+                    >
+                      <option value="">Sélection locale uniquement</option>
+                      {compatibleReleases.map((release) => (
+                        <option key={release.id} value={release.id}>
+                          {releaseOptionLabel(release)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="campaign-release-actions">
+                    <p>Le lien n’est enregistré qu’après une action explicite.</p>
+                    <div>
+                      <button
+                        className="campaign-release-button link"
+                        type="button"
+                        disabled={!canLinkRelease}
+                        onClick={() => void handleReleaseAssociation(campaign, selectedReleaseId)}
+                      >
+                        {isReleaseActionActive ? "MISE À JOUR…" : "LIER"}
+                      </button>
+                      <button
+                        className="campaign-release-button remove"
+                        type="button"
+                        disabled={!canRemoveRelease}
+                        onClick={() => void handleReleaseAssociation(campaign, null)}
+                      >
+                        {isReleaseActionActive ? "MISE À JOUR…" : "RETIRER"}
+                      </button>
+                    </div>
+                  </div>
+                </section>
+              </article>
+            );
+          })}
         </div>
       </section>
 
@@ -1779,8 +1950,8 @@ function CampaignsView() {
           <span className="quiet-label">DRAFT ONLY</span>
         </div>
         <p className="campaign-create-intro">
-          IDA crée uniquement un brouillon local. Les releases, dates, piliers et contenus seront reliés dans une
-          prochaine tranche contrôlée.
+          IDA crée uniquement un brouillon local. Une release existante peut ensuite être liée séparément ; les dates,
+          piliers et contenus restent hors de cette tranche.
         </p>
         <form className="campaign-create-form" noValidate onSubmit={handleSubmit}>
           <label className="campaign-create-field">
@@ -1820,8 +1991,8 @@ function CampaignsView() {
         <p className="eyebrow">NEXT BOUNDARY</p>
         <h2>Structure before automation.</h2>
         <p>
-          Le Campaign Manager, les piliers, les liens de release et les recommandations IA restent désactivés tant que
-          leurs contrats, permissions et validations ne sont pas définis.
+          Le Campaign Manager, les piliers et les recommandations IA restent désactivés tant que leurs contrats,
+          permissions et validations ne sont pas définis.
         </p>
       </section>
     </div>

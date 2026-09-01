@@ -67,14 +67,14 @@ Créer le premier produit réellement utilisable : un Command Center responsive 
 - Artist Brain éditable : identité, ton, genres, influences, audience, objectifs et vocabulaire, avec validation, permission `WRITE` interne et persistance locale ;
 - Music Brain : création locale contrôlée d’un morceau avec métadonnées, validation stricte, scope résolu par le serveur, outil `WRITE` allowlisté et audit append-only ;
 - Content Library : import local privé et recherche filtrée de métadonnées, avec limites, hash SHA-256, détection de doublon, tags normalisés, stockage à clé générée, lecture bornée isolée au workspace et audit append-only pour l’import ;
-- Campaign Brief Registry : liste et création locale de briefs internes `DRAFT`, nom normalisé unique par workspace, outil `CAMPAIGNS` / `WRITE` et audit redacted, sans release, date, pilier, contenu, calendrier ni effet externe ;
+- Campaign Brief Registry : liste et création locale de briefs internes `DRAFT`, nom normalisé unique par workspace, lien optionnel vers une release du même workspace/projet protégé par version, outil `CAMPAIGNS` / `WRITE` et audit redacted, sans date, pilier, contenu, calendrier ni effet externe ;
 - Memory Consent Center : proposition de préférence en `PENDING`, décision humaine explicite et finale, scope serveur, timestamps persistés et audit sans contenu libre ;
 - Task Center : création locale contrôlée, échéance facultative, finalisation explicite idempotente, scope serveur et audit append-only sans contenu libre ;
 - Approval Center : file locale de propositions `REQUESTED`, hash de payload exact, décision humaine contrôlée via `CONTENT` / `APPROVAL_REQUIRED`, audit redacted et aucun effet de programmation ou publication ;
 - Calendar : projection jour/semaine/mois des variantes approuvées et des planifications internes, conflit de créneau plateforme/instant, snapshot hash/date/fuseau immuable, audit redacted et aucun scheduler ni delivery ;
 - PGlite uniquement pour le développement/test local ; aucun compte social, aucun token, aucune publication et aucune donnée personnelle réelle.
 
-La tranche suivante de Phase 1 remplace le contexte de démonstration par une vraie identité/workspace, puis ajoute les prévisualisations/traitements média sécurisés, l’historique de commandes, la consultation du journal d’activité et les premiers liens contrôlés entre briefs de campagne et ressources artistiques. La suite du calendrier couvrira annulation, surcharge, répétitions et fraîcheur avant toute automatisation ; aucune de ces étapes ne débloque encore la publication sociale.
+La tranche suivante de Phase 1 remplace le contexte de démonstration par une vraie identité/workspace, puis ajoute les prévisualisations/traitements média sécurisés, l’historique de commandes, la consultation du journal d’activité et les liens contrôlés restants entre campagnes et ressources artistiques. La suite du calendrier couvrira annulation, surcharge, répétitions et fraîcheur avant toute automatisation ; aucune de ces étapes ne débloque encore la publication sociale.
 
 ### Périmètre
 
@@ -114,7 +114,7 @@ Faire d'IDA un assistant éditorial qui propose, organise et soumet du contenu �
 
 ### Périmètre
 
-1. Étendre le `Campaign Brief Registry` vers les entités `Campaign`, `Post`, `PostVariant`, `ContentPlan` et `Approval` avec leurs états et associations contrôlés.
+1. Étendre le `Campaign Brief Registry`, déjà rattachable de façon contrôlée à une release, vers les entités `Campaign`, `Post`, `PostVariant`, `ContentPlan` et `Approval` avec leurs états et associations contrôlés.
 2. Créer les agents `Content Manager`, `Content Curator`, `Copywriter` et `Calendar Manager`.
 3. Générer des propositions de contenu liées à des médias, tracks, objectifs et règles artistiques.
 4. Créer le calendrier éditorial en vues jour, semaine et mois.

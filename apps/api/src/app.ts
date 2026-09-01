@@ -14,6 +14,8 @@ import {
   calendarRangeSchema,
   calendarResponseSchema,
   campaignCreateSchema,
+  campaignReleaseLinkParamsSchema,
+  campaignReleaseLinkSchema,
   campaignSchema,
   internalPostScheduleSchema,
   mediaAssetSchema,
@@ -358,6 +360,15 @@ class CampaignInputError extends Error {
   }
 }
 
+class CampaignReleaseLinkInputError extends Error {
+  readonly statusCode = 400;
+  readonly code = "INVALID_CAMPAIGN_RELEASE";
+
+  constructor() {
+    super("Le rattachement de la campagne à la release est invalide.");
+  }
+}
+
 class ApprovalDecisionInputError extends Error {
   readonly statusCode = 400;
   readonly code = "INVALID_APPROVAL_DECISION";
@@ -647,6 +658,9 @@ function toCampaignResponse(campaign: Campaign) {
     name: campaign.name,
     objective: campaign.objective,
     status: campaign.status,
+    releaseId: optionalString(campaign.releaseId),
+    releaseTitle: optionalString(campaign.releaseTitle),
+    version: campaign.version,
     createdAt: campaign.createdAt,
     updatedAt: campaign.updatedAt,
   });
@@ -766,6 +780,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     { toolKey: "complete_task", moduleKey: "TASKS", permission: "WRITE" },
     { toolKey: "create_track", moduleKey: "MUSIC", permission: "WRITE" },
     { toolKey: "create_campaign", moduleKey: "CAMPAIGNS", permission: "WRITE" },
+    { toolKey: "link_campaign_release", moduleKey: "CAMPAIGNS", permission: "WRITE" },
     { toolKey: "import_media", moduleKey: "CONTENT", permission: "WRITE" },
     { toolKey: "decide_post_variant", moduleKey: "CONTENT", permission: "APPROVAL_REQUIRED" },
     { toolKey: "schedule_approved_post_variant", moduleKey: "CALENDAR", permission: "APPROVAL_REQUIRED" },
@@ -806,7 +821,8 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     if (
       error instanceof TaskInputError ||
       error instanceof TaskCompletionInputError ||
-      error instanceof CampaignInputError
+      error instanceof CampaignInputError ||
+      error instanceof CampaignReleaseLinkInputError
     ) {
       return reply.status(error.statusCode).send({
         error: { code: error.code, message: error.message },
@@ -1289,6 +1305,54 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     }
 
     return reply.status(201).send({ data: toCampaignResponse(result.campaign) });
+  });
+
+  app.patch("/v1/campaigns/:campaignId/release", async (request, reply) => {
+    const params = campaignReleaseLinkParamsSchema.safeParse(request.params);
+    const input = campaignReleaseLinkSchema.safeParse(request.body);
+
+    if (!params.success || !input.success) {
+      throw new CampaignReleaseLinkInputError();
+    }
+
+    toolGateway.assertAuthorized({
+      toolKey: "link_campaign_release",
+      moduleKey: "CAMPAIGNS",
+      permission: "WRITE",
+    });
+
+    // Le serveur résout la campagne, puis la release dans le même workspace et
+    // le même projet artistique. Cette mutation ne planifie, ne publie et ne
+    // relie aucun contenu ou compte social.
+    const result = await database.linkCampaignRelease(
+      demoContext.workspaceId,
+      demoContext.userId,
+      params.data.campaignId,
+      input.data,
+    );
+
+    if (result.kind === "campaign-not-found") {
+      return reply.status(404).send({
+        error: { code: "CAMPAIGN_NOT_FOUND", message: "Campagne introuvable dans ce workspace." },
+      });
+    }
+
+    if (result.kind === "release-not-found") {
+      return reply.status(404).send({
+        error: { code: "RELEASE_NOT_FOUND", message: "Release introuvable pour cette campagne." },
+      });
+    }
+
+    if (result.kind === "stale") {
+      return reply.status(409).send({
+        error: {
+          code: "CAMPAIGN_STALE",
+          message: "La campagne a été modifiée depuis sa dernière lecture. Recharge-la avant de modifier son lien.",
+        },
+      });
+    }
+
+    return { data: toCampaignResponse(result.campaign) };
   });
 
   app.get("/v1/tracks", async () => {

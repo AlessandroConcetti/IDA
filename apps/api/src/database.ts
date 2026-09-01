@@ -6,6 +6,7 @@ import type {
   ArtistProfile as ArtistProfileContract,
   ArtistProfileUpdate,
   CampaignCreate,
+  CampaignReleaseLink,
   MediaImport,
   MediaListQuery,
   MemoryProposalCreate,
@@ -141,15 +142,18 @@ export type TaskCompletionResult =
   | { kind: "not-found" }
   | { kind: "not-actionable"; status: string };
 
-// Un brief de campagne ne porte volontairement ni release, ni dates, ni
-// piliers : ces associations arriveront avec leurs propres invariants plutôt
-// que comme un payload de création polymorphe.
+// Un brief de campagne ne porte volontairement ni dates, ni piliers, ni
+// contenus. Son éventuel lien vers une release passe par une mutation dédiée,
+// protégée par le scope du workspace, le projet artistique et une version.
 export type Campaign = {
   id: string;
   projectId: string;
   name: string;
   objective: string;
   status: string;
+  releaseId: string | null;
+  releaseTitle: string | null;
+  version: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -158,6 +162,13 @@ export type CampaignCreateResult =
   | { kind: "created"; campaign: Campaign }
   | { kind: "duplicate" }
   | { kind: "project-not-found" };
+
+export type CampaignReleaseLinkResult =
+  | { kind: "updated"; campaign: Campaign }
+  | { kind: "unchanged"; campaign: Campaign }
+  | { kind: "campaign-not-found" }
+  | { kind: "release-not-found" }
+  | { kind: "stale" };
 
 export type ApprovalMedia = {
   id: string;
@@ -474,6 +485,9 @@ function toCampaign(row: ScalarRow): Campaign {
     name: asString(row.name),
     objective: asString(row.objective),
     status: asString(row.status),
+    releaseId: asNullableString(row.releaseId),
+    releaseTitle: asNullableString(row.releaseTitle),
+    version: asNumber(row.version),
     createdAt: asTimestamp(row.createdAt) ?? "1970-01-01T00:00:00.000Z",
     updatedAt: asTimestamp(row.updatedAt) ?? "1970-01-01T00:00:00.000Z",
   };
@@ -843,16 +857,22 @@ export class DemoDatabase {
     const result = await this.pglite.query<ScalarRow>(
       `
         SELECT
-          id,
-          artist_project_id AS "projectId",
-          name,
-          objective,
-          status,
-          created_at AS "createdAt",
-          updated_at AS "updatedAt"
-        FROM campaigns
-        WHERE workspace_id = $1
-        ORDER BY created_at DESC, id DESC
+          campaign.id,
+          campaign.artist_project_id AS "projectId",
+          campaign.name,
+          campaign.objective,
+          campaign.status,
+          campaign.release_id AS "releaseId",
+          release.title AS "releaseTitle",
+          campaign.row_version AS version,
+          campaign.created_at AS "createdAt",
+          campaign.updated_at AS "updatedAt"
+        FROM campaigns campaign
+        LEFT JOIN releases release ON release.id = campaign.release_id
+          AND release.workspace_id = campaign.workspace_id
+          AND release.artist_project_id = campaign.artist_project_id
+        WHERE campaign.workspace_id = $1
+        ORDER BY campaign.created_at DESC, campaign.id DESC
       `,
       [workspaceId],
     );
@@ -898,6 +918,9 @@ export class DemoDatabase {
               name,
               objective,
               status,
+              release_id AS "releaseId",
+              NULL::TEXT AS "releaseTitle",
+              row_version AS version,
               created_at AS "createdAt",
               updated_at AS "updatedAt"
           `,
@@ -941,6 +964,160 @@ export class DemoDatabase {
       }
 
       throw new Error("Impossible de générer un identifiant unique pour la campagne.");
+    });
+  }
+
+  async linkCampaignRelease(
+    workspaceId: string,
+    actorUserId: string,
+    campaignId: string,
+    input: CampaignReleaseLink,
+  ): Promise<CampaignReleaseLinkResult> {
+    return this.pglite.transaction(async (transaction) => {
+      // La campagne est chargée uniquement depuis le workspace résolu côté
+      // serveur. Un identifiant hors scope ne révèle jamais son projet ni son
+      // lien vers une release.
+      const currentResult = await transaction.query<ScalarRow>(
+        `
+          SELECT
+            campaign.id,
+            campaign.artist_project_id AS "projectId",
+            campaign.name,
+            campaign.objective,
+            campaign.status,
+            campaign.release_id AS "releaseId",
+            release.title AS "releaseTitle",
+            campaign.row_version AS version,
+            campaign.created_at AS "createdAt",
+            campaign.updated_at AS "updatedAt"
+          FROM campaigns campaign
+          LEFT JOIN releases release ON release.id = campaign.release_id
+            AND release.workspace_id = campaign.workspace_id
+            AND release.artist_project_id = campaign.artist_project_id
+          WHERE campaign.id = $1
+            AND campaign.workspace_id = $2
+          LIMIT 1
+        `,
+        [campaignId, workspaceId],
+      );
+      const currentRow = currentResult.rows[0];
+
+      if (!currentRow) {
+        return { kind: "campaign-not-found" };
+      }
+
+      const current = toCampaign(currentRow);
+      let releaseTitle: string | null = null;
+
+      if (input.releaseId !== null) {
+        // Une FK seule ne garantit ni le workspace ni le projet. La release
+        // demandée est donc résolue dans les deux scopes du brief avant toute
+        // écriture ; tout autre cas reçoit le même 404 générique.
+        const releaseResult = await transaction.query<ScalarRow>(
+          `
+            SELECT title
+            FROM releases
+            WHERE id = $1
+              AND workspace_id = $2
+              AND artist_project_id = $3
+            LIMIT 1
+          `,
+          [input.releaseId, workspaceId, current.projectId],
+        );
+        const release = releaseResult.rows[0];
+
+        if (!release) {
+          return { kind: "release-not-found" };
+        }
+
+        releaseTitle = asString(release.title);
+      }
+
+      // Un retry exact est idempotent, y compris si l'interface a conservé une
+      // ancienne version. Il ne modifie ni timestamp ni audit.
+      if (current.releaseId === input.releaseId) {
+        return { kind: "unchanged", campaign: current };
+      }
+
+      const updateResult = await transaction.query<ScalarRow>(
+        `
+          UPDATE campaigns
+          SET
+            release_id = $3,
+            row_version = row_version + 1,
+            updated_at = CURRENT_TIMESTAMP
+          WHERE id = $1
+            AND workspace_id = $2
+            AND row_version = $4
+          RETURNING
+            id,
+            artist_project_id AS "projectId",
+            name,
+            objective,
+            status,
+            release_id AS "releaseId",
+            row_version AS version,
+            created_at AS "createdAt",
+            updated_at AS "updatedAt"
+        `,
+        [campaignId, workspaceId, input.releaseId, input.expectedVersion],
+      );
+      const updatedRow = updateResult.rows[0];
+
+      if (!updatedRow) {
+        // Une course peut avoir appliqué exactement le même rattachement entre
+        // la lecture et l'UPDATE. Dans ce seul cas, garder l'idempotence ; dans
+        // les autres cas, refuser l'écrasement silencieux avec 409.
+        const latestResult = await transaction.query<ScalarRow>(
+          `
+            SELECT
+              campaign.id,
+              campaign.artist_project_id AS "projectId",
+              campaign.name,
+              campaign.objective,
+              campaign.status,
+              campaign.release_id AS "releaseId",
+              release.title AS "releaseTitle",
+              campaign.row_version AS version,
+              campaign.created_at AS "createdAt",
+              campaign.updated_at AS "updatedAt"
+            FROM campaigns campaign
+            LEFT JOIN releases release ON release.id = campaign.release_id
+              AND release.workspace_id = campaign.workspace_id
+              AND release.artist_project_id = campaign.artist_project_id
+            WHERE campaign.id = $1
+              AND campaign.workspace_id = $2
+            LIMIT 1
+          `,
+          [campaignId, workspaceId],
+        );
+        const latestRow = latestResult.rows[0];
+
+        if (!latestRow) {
+          return { kind: "campaign-not-found" };
+        }
+
+        const latest = toCampaign(latestRow);
+        return latest.releaseId === input.releaseId ? { kind: "unchanged", campaign: latest } : { kind: "stale" };
+      }
+
+      const campaign = toCampaign({ ...updatedRow, releaseTitle });
+      await transaction.query(
+        `
+          INSERT INTO activity_logs (id, workspace_id, actor_user_id, action, entity_type, entity_id, payload)
+          VALUES ($1, $2, $3, $4, 'CAMPAIGN', $5, $6::json)
+        `,
+        [
+          `act_${randomUUID().replaceAll("-", "")}`,
+          workspaceId,
+          actorUserId,
+          input.releaseId === null ? "campaign.release_unlinked" : "campaign.release_linked",
+          campaign.id,
+          JSON.stringify({ releaseId: campaign.releaseId, version: campaign.version }),
+        ],
+      );
+
+      return { kind: "updated", campaign };
     });
   }
 
@@ -2702,9 +2879,9 @@ export class DemoDatabase {
         created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
 
-      -- Campaign Brief Registry : le brief reste interne. Les associations
-      -- release/contenu/calendrier et les piliers arriveront avec leurs
-      -- propres tables et autorisations, jamais par des colonnes implicites.
+      -- Campaign Brief Registry : le brief reste interne. Son unique lien
+      -- facultatif vers une release est gardé ici ; les contenus, calendrier
+      -- et piliers auront leurs propres tables et autorisations.
       CREATE TABLE IF NOT EXISTS campaigns (
         id TEXT PRIMARY KEY,
         workspace_id TEXT NOT NULL REFERENCES workspaces(id),
@@ -2713,10 +2890,13 @@ export class DemoDatabase {
         normalized_name TEXT NOT NULL,
         objective TEXT NOT NULL,
         status TEXT NOT NULL DEFAULT 'DRAFT',
+        release_id TEXT REFERENCES releases(id),
+        row_version INTEGER NOT NULL DEFAULT 1,
         created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
         UNIQUE (workspace_id, normalized_name),
-        CONSTRAINT campaigns_status_check CHECK (status IN ('DRAFT', 'ACTIVE', 'PAUSED', 'COMPLETED', 'ARCHIVED'))
+        CONSTRAINT campaigns_status_check CHECK (status IN ('DRAFT', 'ACTIVE', 'PAUSED', 'COMPLETED', 'ARCHIVED')),
+        CONSTRAINT campaigns_row_version_check CHECK (row_version > 0)
       );
 
       CREATE TABLE IF NOT EXISTS tracks (
@@ -3016,6 +3196,47 @@ export class DemoDatabase {
         ADD COLUMN IF NOT EXISTS description TEXT;
       ALTER TABLE tracks
         ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+      ALTER TABLE campaigns
+        ADD COLUMN IF NOT EXISTS release_id TEXT REFERENCES releases(id);
+      ALTER TABLE campaigns
+        ADD COLUMN IF NOT EXISTS row_version INTEGER NOT NULL DEFAULT 1;
+      UPDATE campaigns
+        SET row_version = 1
+        WHERE row_version IS NULL OR row_version < 1;
+      ALTER TABLE campaigns
+        ALTER COLUMN row_version SET DEFAULT 1;
+      ALTER TABLE campaigns
+        ALTER COLUMN row_version SET NOT NULL;
+      -- Une ancienne base locale peut avoir été créée avant la contrainte de
+      -- version. Après la normalisation, la remettre garantit aussi les
+      -- écritures SQL futures qui ne passeraient pas par l'API.
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conrelid = 'campaigns'::regclass
+            AND conname = 'campaigns_row_version_check'
+        ) THEN
+          ALTER TABLE campaigns
+            ADD CONSTRAINT campaigns_row_version_check CHECK (row_version > 0);
+        END IF;
+      END;
+      $$;
+      -- Une FK sur release_id établit l'existence, mais ne peut pas exprimer
+      -- l'appartenance au même workspace et projet. Réparer d'abord les liens
+      -- historiques éventuellement incompatibles, puis installer la garde
+      -- côté base ci-dessous.
+      UPDATE campaigns AS campaign
+        SET release_id = NULL
+        WHERE release_id IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1
+            FROM releases AS release
+            WHERE release.id = campaign.release_id
+              AND release.workspace_id = campaign.workspace_id
+              AND release.artist_project_id = campaign.artist_project_id
+          );
       ALTER TABLE media_assets
         ADD COLUMN IF NOT EXISTS storage_key TEXT;
       ALTER TABLE media_assets
@@ -3054,6 +3275,34 @@ export class DemoDatabase {
         ALTER COLUMN updated_at SET DEFAULT CURRENT_TIMESTAMP;
       ALTER TABLE tasks
         ALTER COLUMN updated_at SET NOT NULL;
+    `);
+
+    // Cette garde complète la FK simple avec le scope composé. Elle protège
+    // aussi un futur write path SQL mal câblé : aucune campagne ne peut porter
+    // une release d'un autre workspace ou d'un autre projet artistique.
+    await this.pglite.exec(`
+      CREATE OR REPLACE FUNCTION enforce_campaign_release_scope()
+      RETURNS TRIGGER AS $$
+      BEGIN
+        IF NEW.release_id IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1
+            FROM releases AS release
+            WHERE release.id = NEW.release_id
+              AND release.workspace_id = NEW.workspace_id
+              AND release.artist_project_id = NEW.artist_project_id
+          ) THEN
+          RAISE EXCEPTION 'La release liée doit appartenir au même workspace et projet artistique que la campagne.';
+        END IF;
+
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+
+      DROP TRIGGER IF EXISTS campaigns_release_scope_guard ON campaigns;
+      CREATE TRIGGER campaigns_release_scope_guard
+      BEFORE INSERT OR UPDATE OF release_id, workspace_id, artist_project_id ON campaigns
+      FOR EACH ROW EXECUTE FUNCTION enforce_campaign_release_scope();
     `);
 
     await this.migrateRequestedApprovalPayloadHashes();

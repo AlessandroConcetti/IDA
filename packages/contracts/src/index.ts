@@ -362,15 +362,16 @@ export const taskCompleteParamsSchema = z
 
 // Campaign Brief Registry --------------------------------------------------
 //
-// Cette première tranche conserve uniquement le brief créatif interne. Les
-// liens vers une release, les dates, piliers, contenus et transitions de
-// campagne seront ajoutés par des contrats dédiés, plutôt que d'être acceptés
-// prématurément comme champs libres.
+// Le brief créatif et son lien facultatif vers une release restent deux
+// contrats distincts. Les dates, piliers, contenus et transitions de campagne
+// arriveront eux aussi par des sous-ressources dédiées, plutôt que comme champs
+// libres dans la création.
 export const campaignStatusSchema = z.enum(["DRAFT", "ACTIVE", "PAUSED", "COMPLETED", "ARCHIVED"]);
 export type CampaignStatus = z.infer<typeof campaignStatusSchema>;
 
 const campaignNameSchema = z.string().trim().min(1).max(240);
 const campaignObjectiveSchema = z.string().trim().min(1).max(2_000);
+const campaignVersionSchema = z.number().int().positive();
 
 export const campaignSchema = z.object({
   id: entityIdSchema,
@@ -379,6 +380,9 @@ export const campaignSchema = z.object({
   name: campaignNameSchema,
   objective: campaignObjectiveSchema,
   status: campaignStatusSchema,
+  releaseId: entityIdSchema.optional(),
+  releaseTitle: z.string().trim().min(1).max(240).optional(),
+  version: campaignVersionSchema,
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
 });
@@ -396,6 +400,24 @@ export const campaignCreateSchema = z
   .strict();
 
 export type CampaignCreate = z.infer<typeof campaignCreateSchema>;
+
+// Le rattachement est une mutation explicite et optimiste : le client indique
+// la version du brief qu'il a lu. `null` ne signifie jamais une valeur absente
+// implicite ; il demande explicitement de retirer le lien courant.
+export const campaignReleaseLinkParamsSchema = z
+  .object({
+    campaignId: entityIdSchema,
+  })
+  .strict();
+
+export const campaignReleaseLinkSchema = z
+  .object({
+    releaseId: entityIdSchema.nullable(),
+    expectedVersion: campaignVersionSchema,
+  })
+  .strict();
+
+export type CampaignReleaseLink = z.infer<typeof campaignReleaseLinkSchema>;
 
 export const socialPlatformSchema = z.enum(["INSTAGRAM", "TIKTOK", "YOUTUBE", "FACEBOOK"]);
 export type SocialPlatform = z.infer<typeof socialPlatformSchema>;

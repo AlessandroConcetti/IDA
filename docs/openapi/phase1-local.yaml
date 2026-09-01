@@ -6,7 +6,8 @@ info:
     Contrat du runtime de développement local. Il expose uniquement des données
     de démonstration, des commandes IDA déterministes en lecture seule, une
     modification interne bornée de l’Artist Brain, une création Music Brain
-    strictement contrôlée, un registre de briefs de campagne internes, un flux
+    strictement contrôlée, un registre de briefs de campagne internes avec lien
+    de release contrôlé, un flux
     de mémoire consentie local, un Approval Center interne sans livraison et
     un Task Center interne contrôlé.
 servers:
@@ -115,7 +116,8 @@ paths:
       summary: Liste les briefs de campagne internes du workspace local
       description: >-
         Lecture isolée au workspace résolu côté serveur. Les briefs ne portent
-        encore ni release, ni date, ni pilier, ni contenu ou effet externe.
+        que leur lien optionnel de release; ils ne portent encore ni date, ni
+        pilier, ni contenu ou effet externe.
       responses:
         '200':
           description: Briefs de campagne internes dans un ordre stable
@@ -153,6 +155,39 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/CampaignAlreadyExists'
+  /v1/campaigns/{campaignId}/release:
+    patch:
+      operationId: linkCampaignBriefRelease
+      summary: Rattache ou retire la release d’un Campaign Brief
+      description: >-
+        Reçoit une release existante ou null et une version attendue. Le serveur
+        vérifie que la campagne et la release partagent le workspace et le projet
+        artistique, applique une écriture conditionnelle versionnée et appelle
+        uniquement link_campaign_release avec CAMPAIGNS/WRITE. Aucun contenu,
+        date, planification, IA ou effet social n’est créé.
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CampaignReleaseLinkRequest'
+      responses:
+        '200':
+          description: Lien déjà présent ou campagne mise à jour
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CampaignResponse'
+        '400':
+          $ref: '#/components/responses/InvalidCampaignReleaseLink'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/CampaignOrReleaseNotFound'
+        '409':
+          $ref: '#/components/responses/CampaignStale'
   /v1/tracks:
     get:
       operationId: listTracks
@@ -643,6 +678,14 @@ components:
       schema:
         type: string
         minLength: 1
+    CampaignId:
+      name: campaignId
+      in: path
+      required: true
+      description: Identifiant de campagne résolu dans le workspace serveur.
+      schema:
+        type: string
+        minLength: 1
   responses:
     InvalidCommand:
       description: Corps de commande ou filtre invalide
@@ -670,6 +713,24 @@ components:
             $ref: '#/components/schemas/ErrorResponse'
     CampaignAlreadyExists:
       description: Un brief avec le même nom normalisé existe déjà dans ce workspace
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InvalidCampaignReleaseLink:
+      description: Corps de liaison release invalide ou tentative d’injecter un champ de campagne, scope ou acteur
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    CampaignOrReleaseNotFound:
+      description: Campagne ou release compatible introuvable dans le scope autorisé
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    CampaignStale:
+      description: La version de campagne attendue n’est plus courante
       content:
         application/json:
           schema:
@@ -1027,7 +1088,7 @@ components:
     Campaign:
       type: object
       additionalProperties: false
-      required: [id, workspaceId, artistProjectId, name, objective, status, createdAt, updatedAt]
+      required: [id, workspaceId, artistProjectId, name, objective, status, version, createdAt, updatedAt]
       properties:
         id: { type: string, minLength: 1 }
         workspaceId: { type: string, minLength: 1 }
@@ -1036,6 +1097,16 @@ components:
         objective: { type: string, minLength: 1, maxLength: 2000 }
         status:
           $ref: '#/components/schemas/CampaignStatus'
+        releaseId:
+          type: string
+          minLength: 1
+        releaseTitle:
+          type: string
+          minLength: 1
+          maxLength: 240
+        version:
+          type: integer
+          minimum: 1
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
     CampaignCreateRequest:
@@ -1045,6 +1116,19 @@ components:
       properties:
         name: { type: string, minLength: 1, maxLength: 240 }
         objective: { type: string, minLength: 1, maxLength: 2000 }
+    CampaignReleaseLinkRequest:
+      type: object
+      additionalProperties: false
+      required: [releaseId, expectedVersion]
+      properties:
+        releaseId:
+          oneOf:
+            - type: string
+              minLength: 1
+            - type: 'null'
+        expectedVersion:
+          type: integer
+          minimum: 1
     CampaignResponse:
       type: object
       required: [data]
