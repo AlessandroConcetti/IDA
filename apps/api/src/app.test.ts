@@ -275,7 +275,7 @@ describe("IDA API — première tranche Phase 1", () => {
       expect(submittedBody.data).toMatchObject({
         commandRunId: submittedBody.data.command.id,
         state: "COMPLETED",
-        message: expect.stringContaining("contenu"),
+        message: expect.stringContaining("média"),
       });
 
       const listed = await firstApp.inject({ method: "GET", url: "/v1/ida/command-runs?limit=12" });
@@ -2626,7 +2626,24 @@ describe("IDA API — première tranche Phase 1", () => {
     ).toBe(true);
   });
 
-  it("traite une commande de contenus inutilisés uniquement avec un outil READ", async () => {
+  it("traite une commande de contenus inutilisés avec les médias réellement disponibles et un outil READ", async () => {
+    const imported = await app.inject({
+      method: "POST",
+      url: "/v1/media",
+      ...multipartPayload([
+        {
+          name: "file",
+          filename: "command-rotation.mp4",
+          contentType: "video/mp4",
+          value: Buffer.from("ida-command-rotation-media"),
+        },
+        { name: "description", value: "Média libre pour une commande IDA." },
+        { name: "tags", value: "commande, rotation" },
+      ]),
+    });
+    expect(imported.statusCode).toBe(201);
+    const importedAsset = (imported.json() as { data: { id: string } }).data;
+
     const response = await app.inject({
       method: "POST",
       url: "/v1/ida/commands",
@@ -2640,7 +2657,8 @@ describe("IDA API — première tranche Phase 1", () => {
         kind: string;
         command: { intent: string; requestedPermission: string; workspaceId: string; state: string };
         tools: Array<{ key: string; moduleKey: string; permission: string }>;
-        result: { items: Array<{ id: string }> };
+        message: string;
+        result: { items: Array<{ id: string; filename: string; type: string; state: string }> };
       };
     };
 
@@ -2651,10 +2669,46 @@ describe("IDA API — première tranche Phase 1", () => {
       workspaceId: "wsp_demo_aless",
       state: "COMPLETED",
     });
-    expect(body.data.tools).toEqual([{ key: "search_unused_media", moduleKey: "CONTENT", permission: "READ" }]);
-    expect(body.data.result.items.map((item) => item.id)).toEqual(
-      expect.arrayContaining(["med_studio_light", "med_night-drive"]),
-    );
+    expect(body.data.tools).toEqual([
+      { key: "list_content_rotation_candidates", moduleKey: "CONTENT", permission: "READ" },
+    ]);
+    expect(body.data.message).toContain("réellement disponible");
+    expect(body.data.result.items).toEqual([
+      expect.objectContaining({
+        id: importedAsset.id,
+        filename: "command-rotation.mp4",
+        type: "VIDEO",
+        state: "AVAILABLE",
+      }),
+    ]);
+    expect(Object.keys(body.data.result.items[0] ?? {}).sort()).toEqual([
+      "createdAt",
+      "description",
+      "filename",
+      "id",
+      "state",
+      "tags",
+      "type",
+    ]);
+    const serializedResult = JSON.stringify(body.data.result);
+    for (const forbiddenValue of [
+      "med_studio_light",
+      "med_night-drive",
+      "hash",
+      "mediaType",
+      "mimeType",
+      "usageCount",
+      "lastUsedAt",
+    ]) {
+      expect(serializedResult).not.toContain(forbiddenValue);
+    }
+
+    const unsupportedHistory = await app.inject({
+      method: "POST",
+      url: "/v1/ida/commands",
+      payload: { message: "IDA, montre-moi mes contenus jamais publiés." },
+    });
+    expect((unsupportedHistory.json() as { data: { kind: string } }).data.kind).toBe("HELP");
   });
 
   it("refuse les filtres médias invalides ou dupliqués", async () => {

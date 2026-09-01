@@ -274,7 +274,7 @@ export function getLocalIdaResponse(command: string): string {
   }
 
   if (normalized.includes("inutil") || normalized.includes("unused") || normalized.includes("média")) {
-    return "J’ai trouvé deux médias inutilisés dans cet aperçu local : studio_take_07.mp4 et blue_hour_press.jpg. L’API permettra bientôt de rechercher ta bibliothèque réelle.";
+    return "Je ne peux pas vérifier les médias réellement disponibles sans IDA API. Ouvre Content Rotation une fois le hub connecté.";
   }
 
   if (normalized.includes("release") || normalized.includes("campagne")) {

@@ -740,7 +740,14 @@ paths:
     post:
       operationId: executeIdaCommand
       summary: Exécute une commande IDA déterministe et en lecture seule
-      description: Une commande READ / COMPLETED est ajoutée à l’historique privé local, avec audit redacted sans texte libre, sans résultat détaillé d’outil ni mémoire implicite.
+      description: >-
+        Une commande READ / COMPLETED est ajoutée à l’historique privé local,
+        avec audit redacted sans texte libre, sans résultat détaillé d’outil ni
+        mémoire implicite. La formulation « contenus inutilisés » sélectionne
+        les médias réellement disponibles (UNUSED et sans lien éditorial) avec
+        l’outil CONTENT/READ list_content_rotation_candidates ; elle ne crée
+        aucun effet éditorial ou externe. Les demandes d’historique « jamais
+        publié/utilisé » restent hors périmètre.
       requestBody:
         required: true
         content:
@@ -1849,3 +1856,7 @@ components:
             result:
               type: object
               additionalProperties: true
+              description: >-
+                Résultat borné par le kind. Pour UNUSED_CONTENT, items contient
+                uniquement des ContentRotationCandidate AVAILABLE : aucun hash,
+                stockage, compteur, statut brut ou média déjà lié n’est rendu.

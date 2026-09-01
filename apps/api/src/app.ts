@@ -21,7 +21,6 @@ import {
   campaignReleaseLinkParamsSchema,
   campaignReleaseLinkSchema,
   campaignSchema,
-  contentRotationCandidateSchema,
   contentRotationQuerySchema,
   contentRotationResponseSchema,
   idaCommandRunCursorSchema,
@@ -51,7 +50,7 @@ import {
 } from "@ida/contracts";
 import { createModuleRegistry, ToolGateway, ToolPolicyError } from "@ida/domain";
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
-
+import { toContentRotationCandidateResponse } from "./content-rotation.js";
 import {
   type ActivityLogEntry,
   type ApprovalDecision,
@@ -60,7 +59,6 @@ import {
   type CalendarItem,
   type Campaign,
   type CommandRunHistoryEntry,
-  type ContentRotationCandidate,
   DemoDatabase,
   type DemoDatabaseOptions,
   type InternalPostSchedule,
@@ -526,18 +524,6 @@ function toMediaAssetResponse(asset: MediaAsset) {
     lastUsedAt: asset.lastUsedAt ?? undefined,
     createdAt: asset.createdAt,
     updatedAt: asset.updatedAt,
-  });
-}
-
-function toContentRotationCandidateResponse(candidate: ContentRotationCandidate) {
-  return contentRotationCandidateSchema.parse({
-    id: candidate.id,
-    filename: candidate.filename,
-    type: candidate.mediaType,
-    description: optionalString(candidate.description),
-    tags: candidate.tags,
-    createdAt: candidate.createdAt,
-    state: candidate.state,
   });
 }
 

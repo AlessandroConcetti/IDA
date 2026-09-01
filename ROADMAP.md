@@ -63,7 +63,7 @@ Créer le premier produit réellement utilisable : un Command Center responsive 
 - Command Center React responsive desktop/iPhone avec tous les modules initiaux, dont `SOCIAL`, `CAMPAIGNS`, `ANALYTICS`, `TASKS`, `MEMORY` et `SYSTEM` ;
 - API Fastify locale, contrats Zod partagés et policy d’outils ;
 - données musicales, médias, mémoire, tâches et capacités sociales de démonstration isolées par workspace côté serveur ;
-- commandes textuelles déterministes de lecture : journée, contenus inutilisés et état système ;
+- commandes textuelles déterministes de lecture : journée, médias réellement disponibles à proposer (formulation naturelle « contenus inutilisés ») et état système ;
 - Artist Brain éditable : identité, ton, genres, influences, audience, objectifs et vocabulaire, avec validation, permission `WRITE` interne et persistance locale ;
 - Music Brain : création locale contrôlée d’un morceau avec métadonnées, validation stricte, scope résolu par le serveur, outil `WRITE` allowlisté et audit append-only ;
 - Content Library : import local privé et recherche filtrée de métadonnées, avec limites, hash SHA-256, détection de doublon, tags normalisés, stockage à clé générée, lecture bornée isolée au workspace, audit append-only pour l’import et projection de rotation factuelle des médias `UNUSED` sans lien éditorial ;

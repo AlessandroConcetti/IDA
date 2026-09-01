@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import {
+  type ContentRotationCandidate as ContentRotationCandidateContract,
   type IdaCommand,
   type IdaCommandIntent,
   idaCommandInputSchema,
@@ -10,7 +11,8 @@ import {
 } from "@ida/contracts";
 import { ToolGateway } from "@ida/domain";
 
-import type { DemoDatabase, MediaAsset, TodayItem } from "./database.js";
+import { toContentRotationCandidateResponse } from "./content-rotation.js";
+import type { DemoDatabase, TodayItem } from "./database.js";
 import { demoContext } from "./demo-context.js";
 
 export class CommandInputError extends Error {
@@ -39,7 +41,7 @@ export type CommandResponse = {
   message: string;
   tools: CommandToolUse[];
   result: {
-    items?: TodayItem[] | MediaAsset[];
+    items?: TodayItem[] | ContentRotationCandidateContract[];
     system?: SystemStatus[];
   };
 };
@@ -48,7 +50,7 @@ type CommandCompletion = Omit<CommandResponse, "command" | "commandRunId" | "sta
 
 const idaCoreAllowedTools = [
   { toolKey: "get_today", moduleKey: "TASKS", permission: "READ" },
-  { toolKey: "search_unused_media", moduleKey: "CONTENT", permission: "READ" },
+  { toolKey: "list_content_rotation_candidates", moduleKey: "CONTENT", permission: "READ" },
   { toolKey: "get_system_status", moduleKey: "SYSTEM", permission: "READ" },
   { toolKey: "describe_supported_commands", moduleKey: "IDA", permission: "READ" },
   // L'écriture locale n'est pas exposée dans la réponse de commande. Elle
@@ -82,12 +84,7 @@ function classify(message: string): { kind: DeterministicCommandKind; intent: Id
     return { kind: "TODAY", intent: "PREPARE_DAY" };
   }
 
-  if (
-    normalized.includes("inutilise") ||
-    normalized.includes("unused") ||
-    normalized.includes("jamais publie") ||
-    normalized.includes("jamais utilise")
-  ) {
+  if (normalized.includes("inutilise") || normalized.includes("unused")) {
     return { kind: "UNUSED_CONTENT", intent: "LIST_UNUSED_CONTENT" };
   }
 
@@ -213,16 +210,22 @@ export class DeterministicIdaCore {
         });
       }
       case "UNUSED_CONTENT": {
-        const tool: CommandToolUse = { key: "search_unused_media", moduleKey: "CONTENT", permission: "READ" };
+        const tool: CommandToolUse = {
+          key: "list_content_rotation_candidates",
+          moduleKey: "CONTENT",
+          permission: "READ",
+        };
         this.gateway.assertAuthorized({ toolKey: tool.key, moduleKey: tool.moduleKey, permission: tool.permission });
-        const items = await this.database.listMedia(demoContext.workspaceId, { status: "UNUSED" });
+        const items = (await this.database.listContentRotationCandidates(demoContext.workspaceId, 12)).map(
+          toContentRotationCandidateResponse,
+        );
 
         return this.complete(command, {
           kind: classified.kind,
           message:
             items.length === 0
-              ? "Je n’ai trouvé aucun contenu inutilisé dans ton workspace."
-              : `J’ai trouvé ${items.length} contenu${items.length > 1 ? "s" : ""} inutilisé${items.length > 1 ? "s" : ""} à exploiter.`,
+              ? "Je n’ai trouvé aucun média réellement disponible à proposer. Les médias déjà liés à une proposition restent exclus."
+              : `J’ai trouvé ${items.length} média${items.length > 1 ? "s" : ""} réellement disponible${items.length > 1 ? "s" : ""} à proposer.`,
           tools: [tool],
           result: { items },
         });
@@ -247,7 +250,7 @@ export class DeterministicIdaCore {
         return this.complete(command, {
           kind: classified.kind,
           message:
-            "Je peux actuellement résumer ta journée, lister les contenus inutilisés et expliquer l’état du système. Essaie : « Qu’est-ce que j’ai aujourd’hui ? »",
+            "Je peux actuellement résumer ta journée, lister les médias réellement disponibles à proposer et expliquer l’état du système. Essaie : « Qu’est-ce que j’ai aujourd’hui ? »",
           tools: [tool],
           result: {},
         });
