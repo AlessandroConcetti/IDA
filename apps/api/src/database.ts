@@ -3,6 +3,9 @@ import { mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { PGlite } from "@electric-sql/pglite";
 import type {
+  ActivityLogAction,
+  ActivityLogCursor,
+  ActivityLogEntityType,
   ArtistProfile as ArtistProfileContract,
   ArtistProfileUpdate,
   CampaignCreate,
@@ -13,12 +16,20 @@ import type {
   TaskCreate,
   TrackCreate,
 } from "@ida/contracts";
+import { activityLogActionValues, activityLogEntityTypeValues } from "@ida/contracts";
 
 import { demoContext, demoWorkspace } from "./demo-context.js";
 
 export const mediaStatuses = ["UNUSED", "USED", "SCHEDULED", "PUBLISHED", "ARCHIVED"] as const;
 
 export type MediaStatus = (typeof mediaStatuses)[number];
+
+// Ces valeurs viennent du contrat partagé, pas d'une entrée utilisateur. Elles
+// sont interpolées une fois dans la projection SQL afin que les événements
+// d'un futur domaine (Finance, Banque, etc.) restent invisibles tant qu'une
+// projection explicite n'a pas été approuvée.
+const visibleActivityActionsSql = activityLogActionValues.map((action) => `'${action}'`).join(", ");
+const visibleActivityEntityTypesSql = activityLogEntityTypeValues.map((entityType) => `'${entityType}'`).join(", ");
 
 export type DemoDatabaseOptions = {
   dataDir?: string;
@@ -169,6 +180,23 @@ export type CampaignReleaseLinkResult =
   | { kind: "campaign-not-found" }
   | { kind: "release-not-found" }
   | { kind: "stale" };
+
+export type ActivityLogEntry = {
+  id: string;
+  action: ActivityLogAction;
+  entityType: ActivityLogEntityType;
+  entityId: string;
+  createdAt: string;
+  // Valeur de pagination interne : elle conserve les microsecondes SQL, que
+  // `Date#toISOString()` ne peut pas représenter. Elle ne sort jamais de la
+  // réponse API, seul le curseur opaque l'utilise.
+  cursorCreatedAt: string;
+};
+
+export type ActivityLogPage = {
+  items: ActivityLogEntry[];
+  nextCursor?: ActivityLogCursor;
+};
 
 export type ApprovalMedia = {
   id: string;
@@ -490,6 +518,17 @@ function toCampaign(row: ScalarRow): Campaign {
     version: asNumber(row.version),
     createdAt: asTimestamp(row.createdAt) ?? "1970-01-01T00:00:00.000Z",
     updatedAt: asTimestamp(row.updatedAt) ?? "1970-01-01T00:00:00.000Z",
+  };
+}
+
+function toActivityLogEntry(row: ScalarRow): ActivityLogEntry {
+  return {
+    id: asString(row.id),
+    action: asString(row.action) as ActivityLogAction,
+    entityType: asString(row.entityType) as ActivityLogEntityType,
+    entityId: asString(row.entityId),
+    createdAt: asTimestamp(row.createdAt) ?? "1970-01-01T00:00:00.000Z",
+    cursorCreatedAt: asString(row.cursorCreatedAt),
   };
 }
 
@@ -851,6 +890,67 @@ export class DemoDatabase {
       status: asString(row.status),
       description: asNullableString(row.description),
     }));
+  }
+
+  async listActivityLogs(
+    workspaceId: string,
+    options: { limit?: number; cursor?: ActivityLogCursor } = {},
+  ): Promise<ActivityLogPage> {
+    const limit = options.limit ?? 20;
+    const values: unknown[] = [workspaceId];
+    const whereClauses = [
+      "activity.workspace_id = $1",
+      `activity.action IN (${visibleActivityActionsSql})`,
+      `activity.entity_type IN (${visibleActivityEntityTypesSql})`,
+    ];
+
+    if (options.cursor) {
+      values.push(options.cursor.createdAt, options.cursor.id);
+      const createdAtPlaceholder = `$${values.length - 1}`;
+      const idPlaceholder = `$${values.length}`;
+      whereClauses.push(
+        `(activity.created_at < ${createdAtPlaceholder} OR (activity.created_at = ${createdAtPlaceholder} AND activity.id < ${idPlaceholder}))`,
+      );
+    }
+
+    // Lire une ligne supplémentaire permet d'indiquer une page suivante sans
+    // total coûteux ni requête qui sortirait du workspace.
+    values.push(limit + 1);
+    const limitPlaceholder = `$${values.length}`;
+    const result = await this.pglite.query<ScalarRow>(
+      `
+        SELECT
+          activity.id,
+          activity.action,
+          activity.entity_type AS "entityType",
+          activity.entity_id AS "entityId",
+          activity.created_at AS "createdAt",
+          to_char(
+            activity.created_at AT TIME ZONE 'UTC',
+            'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+          ) AS "cursorCreatedAt"
+        FROM activity_logs activity
+        WHERE ${whereClauses.join("\n          AND ")}
+        ORDER BY activity.created_at DESC, activity.id DESC
+        LIMIT ${limitPlaceholder}
+      `,
+      values,
+    );
+    const hasNextPage = result.rows.length > limit;
+    const items = result.rows.slice(0, limit).map(toActivityLogEntry);
+    const lastItem = items.at(-1);
+
+    return {
+      items,
+      ...(hasNextPage && lastItem
+        ? {
+            nextCursor: {
+              createdAt: lastItem.cursorCreatedAt,
+              id: lastItem.id,
+            },
+          }
+        : {}),
+    };
   }
 
   async listCampaigns(workspaceId: string): Promise<Campaign[]> {
@@ -3110,6 +3210,8 @@ export class DemoDatabase {
         ON tracks (workspace_id, status);
       CREATE INDEX IF NOT EXISTS idx_activity_logs_workspace_created
         ON activity_logs (workspace_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_activity_logs_workspace_created_id
+        ON activity_logs (workspace_id, created_at DESC, id DESC);
       CREATE INDEX IF NOT EXISTS idx_media_workspace_status
         ON media_assets (workspace_id, status);
       CREATE INDEX IF NOT EXISTS idx_media_asset_tags_tag_asset

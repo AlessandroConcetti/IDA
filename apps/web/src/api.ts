@@ -12,6 +12,24 @@ export interface DashboardSnapshot {
   mediaAssets: MediaAsset[];
 }
 
+export interface ActivityLogRecord {
+  id: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  createdAt: string;
+}
+
+export interface ActivityLogPage {
+  items: ActivityLogRecord[];
+  nextCursor?: string;
+}
+
+export interface ActivityLogListInput {
+  limit?: number;
+  cursor?: string;
+}
+
 export interface TrackCreateInput {
   title: string;
   artistCredit: string;
@@ -534,6 +552,35 @@ function toSystemServices(payload: unknown): SystemService[] {
   }));
 }
 
+function toActivityLog(record: Record<string, unknown>): ActivityLogRecord {
+  const id = readString(record.id);
+  const action = readString(record.action);
+  const entityType = readString(record.entityType);
+  const entityId = readString(record.entityId);
+  const createdAt = readString(record.createdAt);
+
+  if (!id || !action || !entityType || !entityId || !createdAt || Number.isNaN(Date.parse(createdAt))) {
+    throw new IdaApiError("Une entrée de l’historique d’activité est invalide.");
+  }
+
+  return { id, action, entityType, entityId, createdAt };
+}
+
+function toActivityLogPage(payload: unknown): ActivityLogPage {
+  const data = readDataObject(payload, "/v1/activity-logs");
+
+  if (!Array.isArray(data.items) || !data.items.every(isRecord)) {
+    throw new IdaApiError("La réponse /v1/activity-logs n’a pas le format attendu.");
+  }
+
+  const nextCursor = readString(data.nextCursor);
+
+  return {
+    items: data.items.map(toActivityLog),
+    ...(nextCursor === undefined ? {} : { nextCursor }),
+  };
+}
+
 function toArtistBrain(payload: unknown): ArtistBrain {
   const profile = readDataObject(payload, "/v1/artist-profile");
 
@@ -552,6 +599,17 @@ function toArtistBrain(payload: unknown): ArtistBrain {
 
 export async function fetchArtistBrain(): Promise<ArtistBrain> {
   return toArtistBrain(await getApiJson("/v1/artist-profile"));
+}
+
+export async function fetchActivityLogs(input: ActivityLogListInput = {}): Promise<ActivityLogPage> {
+  const query = new URLSearchParams();
+  query.set("limit", String(input.limit ?? 12));
+
+  if (input.cursor) {
+    query.set("cursor", input.cursor);
+  }
+
+  return toActivityLogPage(await getApiJson(`/v1/activity-logs?${query.toString()}`));
 }
 
 export async function updateArtistBrain(profile: ArtistBrain): Promise<ArtistBrain> {

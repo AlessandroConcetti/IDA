@@ -1,5 +1,6 @@
 import { type DragEvent, type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
+  type ActivityLogRecord,
   type ApprovalQueueItem,
   approvePostVariant,
   type CampaignCreateInput,
@@ -14,6 +15,7 @@ import {
   type EditorialCalendarItem,
   type EditorialCalendarSnapshot,
   type EditorialCalendarView,
+  fetchActivityLogs,
   fetchApprovalQueue,
   fetchArtistBrain,
   fetchCampaigns,
@@ -487,6 +489,135 @@ function SystemPanel({
           </article>
         ))}
       </div>
+    </section>
+  );
+}
+
+type ActivityTimelineSource = "loading" | "api" | "unavailable";
+
+function activityActionLabel(action: string): string {
+  const labels: Record<string, string> = {
+    "campaign.created": "Campaign Brief créé",
+    "campaign.release_linked": "Release rattachée à une campagne",
+    "campaign.release_unlinked": "Release retirée d’une campagne",
+    "track.created": "Morceau ajouté au Music Brain",
+    "media.imported": "Média importé dans la bibliothèque",
+    "memory.proposed": "Préférence proposée",
+    "memory.confirmed": "Préférence enregistrée",
+    "memory.rejected": "Préférence non enregistrée",
+    "post_variant.approved": "Proposition approuvée",
+    "post_variant.rejected": "Proposition refusée",
+    "post_variant.internal_scheduled": "Proposition ajoutée au calendrier interne",
+    "task.created": "Tâche créée",
+    "task.completed": "Tâche terminée",
+  };
+
+  return labels[action] ?? "Action interne enregistrée";
+}
+
+function activityEntityLabel(entityType: string): string {
+  const labels: Record<string, string> = {
+    CAMPAIGN: "CAMPAIGN",
+    TRACK: "MUSIC",
+    MEDIA_ASSET: "CONTENT",
+    MEMORY: "MEMORY",
+    POST_VARIANT: "CONTENT",
+    TASK: "TASKS",
+  };
+
+  return labels[entityType] ?? "SYSTEM";
+}
+
+function formatActivityTime(value: string): string {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Date indisponible";
+  }
+
+  return new Intl.DateTimeFormat("fr-FR", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function ActivityTimeline() {
+  const [items, setItems] = useState<ActivityLogRecord[]>([]);
+  const [source, setSource] = useState<ActivityTimelineSource>(isApiConfigured ? "loading" : "unavailable");
+  const [notice, setNotice] = useState("Chargement de l’historique d’activité…");
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    if (!isApiConfigured) {
+      return () => {
+        isCurrent = false;
+      };
+    }
+
+    void fetchActivityLogs({ limit: 12 })
+      .then((page) => {
+        if (!isCurrent) {
+          return;
+        }
+
+        setItems(page.items);
+        setSource("api");
+        setNotice(
+          page.items.length === 0 ? "Aucune action interne n’est encore enregistrée." : "Timeline en lecture seule.",
+        );
+      })
+      .catch((error: unknown) => {
+        if (!isCurrent) {
+          return;
+        }
+
+        setItems([]);
+        setSource("unavailable");
+        const reason = error instanceof IdaApiError ? error.message : "IDA API est indisponible.";
+        setNotice(`Historique indisponible : ${reason}`);
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, []);
+
+  return (
+    <section className="panel activity-timeline" aria-labelledby="activity-timeline-title">
+      <div className="panel-heading">
+        <div>
+          <p className="eyebrow">ACTIVITY</p>
+          <h2 id="activity-timeline-title">What IDA has recorded.</h2>
+        </div>
+        <span className="quiet-label">
+          {source === "api" ? `${items.length} récent${items.length === 1 ? "" : "s"}` : "READ ONLY"}
+        </span>
+      </div>
+      <p className="activity-timeline-intro">
+        Une projection minimale de l’audit : aucune caption, préférence, média, hash, token ou détail privé n’est
+        affiché.
+      </p>
+      {source !== "api" || items.length === 0 ? (
+        <p className={`activity-timeline-empty ${source}`} role="status" aria-live="polite">
+          {notice}
+        </p>
+      ) : (
+        <ol className="activity-timeline-list" aria-label="Historique d’activité récent">
+          {items.map((item) => (
+            <li className="activity-timeline-item" key={item.id}>
+              <span className="activity-timeline-marker" aria-hidden="true" />
+              <div>
+                <h3>{activityActionLabel(item.action)}</h3>
+                <p>{activityEntityLabel(item.entityType)}</p>
+              </div>
+              <time dateTime={item.createdAt}>{formatActivityTime(item.createdAt)}</time>
+            </li>
+          ))}
+        </ol>
+      )}
     </section>
   );
 }
@@ -2893,7 +3024,12 @@ function MemoryView() {
 }
 
 function SystemView({ dashboard, source }: { dashboard: DashboardSnapshot; source: DashboardSource }) {
-  return <SystemPanel services={dashboard.systemServices} source={source} />;
+  return (
+    <div className="page-grid system-view">
+      <SystemPanel services={dashboard.systemServices} source={source} />
+      <ActivityTimeline />
+    </div>
+  );
 }
 
 function IdaView({ messages }: { messages: ConversationMessage[] }) {

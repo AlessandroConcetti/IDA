@@ -5,6 +5,10 @@ import { fileURLToPath } from "node:url";
 import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
 import {
+  activityLogCursorSchema,
+  activityLogListQuerySchema,
+  activityLogListResponseSchema,
+  activityLogSchema,
   approvalQueueItemSchema,
   artistProfileSchema,
   artistProfileUpdateSchema,
@@ -42,6 +46,7 @@ import { createModuleRegistry, ToolGateway, ToolPolicyError } from "@ida/domain"
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 
 import {
+  type ActivityLogEntry,
   type ApprovalDecision,
   type ApprovalQueueItem,
   type ArtistProfile,
@@ -405,6 +410,15 @@ class MediaListQueryInputError extends Error {
   }
 }
 
+class ActivityLogQueryInputError extends Error {
+  readonly statusCode = 400;
+  readonly code = "INVALID_ACTIVITY_LOG_QUERY";
+
+  constructor() {
+    super("La pagination de l'historique d'activité est invalide.");
+  }
+}
+
 class MediaImportError extends Error {
   constructor(
     readonly statusCode: number,
@@ -666,6 +680,35 @@ function toCampaignResponse(campaign: Campaign) {
   });
 }
 
+function toActivityLogResponse(activity: ActivityLogEntry) {
+  return activityLogSchema.parse({
+    id: activity.id,
+    action: activity.action,
+    entityType: activity.entityType,
+    entityId: activity.entityId,
+    createdAt: activity.createdAt,
+  });
+}
+
+function encodeActivityLogCursor(cursor: { createdAt: string; id: string }): string {
+  return Buffer.from(JSON.stringify(activityLogCursorSchema.parse(cursor)), "utf8").toString("base64url");
+}
+
+function decodeActivityLogCursor(cursor: string) {
+  try {
+    const decoded = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as unknown;
+    const parsed = activityLogCursorSchema.safeParse(decoded);
+
+    if (!parsed.success) {
+      throw new Error("Cursor invalide.");
+    }
+
+    return parsed.data;
+  } catch {
+    throw new ActivityLogQueryInputError();
+  }
+}
+
 function toMemoryResponse(memory: Memory) {
   return memorySchema.parse({
     id: memory.id,
@@ -838,7 +881,8 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     if (
       error instanceof InternalPostScheduleInputError ||
       error instanceof CalendarQueryInputError ||
-      error instanceof MediaListQueryInputError
+      error instanceof MediaListQueryInputError ||
+      error instanceof ActivityLogQueryInputError
     ) {
       return reply.status(error.statusCode).send({
         error: { code: error.code, message: error.message },
@@ -1202,6 +1246,28 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   app.get("/v1/modules", async () => ({ data: modules.list() }));
 
   app.get("/v1/system/status", async () => ({ data: core.getSystemStatus() }));
+
+  app.get("/v1/activity-logs", async (request) => {
+    const query = activityLogListQuerySchema.safeParse(request.query);
+
+    if (!query.success) {
+      throw new ActivityLogQueryInputError();
+    }
+
+    // La requête ne peut ni choisir un workspace, ni demander le JSON payload
+    // d'audit. Le curseur est un tuple opaque validé avant toute requête SQL.
+    const page = await database.listActivityLogs(demoContext.workspaceId, {
+      limit: query.data.limit,
+      ...(query.data.cursor ? { cursor: decodeActivityLogCursor(query.data.cursor) } : {}),
+    });
+
+    return activityLogListResponseSchema.parse({
+      data: {
+        items: page.items.map(toActivityLogResponse),
+        ...(page.nextCursor ? { nextCursor: encodeActivityLogCursor(page.nextCursor) } : {}),
+      },
+    });
+  });
 
   app.get("/v1/artist-profile", async (_request, reply) => {
     const profile = await database.getArtistProfile(demoContext.workspaceId);

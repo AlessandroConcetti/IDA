@@ -86,6 +86,7 @@ describe("IDA API — première tranche Phase 1", () => {
       "/v1/me",
       "/v1/modules",
       "/v1/system/status",
+      "/v1/activity-logs",
       "/v1/artist-profile",
       "/v1/releases",
       "/v1/campaigns",
@@ -103,6 +104,136 @@ describe("IDA API — première tranche Phase 1", () => {
 
       expect(response.statusCode, url).toBe(200);
       expect(response.json()).toHaveProperty("data");
+    }
+  });
+
+  it("projette un historique d'activité borné, stable, isolé et sans payload d'audit", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "ida-activity-log-"));
+    let setupDatabase: DemoDatabase | undefined;
+    let isolatedApp: Awaited<ReturnType<typeof createApp>> | undefined;
+
+    try {
+      setupDatabase = await DemoDatabase.open({ dataDir });
+      await setupDatabase.pglite.exec(`
+        INSERT INTO activity_logs (
+          id, workspace_id, actor_user_id, action, entity_type, entity_id, payload, created_at
+        )
+        VALUES
+          (
+            'act_timeline_z', 'wsp_demo_aless', 'usr_demo_aless', 'task.completed', 'TASK', 'tsk_timeline_z',
+            '{"caption":"NEVER_EXPOSE_CAPTION","token":"NEVER_EXPOSE_TOKEN"}'::json,
+            '2026-09-01T12:00:00.123900Z'
+          ),
+          (
+            'act_timeline_y', 'wsp_demo_aless', 'usr_demo_aless', 'task.created', 'TASK', 'tsk_timeline_y',
+            '{"title":"NEVER_EXPOSE_TITLE","hash":"NEVER_EXPOSE_HASH"}'::json,
+            '2026-09-01T12:00:00.123500Z'
+          ),
+          (
+            'act_timeline_precision_x', 'wsp_demo_aless', 'usr_demo_aless', 'track.created', 'TRACK', 'trk_timeline_precision_x',
+            '{"description":"NEVER_EXPOSE_MICROSECOND"}'::json,
+            '2026-09-01T12:00:00.123100Z'
+          ),
+          (
+            'act_timeline_old', 'wsp_demo_aless', 'usr_demo_aless', 'memory.confirmed', 'MEMORY', 'mem_timeline_old',
+            '{"content":"NEVER_EXPOSE_MEMORY"}'::json,
+            '2026-09-01T11:59:00.000Z'
+          ),
+          (
+            'act_timeline_other_workspace', 'wsp_other', 'usr_other', 'task.completed', 'TASK', 'tsk_other_workspace',
+            '{"caption":"NEVER_EXPOSE_OTHER_WORKSPACE"}'::json,
+            '2026-09-01T12:01:00.000Z'
+          ),
+          (
+            'act_timeline_future_finance', 'wsp_demo_aless', 'usr_demo_aless', 'bank.transaction_seen', 'BANK_TRANSACTION',
+            'bank_transaction_private', '{"amount":999,"token":"NEVER_EXPOSE_FINANCE"}'::json,
+            '2026-09-01T12:02:00.000Z'
+          );
+      `);
+      const before = await setupDatabase.pglite.query<{ count: number }>(`
+        SELECT COUNT(*)::int AS count
+        FROM activity_logs
+        WHERE workspace_id IN ('wsp_demo_aless', 'wsp_other')
+      `);
+      await setupDatabase.close();
+      setupDatabase = undefined;
+
+      isolatedApp = await createApp({ dataDir, storageDir });
+      const invalidQueries = [
+        "/v1/activity-logs?workspaceId=wsp_other",
+        "/v1/activity-logs?limit=0",
+        "/v1/activity-logs?limit=1&limit=2",
+        "/v1/activity-logs?cursor=eyJmb28iOiJiYXIifQ",
+        `/v1/activity-logs?cursor=${"a".repeat(513)}`,
+      ];
+
+      for (const url of invalidQueries) {
+        const response = await isolatedApp.inject({ method: "GET", url });
+        expect(response.statusCode, url).toBe(400);
+        expect(response.json()).toMatchObject({ error: { code: "INVALID_ACTIVITY_LOG_QUERY" } });
+      }
+
+      const first = await isolatedApp.inject({ method: "GET", url: "/v1/activity-logs?limit=2" });
+      expect(first.statusCode).toBe(200);
+      const firstBody = first.json() as {
+        data: {
+          items: Array<{ id: string; action: string; entityType: string; entityId: string; createdAt: string }>;
+          nextCursor?: string;
+        };
+      };
+      expect(firstBody.data.items.map((item) => item.id)).toEqual(["act_timeline_z", "act_timeline_y"]);
+      expect(firstBody.data.items.map((item) => item.action)).toEqual(["task.completed", "task.created"]);
+      expect(firstBody.data.items.every((item) => item.entityType === "TASK")).toBe(true);
+      expect(firstBody.data.nextCursor).toEqual(expect.any(String));
+
+      const serializedFirst = JSON.stringify(firstBody);
+      for (const sensitiveValue of [
+        "NEVER_EXPOSE_CAPTION",
+        "NEVER_EXPOSE_TOKEN",
+        "NEVER_EXPOSE_TITLE",
+        "NEVER_EXPOSE_HASH",
+        "NEVER_EXPOSE_OTHER_WORKSPACE",
+        "NEVER_EXPOSE_FINANCE",
+        "usr_demo_aless",
+        "payload",
+      ]) {
+        expect(serializedFirst).not.toContain(sensitiveValue);
+      }
+
+      const second = await isolatedApp.inject({
+        method: "GET",
+        url: `/v1/activity-logs?limit=2&cursor=${encodeURIComponent(firstBody.data.nextCursor ?? "")}`,
+      });
+      expect(second.statusCode).toBe(200);
+      const secondBody = second.json() as {
+        data: { items: Array<{ id: string; action: string }>; nextCursor?: string };
+      };
+      expect(secondBody.data.items).toEqual([
+        expect.objectContaining({ id: "act_timeline_precision_x", action: "track.created" }),
+        expect.objectContaining({ id: "act_timeline_old", action: "memory.confirmed" }),
+      ]);
+      expect(secondBody.data.nextCursor).toBeUndefined();
+      expect(new Set([...firstBody.data.items, ...secondBody.data.items].map((item) => item.id)).size).toBe(4);
+      expect([...firstBody.data.items, ...secondBody.data.items].map((item) => item.id)).not.toContain(
+        "act_timeline_other_workspace",
+      );
+      expect([...firstBody.data.items, ...secondBody.data.items].map((item) => item.id)).not.toContain(
+        "act_timeline_future_finance",
+      );
+
+      await isolatedApp.close();
+      isolatedApp = undefined;
+      setupDatabase = await DemoDatabase.open({ dataDir, seed: false });
+      const after = await setupDatabase.pglite.query<{ count: number }>(`
+        SELECT COUNT(*)::int AS count
+        FROM activity_logs
+        WHERE workspace_id IN ('wsp_demo_aless', 'wsp_other')
+      `);
+      expect(after.rows[0]?.count).toBe(before.rows[0]?.count);
+    } finally {
+      await setupDatabase?.close();
+      await isolatedApp?.close();
+      await rm(dataDir, { recursive: true, force: true });
     }
   });
 

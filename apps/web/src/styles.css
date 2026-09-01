@@ -832,6 +832,85 @@ h3 {
   color: #d97985;
 }
 
+.activity-timeline {
+  min-width: 0;
+  padding: 22px;
+}
+
+.activity-timeline-intro {
+  margin: 13px 0 0;
+  color: #9198a9;
+  font-size: 0.74rem;
+  line-height: 1.5;
+}
+
+.activity-timeline-empty {
+  margin: 17px 0 0;
+  padding: 15px;
+  color: #9299aa;
+  border: 1px dashed rgba(255, 255, 255, 0.11);
+  border-radius: 11px;
+  background: rgba(3, 5, 9, 0.24);
+  font-size: 0.73rem;
+  line-height: 1.45;
+}
+
+.activity-timeline-empty.unavailable {
+  color: #d6ab76;
+  border-color: rgba(227, 177, 110, 0.2);
+}
+
+.activity-timeline-list {
+  display: flex;
+  flex-direction: column;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.activity-timeline-item {
+  display: grid;
+  grid-template-columns: 9px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.065);
+}
+
+.activity-timeline-item:first-child {
+  border-top: 0;
+}
+
+.activity-timeline-marker {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #9488ff;
+  box-shadow: 0 0 12px rgba(148, 136, 255, 0.48);
+}
+
+.activity-timeline-item h3 {
+  color: #e8e8ee;
+  font-size: 0.76rem;
+  font-weight: 620;
+}
+
+.activity-timeline-item p {
+  margin: 4px 0 0;
+  color: #888fa1;
+  font-size: 0.57rem;
+  font-weight: 720;
+  letter-spacing: 0.08em;
+}
+
+.activity-timeline-item time {
+  color: #aeb3c2;
+  font-size: 0.62rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
 .media-panel {
   margin-top: 16px;
 }

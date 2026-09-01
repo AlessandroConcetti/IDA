@@ -21,6 +21,7 @@ Le premier runtime est une API Fastify locale sur `http://127.0.0.1:8787`, conso
 | `GET /v1/me` | Livrée | Identité et workspace de démonstration, marqués `LOCAL_DEMO`. |
 | `GET /v1/modules` | Livrée | Registre des modules visibles du Command Center. |
 | `GET /v1/system/status` | Livrée | États factuels de la tranche locale ; les intégrations absentes sont `WARNING` ou `DISCONNECTED`. |
+| `GET /v1/activity-logs` | Livrée | Timeline d’activité locale en lecture seule : projection bornée de l’audit, filtrée par workspace serveur et sans payload, acteur ni données privées. |
 | `GET/PATCH /v1/artist-profile`, `/v1/releases`, `GET/POST /v1/tracks`, `GET/POST /v1/media`, `GET /v1/memories` | Livrées | Données de démonstration isolées par workspace côté serveur. L’Artist Brain, la création bornée d’un morceau Music Brain et l’import local privé d’un média passent par des outils `WRITE` allowlistés ; `GET /v1/media` filtre localement par texte, statut, type et tag. |
 | `GET/POST /v1/campaigns`, `PATCH /v1/campaigns/:campaignId/release` | Livrées | Registre local de briefs de campagne internes. La création force `DRAFT`; un lien optionnel vers une release du même workspace et projet est contrôlé par version via `CAMPAIGNS` / `WRITE`, sans créer de planification ni effet externe. |
 | `POST /v1/memories/proposals`, `POST /v1/memories/:memoryId/confirm`, `POST /v1/memories/:memoryId/reject` | Livrées | Flux de mémoire consentie : une préférence commence forcément à `PENDING` et seule une décision humaine explicite peut la faire passer à `CONFIRMED` ou `REJECTED`. |
@@ -31,6 +32,14 @@ Le premier runtime est une API Fastify locale sur `http://127.0.0.1:8787`, conso
 | `POST /v1/ida/commands` | Livrée | Corps `{ "message": "…" }` ; commandes déterministes de lecture pour la journée, les contenus inutilisés et l’état système. |
 
 La commande retourne un objet `data` contenant la commande structurée, les outils de lecture autorisés et un résultat. À l’exception de la modification interne de l’Artist Brain, de la création Music Brain bornée, de l’import local privé, du flux de consentement mémoire, du registre de briefs de campagne, de l’Approval Center et du Task Center décrits ci-dessous, toute mutation, publication, intégration externe ou accès financier est hors de cette tranche et reste refusée par conception.
+
+### Timeline d’activité System en lecture seule
+
+`GET /v1/activity-logs` accepte uniquement `limit` (entier de `1` à `30`, `20` par défaut) et `cursor`. Le curseur de continuation est encodé en Base64URL et doit être traité comme opaque par le client ; une valeur reçue est validée avant la requête. Tout paramètre inconnu — notamment `workspaceId` —, une valeur dupliquée, une limite invalide ou un curseur invalide répondent `400 INVALID_ACTIVITY_LOG_QUERY`.
+
+La réponse est bornée à `{ data: { items, nextCursor? } }`. Chaque item contient exactement `id`, `action`, `entityType`, `entityId` et `createdAt`. Le scope est imposé par le serveur et la pagination par cléset suit `created_at DESC, id DESC` : elle ne calcule aucun total et reste stable lorsque plusieurs entrées partagent le même instant.
+
+La projection ne sélectionne ni ne retourne le `payload` d’audit, `actor_user_id`, `workspace_id`, caption, préférence, hash, token, chemin, média privé ou détail libre. Seules les actions actuellement prévues par la tranche locale sont visibles : `campaign.created`, `campaign.release_linked`, `campaign.release_unlinked`, `track.created`, `media.imported`, `memory.proposed`, `memory.confirmed`, `memory.rejected`, `post_variant.approved`, `post_variant.rejected`, `post_variant.internal_scheduled`, `task.created` et `task.completed`. La consultation est sans effet : elle ne crée aucun nouvel audit. Les futurs domaines, notamment Finance et Banque, restent invisibles jusqu’à la définition et la revue d’une projection dédiée.
 
 ### Artist Brain local éditable
 
@@ -250,6 +259,7 @@ GET    /v1/me
 GET    /v1/workspaces/current
 PATCH  /v1/workspaces/current
 GET    /v1/system/status
+GET    /v1/activity-logs
 GET    /health/live
 GET    /health/ready
 ```

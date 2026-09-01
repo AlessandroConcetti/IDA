@@ -75,6 +75,97 @@ export const systemStatusSchema = z.object({
 
 export type SystemStatus = z.infer<typeof systemStatusSchema>;
 
+// Journal d'activité -------------------------------------------------------
+//
+// La timeline utilisateur est une projection très réduite de l'audit interne.
+// Elle ne transporte jamais le payload, l'acteur, le workspace, un hash ni un
+// contenu libre. Seules les actions connues de la tranche locale sont visibles
+// par défaut ; les futurs domaines sensibles devront déclarer leur projection.
+export const activityLogActionValues = [
+  "campaign.created",
+  "campaign.release_linked",
+  "campaign.release_unlinked",
+  "track.created",
+  "media.imported",
+  "memory.proposed",
+  "memory.confirmed",
+  "memory.rejected",
+  "post_variant.approved",
+  "post_variant.rejected",
+  "post_variant.internal_scheduled",
+  "task.created",
+  "task.completed",
+] as const;
+
+export const activityLogActionSchema = z.enum(activityLogActionValues);
+export type ActivityLogAction = z.infer<typeof activityLogActionSchema>;
+
+export const activityLogEntityTypeValues = [
+  "CAMPAIGN",
+  "TRACK",
+  "MEDIA_ASSET",
+  "MEMORY",
+  "POST_VARIANT",
+  "TASK",
+] as const;
+export const activityLogEntityTypeSchema = z.enum(activityLogEntityTypeValues);
+export type ActivityLogEntityType = z.infer<typeof activityLogEntityTypeSchema>;
+
+export const activityLogSchema = z
+  .object({
+    id: entityIdSchema,
+    action: activityLogActionSchema,
+    entityType: activityLogEntityTypeSchema,
+    entityId: entityIdSchema,
+    createdAt: timestampSchema,
+  })
+  .strict();
+
+export type ActivityLog = z.infer<typeof activityLogSchema>;
+
+export const activityLogCursorSchema = z
+  .object({
+    createdAt: timestampSchema,
+    id: entityIdSchema,
+  })
+  .strict();
+
+export type ActivityLogCursor = z.infer<typeof activityLogCursorSchema>;
+
+export const activityLogListQuerySchema = z
+  .object({
+    limit: z.coerce.number().int().min(1).max(30).optional(),
+    cursor: z
+      .string()
+      .min(1)
+      .max(512)
+      .regex(/^[A-Za-z0-9_-]+$/u)
+      .optional(),
+  })
+  .strict();
+
+export type ActivityLogListQuery = z.infer<typeof activityLogListQuerySchema>;
+
+export const activityLogPageSchema = z
+  .object({
+    items: z.array(activityLogSchema).max(30),
+    nextCursor: z
+      .string()
+      .min(1)
+      .max(512)
+      .regex(/^[A-Za-z0-9_-]+$/u)
+      .optional(),
+  })
+  .strict();
+
+export const activityLogListResponseSchema = z
+  .object({
+    data: activityLogPageSchema,
+  })
+  .strict();
+
+export type ActivityLogListResponse = z.infer<typeof activityLogListResponseSchema>;
+
 const artistProfileTextSchema = z.string().trim().min(1).max(2_000);
 const artistProfileListItemSchema = z.string().trim().min(1).max(240);
 const artistProfileListSchema = z.array(artistProfileListItemSchema).max(60);

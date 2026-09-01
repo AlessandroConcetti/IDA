@@ -62,6 +62,44 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SystemStatusListResponse'
+  /v1/activity-logs:
+    get:
+      operationId: listActivityLogs
+      summary: Liste une projection sûre de l’activité locale
+      description: >-
+        Lecture seule de l’audit, limitée au workspace imposé par le serveur.
+        La réponse ne contient que id, action, entityType, entityId et createdAt.
+        Elle ne sélectionne ni payload, acteur, workspace, caption, hash, token,
+        chemin ou média privé. Seules les actions Phase 1 explicitement
+        autorisées sont visibles ; les futurs domaines sensibles restent masqués.
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: Nombre d’éléments par page ; 20 par défaut.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 30
+            default: 20
+        - name: cursor
+          in: query
+          required: false
+          description: Curseur de continuation Base64URL, à traiter comme opaque par le client.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 512
+            pattern: '^[A-Za-z0-9_-]+$'
+      responses:
+        '200':
+          description: Page d’activité sûre, triée par createdAt puis id décroissants
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivityLogListResponse'
+        '400':
+          $ref: '#/components/responses/InvalidActivityLogQuery'
   /v1/artist-profile:
     get:
       operationId: getArtistProfile
@@ -693,6 +731,12 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
+    InvalidActivityLogQuery:
+      description: Query d’activité inconnue, dupliquée ou pagination invalide
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
     InvalidArtistProfile:
       description: Corps Artist Brain invalide ou tentative de définir le scope client
       content:
@@ -964,6 +1008,65 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SystemStatus'
+    ActivityLogAction:
+      type: string
+      enum:
+        - campaign.created
+        - campaign.release_linked
+        - campaign.release_unlinked
+        - track.created
+        - media.imported
+        - memory.proposed
+        - memory.confirmed
+        - memory.rejected
+        - post_variant.approved
+        - post_variant.rejected
+        - post_variant.internal_scheduled
+        - task.created
+        - task.completed
+    ActivityLogEntityType:
+      type: string
+      enum: [CAMPAIGN, TRACK, MEDIA_ASSET, MEMORY, POST_VARIANT, TASK]
+    ActivityLog:
+      type: object
+      additionalProperties: false
+      required: [id, action, entityType, entityId, createdAt]
+      properties:
+        id:
+          type: string
+          minLength: 1
+        action:
+          $ref: '#/components/schemas/ActivityLogAction'
+        entityType:
+          $ref: '#/components/schemas/ActivityLogEntityType'
+        entityId:
+          type: string
+          minLength: 1
+        createdAt:
+          type: string
+          format: date-time
+    ActivityLogPage:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 30
+          items:
+            $ref: '#/components/schemas/ActivityLog'
+        nextCursor:
+          type: string
+          minLength: 1
+          maxLength: 512
+          pattern: '^[A-Za-z0-9_-]+$'
+    ActivityLogListResponse:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/ActivityLogPage'
     ArtistProfile:
       type: object
       required: [id, workspaceId, artistProjectId, identity, genres, influences, tone, preferredVocabulary, forbiddenVocabulary, goals, audience, platformPreferences, createdAt, updatedAt]

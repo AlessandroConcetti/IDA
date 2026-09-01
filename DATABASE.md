@@ -96,10 +96,12 @@ Les transitions de consentement actuelles sont uniquement `PENDING → CONFIRMED
 | `agent_runs` | `id`, `command_run_id`, `agent_key`, `input_summary`, `output_summary`, `state`, `duration_ms` | Journalise le routage sans donner de pouvoir direct aux agents. |
 | `tools` | `id`, `key`, `version`, `permission_level`, `input_schema_version`, `is_active` | Catalogue déclaratif des outils autorisés. Le code reste la source de vérité des implémentations. |
 | `tool_executions` | `id`, `command_run_id`, `tool_id`, `state`, `idempotency_key`, `input_redacted`, `output_redacted`, `error_code?` | Preuve d’appel d’outil et gestion des retries. Clé unique sur l’idempotence pertinente. |
-| `activity_logs` | `id`, `workspace_id`, `actor_type`, `actor_id?`, `action`, `entity_type`, `entity_id`, `metadata_redacted`, `correlation_id`, `created_at` | Journal append-only pour audit, diagnostic et explication des actions d’IDA. |
+| `activity_logs` | Runtime local : `id`, `workspace_id`, `actor_user_id`, `action`, `entity_type`, `entity_id`, `payload`, `created_at` | Journal append-only pour audit, diagnostic et explication des actions d’IDA. Le `payload` reste interne ; il n’est pas une réponse API. Une évolution de production pourra ajouter des métadonnées redacted, corrélation et acteurs système sans modifier la projection utilisateur. |
 | `system_events` | `id`, `workspace_id?`, `component`, `severity`, `code`, `message`, `details_redacted`, `resolved_at?` | État et incidents : IA, stockage, scheduler, intégrations. |
 
 États de `command_runs` : `RECEIVED`, `PLANNING`, `AWAITING_APPROVAL`, `EXECUTING`, `COMPLETED`, `FAILED`, `CANCELLED`.
+
+Dans le runtime local, `GET /v1/activity-logs` n’est pas un accès brut à `activity_logs` : il projette seulement `id`, `action`, `entity_type`, `entity_id` et `created_at`, dans le workspace résolu côté serveur. Son allowlist couvre les actions Phase 1 des campagnes, tracks, médias, mémoires, variantes de post et tâches ; les actions inconnues ou futures, dont Finance/Banque, ne sont pas visibles par défaut. Le `payload`, l’acteur et le workspace ne sont jamais sélectionnés pour cette réponse, et une lecture n’ajoute pas d’événement d’audit.
 
 ### Contenu, approbation, calendrier et tâches
 
@@ -172,6 +174,7 @@ Les payloads bruts d’analytics doivent être minimisés, retenus selon une pol
 - `post_variants n:n media_assets` et `n:n tracks`; une livraison est liée à une seule variante. La tranche locale ne crée que le lien média, jamais une livraison.
 - `platforms 1:n social_accounts`, `social_accounts 1:n analytics_syncs/analytics`.
 - Index minimum sur chaque `(workspace_id, created_at DESC)` et `(workspace_id, status)` lorsque le statut est filtré.
+- La timeline locale utilise aussi `activity_logs(workspace_id, created_at DESC, id DESC)` pour sa pagination par cléset stable ; l’index ne donne accès ni au payload ni à un autre workspace.
 - Index sur `tracks(artist_project_id, release_date)`, `releases(artist_project_id, release_date)`, `post_variants(platform_id, scheduled_at)`, `analytics(social_account_id, captured_at DESC)`, `media_assets(workspace_id, sha256)` et `media_asset_tags(media_tag_id, media_asset_id)`.
 - Recherche plein texte PostgreSQL sur titres, descriptions et noms de tags. Les embeddings sont une extension, non un prérequis.
 - Ajouter une colonne `row_version` ou utiliser ETag/`updated_at` pour les modifications concurrentes depuis desktop et mobile.
