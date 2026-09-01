@@ -109,6 +109,105 @@ describe("IDA API — première tranche Phase 1", () => {
     }
   });
 
+  it("expose une matrice sociale déclarative sans compte, secret ni effet d’audit", async () => {
+    const activityBefore = await app.inject({ method: "GET", url: "/v1/activity-logs?limit=30" });
+    expect(activityBefore.statusCode).toBe(200);
+
+    const response = await app.inject({ method: "GET", url: "/v1/social/platforms" });
+    expect(response.statusCode).toBe(200);
+
+    const body = response.json() as {
+      data: Array<{
+        platform: string;
+        apiVersion: string;
+        oauthSupported: boolean;
+        draftSupported: boolean;
+        scheduleSupported: boolean;
+        publishSupported: boolean;
+        analyticsSupported: boolean;
+        requiresHumanApproval: boolean;
+        requiresPlatformReview: boolean;
+        notes: string[];
+        verifiedAt: string;
+      }>;
+    };
+    const capabilityKeys = [
+      "analyticsSupported",
+      "apiVersion",
+      "draftSupported",
+      "notes",
+      "oauthSupported",
+      "platform",
+      "publishSupported",
+      "requiresHumanApproval",
+      "requiresPlatformReview",
+      "scheduleSupported",
+      "verifiedAt",
+    ];
+
+    expect(body.data).toEqual([
+      expect.objectContaining({
+        platform: "INSTAGRAM",
+        apiVersion: "documented-capability",
+        oauthSupported: true,
+        draftSupported: false,
+        scheduleSupported: false,
+        publishSupported: true,
+        analyticsSupported: true,
+        requiresHumanApproval: true,
+        requiresPlatformReview: true,
+        notes: ["Capacité déclarative de démonstration, à vérifier avant toute intégration réelle."],
+        verifiedAt: "2026-08-30T00:00:00.000Z",
+      }),
+      expect.objectContaining({
+        platform: "TIKTOK",
+        apiVersion: "documented-capability",
+        oauthSupported: true,
+        draftSupported: false,
+        scheduleSupported: false,
+        publishSupported: true,
+        analyticsSupported: true,
+        requiresHumanApproval: true,
+        requiresPlatformReview: true,
+        notes: ["Capacité déclarative de démonstration, à vérifier avant toute intégration réelle."],
+        verifiedAt: "2026-08-30T00:00:00.000Z",
+      }),
+      expect.objectContaining({
+        platform: "YOUTUBE",
+        apiVersion: "documented-capability",
+        oauthSupported: true,
+        draftSupported: true,
+        scheduleSupported: true,
+        publishSupported: true,
+        analyticsSupported: true,
+        requiresHumanApproval: true,
+        requiresPlatformReview: true,
+        notes: ["Capacité déclarative de démonstration, à vérifier avant toute intégration réelle."],
+        verifiedAt: "2026-08-30T00:00:00.000Z",
+      }),
+    ]);
+    for (const capability of body.data) {
+      expect(Object.keys(capability).sort()).toEqual(capabilityKeys);
+    }
+
+    const serialized = JSON.stringify(body);
+    for (const forbiddenValue of [
+      "accountId",
+      "accessToken",
+      "refreshToken",
+      "credential",
+      "connected",
+      "wsp_demo_aless",
+      "usr_demo_aless",
+    ]) {
+      expect(serialized).not.toContain(forbiddenValue);
+    }
+
+    const activityAfter = await app.inject({ method: "GET", url: "/v1/activity-logs?limit=30" });
+    expect(activityAfter.statusCode).toBe(200);
+    expect(activityAfter.json()).toEqual(activityBefore.json());
+  });
+
   it("projette un historique d'activité borné, stable, isolé et sans payload d'audit", async () => {
     const dataDir = await mkdtemp(join(tmpdir(), "ida-activity-log-"));
     let setupDatabase: DemoDatabase | undefined;

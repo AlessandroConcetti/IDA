@@ -27,6 +27,7 @@ import {
   fetchMediaAssets,
   fetchMemories,
   fetchReleases,
+  fetchSocialPlatformCapabilities,
   fetchTasks,
   IdaApiError,
   type IdaCommandRunRecord,
@@ -38,6 +39,8 @@ import {
   type ReleaseRecord,
   rejectMemory,
   rejectPostVariant,
+  type SocialPlatform,
+  type SocialPlatformCapabilityRecord,
   scheduleApprovedPostVariant,
   submitIdaCommand,
   type TaskCreateInput,
@@ -61,7 +64,6 @@ import {
   type OperationalState,
   type SystemService,
   sectionCopy,
-  socialCapabilities,
   type Track,
   todayPriorities,
 } from "./data";
@@ -651,41 +653,138 @@ function ActivityTimeline() {
   );
 }
 
+type SocialCapabilitySource = "loading" | "api" | "unavailable";
+
+const socialPlatformLabels: Record<SocialPlatform, string> = {
+  INSTAGRAM: "Instagram",
+  TIKTOK: "TikTok",
+  YOUTUBE: "YouTube",
+  FACEBOOK: "Facebook",
+};
+
+function formatSocialCapabilityDate(value: string): string {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "date non disponible";
+  }
+
+  return new Intl.DateTimeFormat("fr-FR", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(date);
+}
+
+function declaredSocialCapability(label: string, supported: boolean): string {
+  return `${label} : ${supported ? "déclarée — non activée" : "non déclarée"}`;
+}
+
+function socialCapabilityItems(platform: SocialPlatformCapabilityRecord): string[] {
+  return [
+    declaredSocialCapability("OAuth", platform.oauthSupported),
+    declaredSocialCapability("Brouillons natifs", platform.draftSupported),
+    declaredSocialCapability("Planification native", platform.scheduleSupported),
+    platform.publishSupported ? "Publication : déclarée — toujours soumise à validation" : "Publication : non déclarée",
+    declaredSocialCapability("Analytics", platform.analyticsSupported),
+    ...(platform.requiresHumanApproval ? ["Validation humaine requise avant toute action"] : []),
+    ...(platform.requiresPlatformReview ? ["Revue de la plateforme requise avant activation"] : []),
+    ...platform.notes.map((note) => `Note : ${note}`),
+  ];
+}
+
 function SocialView({ dashboard, source }: { dashboard: DashboardSnapshot; source: DashboardSource }) {
+  const [platforms, setPlatforms] = useState<SocialPlatformCapabilityRecord[]>([]);
+  const [matrixSource, setMatrixSource] = useState<SocialCapabilitySource>(isApiConfigured ? "loading" : "unavailable");
+  const [notice, setNotice] = useState("Chargement des capacités sociales déclarées…");
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    if (!isApiConfigured) {
+      return () => {
+        isCurrent = false;
+      };
+    }
+
+    void fetchSocialPlatformCapabilities()
+      .then((capabilities) => {
+        if (!isCurrent) {
+          return;
+        }
+
+        setPlatforms(capabilities);
+        setMatrixSource("api");
+        setNotice(
+          capabilities.length === 0
+            ? "Aucune capacité sociale n’est déclarée pour ce workspace."
+            : `${capabilities.length} plateforme${capabilities.length === 1 ? "" : "s"} déclarée${
+                capabilities.length === 1 ? "" : "s"
+              }. Le contrat ne renseigne aucun compte ni aucune autorisation d’action externe.`,
+        );
+      })
+      .catch((error: unknown) => {
+        if (!isCurrent) {
+          return;
+        }
+
+        setPlatforms([]);
+        setMatrixSource("unavailable");
+        const reason = error instanceof IdaApiError ? error.message : "IDA API est indisponible.";
+        setNotice(`Capacités sociales indisponibles : ${reason}`);
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, []);
+
   return (
     <div className="page-grid social-grid">
       <section className="panel wide-panel">
         <div className="panel-heading">
           <div>
             <p className="eyebrow">ADAPTER MATRIX</p>
-            <h2>Real capabilities, no assumptions.</h2>
+            <h2>Capacités déclarées, sans supposition.</h2>
           </div>
-          <span className="quiet-label">Phase 3</span>
+          <span className="quiet-label">{matrixSource === "api" ? "API READ ONLY" : "READ ONLY"}</span>
         </div>
         <p className="panel-intro">
-          Les connexions OAuth, la publication et les analytics seront activés plateforme par plateforme, uniquement
-          après validation de leurs capacités officielles.
+          Cette matrice provient du contrat partagé d’IDA. Elle ne représente ni un compte connecté, ni un token, ni une
+          permission d’agir sur une plateforme externe.
         </p>
-        <div className="social-list">
-          {socialCapabilities.map((platform) => (
-            <article className="social-card" key={platform.name}>
-              <div className="social-card-heading">
-                <div>
-                  <p className="social-platform">{platform.name}</p>
-                  <p>{platform.detail}</p>
-                </div>
-                <span className={`status-tag ${platform.state.toLocaleLowerCase("en-US")}`}>
-                  {platform.state.replace("_", " ")}
-                </span>
-              </div>
-              <ul>
-                {platform.capabilities.map((capability) => (
-                  <li key={capability}>{capability}</li>
-                ))}
-              </ul>
-            </article>
-          ))}
-        </div>
+        {matrixSource !== "api" || platforms.length === 0 ? (
+          <p className={`social-matrix-notice ${matrixSource}`} role="status" aria-live="polite">
+            {notice}
+          </p>
+        ) : (
+          <>
+            <p className="social-matrix-notice" role="status" aria-live="polite">
+              {notice}
+            </p>
+            <div className="social-list">
+              {platforms.map((platform) => (
+                <article className="social-card" key={platform.platform}>
+                  <div className="social-card-heading">
+                    <div>
+                      <p className="social-platform">{socialPlatformLabels[platform.platform]}</p>
+                      <p>
+                        {platform.apiVersion} · vérifié le {formatSocialCapabilityDate(platform.verifiedAt)}
+                      </p>
+                    </div>
+                    <span className="status-tag warning">DECLARED ONLY</span>
+                  </div>
+                  <ul>
+                    {socialCapabilityItems(platform).map((capability) => (
+                      <li key={capability}>{capability}</li>
+                    ))}
+                  </ul>
+                </article>
+              ))}
+            </div>
+          </>
+        )}
       </section>
       <SystemPanel services={dashboard.systemServices} compact source={source} />
     </div>

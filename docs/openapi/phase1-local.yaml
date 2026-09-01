@@ -689,7 +689,11 @@ paths:
     get:
       operationId: listSocialPlatformCapabilities
       summary: Retourne les capacités sociales déclarées
-      description: Ne connecte aucun compte et n'appelle aucune plateforme externe.
+      description: |
+        Retourne une matrice déclarative de démonstration en lecture seule.
+        Elle ne représente ni compte social, ni token, ni connexion OAuth réelle,
+        ni scope accordé, ni autorisation d'action externe. La route ne lance pas
+        OAuth, n'appelle aucune plateforme et n'écrit aucun audit.
       responses:
         '200':
           description: Capacités de démonstration à revalider avant intégration
@@ -1731,21 +1735,36 @@ components:
             $ref: '#/components/schemas/Task'
     SocialPlatformCapability:
       type: object
-      required: [platform, apiVersion, oauthSupported, draftSupported, scheduleSupported, publishSupported, analyticsSupported, requiresHumanApproval, requiresPlatformReview, notes]
+      description: |
+        Déclaration de capacité à revalider pour un futur adaptateur. Ce n'est pas
+        l'état d'un compte connecté ni une permission effective.
+      required: [platform, apiVersion, oauthSupported, draftSupported, scheduleSupported, publishSupported, analyticsSupported, requiresHumanApproval, requiresPlatformReview, notes, verifiedAt]
       properties:
         platform:
+          type: string
           enum: [INSTAGRAM, TIKTOK, YOUTUBE, FACEBOOK]
-        apiVersion: { type: string }
-        oauthSupported: { type: boolean }
+        apiVersion:
+          type: string
+          description: Version de la matrice déclarative, pas une session OAuth.
+        oauthSupported:
+          type: boolean
+          description: Capacité documentée à étudier ; aucun compte n'est connecté.
         draftSupported: { type: boolean }
         scheduleSupported: { type: boolean }
         publishSupported: { type: boolean }
         analyticsSupported: { type: boolean }
-        requiresHumanApproval: { const: true }
-        requiresPlatformReview: { type: boolean }
+        requiresHumanApproval:
+          type: boolean
+          const: true
+        requiresPlatformReview:
+          type: boolean
         notes:
           type: array
           items: { type: string }
+        verifiedAt:
+          type: string
+          format: date-time
+          description: Date de revue de la matrice, pas une vérification en direct d'un compte.
     SocialPlatformListResponse:
       type: object
       required: [data]

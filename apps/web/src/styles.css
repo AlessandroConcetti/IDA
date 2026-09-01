@@ -1062,6 +1062,22 @@ h3 {
   line-height: 1.55;
 }
 
+.social-matrix-notice {
+  margin: -4px 0 20px;
+  color: #bcc1ce;
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+
+.social-matrix-notice.loading,
+.social-matrix-notice.unavailable {
+  padding: 13px 14px;
+  border: 1px solid rgba(244, 196, 134, 0.18);
+  border-radius: 11px;
+  background: rgba(244, 176, 99, 0.045);
+  color: #e2ba86;
+}
+
 .social-list {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

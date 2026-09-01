@@ -87,6 +87,22 @@ export interface ContentRotationInput {
   limit?: number;
 }
 
+export type SocialPlatform = "INSTAGRAM" | "TIKTOK" | "YOUTUBE" | "FACEBOOK";
+
+export interface SocialPlatformCapabilityRecord {
+  platform: SocialPlatform;
+  apiVersion: string;
+  oauthSupported: boolean;
+  draftSupported: boolean;
+  scheduleSupported: boolean;
+  publishSupported: boolean;
+  analyticsSupported: boolean;
+  requiresHumanApproval: boolean;
+  requiresPlatformReview: boolean;
+  notes: string[];
+  verifiedAt: string;
+}
+
 export type MemoryCategory =
   | "ARTIST_MEMORY"
   | "CONTENT_MEMORY"
@@ -1203,6 +1219,53 @@ function toContentRotationCandidates(payload: unknown): ContentRotationCandidate
   return data.candidates.map(toContentRotationCandidate);
 }
 
+function socialPlatform(value: unknown): SocialPlatform | undefined {
+  if (value === "INSTAGRAM" || value === "TIKTOK" || value === "YOUTUBE" || value === "FACEBOOK") {
+    return value;
+  }
+
+  return undefined;
+}
+
+function toSocialPlatformCapability(record: Record<string, unknown>): SocialPlatformCapabilityRecord {
+  const platform = socialPlatform(record.platform);
+  const apiVersion = readString(record.apiVersion);
+  const verifiedAt = readString(record.verifiedAt);
+  const notes = record.notes;
+
+  if (
+    !platform ||
+    !apiVersion ||
+    !verifiedAt ||
+    Number.isNaN(Date.parse(verifiedAt)) ||
+    typeof record.oauthSupported !== "boolean" ||
+    typeof record.draftSupported !== "boolean" ||
+    typeof record.scheduleSupported !== "boolean" ||
+    typeof record.publishSupported !== "boolean" ||
+    typeof record.analyticsSupported !== "boolean" ||
+    typeof record.requiresHumanApproval !== "boolean" ||
+    typeof record.requiresPlatformReview !== "boolean" ||
+    !Array.isArray(notes) ||
+    !notes.every((note) => typeof note === "string" && note.trim().length > 0)
+  ) {
+    throw new IdaApiError("Une capacité sociale déclarée par IDA API est invalide.");
+  }
+
+  return {
+    platform,
+    apiVersion,
+    oauthSupported: record.oauthSupported,
+    draftSupported: record.draftSupported,
+    scheduleSupported: record.scheduleSupported,
+    publishSupported: record.publishSupported,
+    analyticsSupported: record.analyticsSupported,
+    requiresHumanApproval: record.requiresHumanApproval,
+    requiresPlatformReview: record.requiresPlatformReview,
+    notes: notes.map((note) => note.trim()),
+    verifiedAt,
+  };
+}
+
 export async function fetchMediaAssets(input: MediaSearchInput = {}): Promise<MediaAsset[]> {
   const query = new URLSearchParams();
 
@@ -1233,6 +1296,10 @@ export async function fetchContentRotationCandidates(
   const query = new URLSearchParams({ limit: String(input.limit ?? 6) });
 
   return toContentRotationCandidates(await getApiJson(`/v1/content/rotation?${query.toString()}`));
+}
+
+export async function fetchSocialPlatformCapabilities(): Promise<SocialPlatformCapabilityRecord[]> {
+  return readDataList(await getApiJson("/v1/social/platforms"), "/v1/social/platforms").map(toSocialPlatformCapability);
 }
 
 export async function uploadMediaAsset(input: MediaUploadInput): Promise<MediaAsset> {

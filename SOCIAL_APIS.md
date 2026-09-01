@@ -13,6 +13,12 @@
 - Dans le MVP, toute publication publique passe par l’IDA Approval Center. Le scheduler, si nécessaire, diffère l’appel officiel ; il ne contourne jamais l’approbation ni une limitation de plateforme.
 - Une publication ou synchronisation doit être idempotente, journalisée et afficher à l’utilisateur le compte cible, le média, la visibilité, la date et le résultat exact de l’API.
 
+### Projection locale déclarative
+
+Le runtime local expose `GET /v1/social/platforms` comme une matrice **déclarative et en lecture seule**. Ses champs `oauthSupported`, `draftSupported`, `scheduleSupported`, `publishSupported` et `analyticsSupported` décrivent une capacité à étudier pour un futur adaptateur ; ils ne décrivent jamais un compte IDA, une connexion OAuth, un scope accordé, une permission effective ou un appel externe réellement disponible.
+
+La réponse ne contient ni compte, ni identifiant de compte, ni token, ni secret, ni état de connexion, ni analytics. Elle ne lance pas OAuth, ne contacte pas une plateforme et n’écrit aucun audit. `verifiedAt` date la revue de la matrice, pas la vérification en direct d’un compte. L’interface doit donc la présenter comme « déclarée / à revalider », jamais comme une intégration active.
+
 ## 2. Matrice de capacité — état actuel
 
 | Plateforme | Compte et OAuth | Publication / planification | Brouillons | Analytics disponibles | Contraintes majeures | Décision IDA |

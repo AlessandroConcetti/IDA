@@ -65,13 +65,6 @@ export interface MediaAsset {
   usageCount?: number;
 }
 
-export interface SocialCapability {
-  name: string;
-  state: "READY" | "PLANNED" | "NOT_CONNECTED";
-  detail: string;
-  capabilities: string[];
-}
-
 export const navigation: NavigationItem[] = [
   { id: "home", label: "HOME", glyph: "⌂" },
   { id: "ida", label: "IDA", glyph: "✦" },
@@ -243,27 +236,6 @@ export const systemServices: SystemService[] = [
   { name: "Scheduler", state: "WARNING", detail: "Planning interne — worker à venir" },
   { name: "Notifications", state: "WARNING", detail: "Centre de notifications en préparation" },
   { name: "Social accounts", state: "DISCONNECTED", detail: "Connexions prévues en phase 3" },
-];
-
-export const socialCapabilities: SocialCapability[] = [
-  {
-    name: "Instagram",
-    state: "NOT_CONNECTED",
-    detail: "Connexion non activée dans cette tranche.",
-    capabilities: ["Capacités API à vérifier", "Brouillons internes", "Approval Center"],
-  },
-  {
-    name: "TikTok",
-    state: "PLANNED",
-    detail: "Flux pilote à définir selon les règles officielles.",
-    capabilities: ["Export assisté", "Brouillons internes", "Aucune publication automatique"],
-  },
-  {
-    name: "YouTube",
-    state: "PLANNED",
-    detail: "Adaptateur prévu après validation de l'éligibilité.",
-    capabilities: ["Upload planifié à étudier", "Analytics à étudier", "Approval Center"],
-  },
 ];
 
 export function getLocalIdaResponse(command: string): string {

@@ -29,10 +29,16 @@ Le premier runtime est une API Fastify locale sur `http://127.0.0.1:8787`, conso
 | `GET /v1/approvals/queue`, `POST /v1/post-variants/:variantId/approve`, `POST /v1/post-variants/:variantId/reject` | Livrées | Approval Center local : propositions seedées en `REQUESTED`, préconditionnées par un hash de payload et décidées humainement ; aucune programmation ni publication n’en découle seule. |
 | `GET /v1/calendar`, `POST /v1/post-variants/:variantId/internal-schedules` | Livrées | Calendrier éditorial et planification interne d’une variante déjà approuvée ; aucun job, compte social, adaptateur ou appel réseau n’est créé. |
 | `GET/POST /v1/tasks`, `POST /v1/tasks/:taskId/complete` | Livrées | Task Center local : création interne en `TODO`, finalisation explicite et idempotente, toujours isolées au workspace serveur. |
-| `GET /v1/social/platforms` | Livrée | Capacités déclaratives de démonstration ; aucune connexion sociale n’est créée. |
+| `GET /v1/social/platforms` | Livrée | Matrice déclarative en lecture seule des capacités à vérifier avant intégration. Elle ne représente ni compte, ni token, ni connexion réelle, ni autorisation d’action externe. |
 | `POST /v1/ida/commands`, `GET /v1/ida/command-runs` | Livrées | Commandes déterministes de lecture et historique privé, borné et paginé de leurs paires de messages terminées. |
 
 La commande retourne un objet `data` contenant la commande structurée, les outils de lecture autorisés et un résultat. Une commande réussie ajoute aussi une entrée privée de réhydratation, sans résultat détaillé d’outil, ainsi qu’un audit redacted sans texte libre qui reste invisible dans la timeline. À l’exception de cette écriture locale, de la modification interne de l’Artist Brain, de la création Music Brain bornée, de l’import local privé, du flux de consentement mémoire, du registre de briefs de campagne, de l’Approval Center et du Task Center décrits ci-dessous, toute mutation, publication, intégration externe ou accès financier est hors de cette tranche et reste refusée par conception.
+
+### Matrice de capacités sociales déclarative
+
+`GET /v1/social/platforms` retourne uniquement les déclarations de capacité de démonstration : clé de plateforme, version de matrice, booléens OAuth/brouillon/planification/publication/analytics, contraintes d’approbation et de revue, note et date `verifiedAt`. Un booléen à `true` signifie seulement qu’une capacité est documentée pour une future étude d’adaptateur ; il ne prouve ni qu’un compte est connecté, ni qu’un scope est accordé, ni qu’un appel réel est autorisé ou possible.
+
+La route n’accepte aucun paramètre, ne retourne ni `SocialAccount`, identifiant de compte, token, secret, scope accordé, état de connexion ou métrique, et n’appelle aucune plateforme externe. Sa lecture n’écrit ni audit ni état local. Le client doit l’étiqueter comme déclarative et afficher une indisponibilité explicite s’il ne peut pas la lire ; il ne doit jamais en déduire une intégration active.
 
 ### Timeline d’activité System en lecture seule
 
@@ -422,10 +428,9 @@ Dans le runtime local, `GET /v1/campaigns`, `POST /v1/campaigns` et `PATCH /v1/c
 
 ### Réseaux sociaux et analytics
 
-Ces routes sont prévues pour une phase postérieure et seront activées plateforme par plateforme selon les capacités officiellement vérifiées.
+La matrice locale `GET /v1/social/platforms` est livrée et décrite plus haut. Les routes ci-dessous restent prévues pour une phase postérieure et seront activées plateforme par plateforme selon les capacités officiellement vérifiées.
 
 ```text
-GET    /v1/social/platforms
 GET    /v1/social/platforms/:platformKey/capabilities
 GET    /v1/social/accounts
 POST   /v1/social/:platformKey/oauth/start
