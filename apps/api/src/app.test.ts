@@ -128,6 +128,68 @@ describe("IDA API — première tranche Phase 1", () => {
     expect(body.data.some((asset) => asset.filename === "private-other-video.mp4")).toBe(false);
   });
 
+  it("recherche les médias avec des filtres cumulés sans exposer le stockage privé", async () => {
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/media?q=studio&status=UNUSED&type=VIDEO&tag=StUdIo&limit=1",
+    });
+
+    expect(response.statusCode).toBe(200);
+
+    const body = response.json() as {
+      data: Array<Record<string, unknown>>;
+    };
+
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0]).toMatchObject({
+      id: "med_studio_light",
+      filename: "studio-lumiere-noire-take-04.mp4",
+      status: "UNUSED",
+      type: "VIDEO",
+      tags: expect.arrayContaining(["studio", "vertical"]),
+    });
+    expect(body.data[0]).not.toHaveProperty("storageKey");
+    expect(body.data[0]).not.toHaveProperty("filePath");
+  });
+
+  it("cherche aussi dans les tags, normalise le filtre tag et garde une liste sans doublon", async () => {
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/media?q=VERTICAL&type=VIDEO&tag=VeRtIcAl&limit=2",
+    });
+
+    expect(response.statusCode).toBe(200);
+
+    const body = response.json() as {
+      data: Array<{ id: string; tags: string[] }>;
+    };
+
+    expect(body.data.map((asset) => asset.id)).toEqual(expect.arrayContaining(["med_studio_light", "med_night-drive"]));
+    expect(body.data).toHaveLength(2);
+    expect(new Set(body.data.map((asset) => asset.id)).size).toBe(2);
+    expect(body.data.every((asset) => asset.tags.includes("vertical"))).toBe(true);
+
+    const escapedWildcard = await app.inject({ method: "GET", url: "/v1/media?q=%25" });
+    expect(escapedWildcard.statusCode).toBe(200);
+    expect((escapedWildcard.json() as { data: unknown[] }).data).toHaveLength(0);
+  });
+
+  it("applique une limite stable aux recherches de médias", async () => {
+    const response = await app.inject({ method: "GET", url: "/v1/media?type=VIDEO&limit=2" });
+
+    expect(response.statusCode).toBe(200);
+
+    const body = response.json() as {
+      data: Array<{ id: string; createdAt: string }>;
+    };
+    const ordered = [...body.data].sort(
+      (left, right) => right.createdAt.localeCompare(left.createdAt) || right.id.localeCompare(left.id),
+    );
+
+    expect(body.data).toHaveLength(2);
+    expect(body.data).toEqual(ordered);
+  });
+
   it("importe un média privé, normalise ses tags et le rend visible dans la bibliothèque", async () => {
     const file = Buffer.from("ida-private-image-content");
     const response = await app.inject({
@@ -1488,10 +1550,19 @@ describe("IDA API — première tranche Phase 1", () => {
     );
   });
 
-  it("refuse un statut média inconnu", async () => {
-    const response = await app.inject({ method: "GET", url: "/v1/media?status=NOT_A_STATUS" });
+  it("refuse les filtres médias invalides ou dupliqués", async () => {
+    const invalidUrls = [
+      "/v1/media?status=NOT_A_STATUS",
+      "/v1/media?limit=0",
+      "/v1/media?limit=51",
+      "/v1/media?status=UNUSED&status=USED",
+    ];
 
-    expect(response.statusCode).toBe(400);
-    expect(response.json()).toMatchObject({ error: { code: "INVALID_COMMAND" } });
+    for (const url of invalidUrls) {
+      const response = await app.inject({ method: "GET", url });
+
+      expect(response.statusCode, url).toBe(400);
+      expect(response.json()).toMatchObject({ error: { code: "INVALID_MEDIA_QUERY" } });
+    }
   });
 });

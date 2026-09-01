@@ -6,6 +6,7 @@ import type {
   ArtistProfile as ArtistProfileContract,
   ArtistProfileUpdate,
   MediaImport,
+  MediaListQuery,
   MemoryProposalCreate,
   TaskCreate,
   TrackCreate,
@@ -640,6 +641,10 @@ function normalizeMediaTag(value: string): string {
   return value.normalize("NFKC").trim().toLocaleLowerCase("fr-FR");
 }
 
+function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_]/gu, "\\$&");
+}
+
 export class DemoDatabase {
   readonly pglite: PGlite;
 
@@ -923,13 +928,52 @@ export class DemoDatabase {
     });
   }
 
-  async listMedia(workspaceId: string, status?: MediaStatus): Promise<MediaAsset[]> {
+  async listMedia(workspaceId: string, filters: MediaListQuery = {}): Promise<MediaAsset[]> {
     const values: unknown[] = [workspaceId];
-    const statusClause = status ? " AND asset.status = $2" : "";
+    const whereClauses = ["asset.workspace_id = $1"];
 
-    if (status) {
-      values.push(status);
+    if (filters.status) {
+      values.push(filters.status);
+      whereClauses.push(`asset.status = $${values.length}`);
     }
+
+    if (filters.type) {
+      values.push(filters.type);
+      whereClauses.push(`asset.media_type = $${values.length}`);
+    }
+
+    if (filters.q) {
+      values.push(`%${escapeLikePattern(filters.q)}%`);
+      const searchPlaceholder = `$${values.length}`;
+      whereClauses.push(`(
+        asset.filename ILIKE ${searchPlaceholder} ESCAPE '\\'
+        OR COALESCE(asset.description, '') ILIKE ${searchPlaceholder} ESCAPE '\\'
+        OR EXISTS (
+          SELECT 1
+          FROM media_asset_tags search_asset_tag
+          INNER JOIN media_tags search_tag ON search_tag.id = search_asset_tag.media_tag_id
+          WHERE search_asset_tag.media_asset_id = asset.id
+            AND search_tag.workspace_id = asset.workspace_id
+            AND search_tag.name ILIKE ${searchPlaceholder} ESCAPE '\\'
+        )
+      )`);
+    }
+
+    if (filters.tag) {
+      values.push(normalizeMediaTag(filters.tag));
+      const tagPlaceholder = `$${values.length}`;
+      whereClauses.push(`EXISTS (
+        SELECT 1
+        FROM media_asset_tags filter_asset_tag
+        INNER JOIN media_tags filter_tag ON filter_tag.id = filter_asset_tag.media_tag_id
+        WHERE filter_asset_tag.media_asset_id = asset.id
+          AND filter_tag.workspace_id = asset.workspace_id
+          AND filter_tag.normalized_name = ${tagPlaceholder}
+      )`);
+    }
+
+    values.push(filters.limit ?? 50);
+    const limitPlaceholder = `$${values.length}`;
 
     const result = await this.pglite.query<ScalarRow>(
       `
@@ -955,14 +999,15 @@ export class DemoDatabase {
             '[]'::json
           ) AS tags
         FROM media_assets asset
-        LEFT JOIN artist_projects project ON project.id = asset.artist_project_id
-        LEFT JOIN releases release ON release.id = asset.release_id
-        LEFT JOIN tracks track ON track.id = asset.track_id
+        LEFT JOIN artist_projects project ON project.id = asset.artist_project_id AND project.workspace_id = asset.workspace_id
+        LEFT JOIN releases release ON release.id = asset.release_id AND release.workspace_id = asset.workspace_id
+        LEFT JOIN tracks track ON track.id = asset.track_id AND track.workspace_id = asset.workspace_id
         LEFT JOIN media_asset_tags asset_tag ON asset_tag.media_asset_id = asset.id
-        LEFT JOIN media_tags tag ON tag.id = asset_tag.media_tag_id
-        WHERE asset.workspace_id = $1${statusClause}
+        LEFT JOIN media_tags tag ON tag.id = asset_tag.media_tag_id AND tag.workspace_id = asset.workspace_id
+        WHERE ${whereClauses.join("\n          AND ")}
         GROUP BY asset.id, project.name, release.title, track.title
-        ORDER BY asset.created_at DESC
+        ORDER BY asset.created_at DESC, asset.id DESC
+        LIMIT ${limitPlaceholder}
       `,
       values,
     );
@@ -2728,6 +2773,8 @@ export class DemoDatabase {
         ON activity_logs (workspace_id, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_media_workspace_status
         ON media_assets (workspace_id, status);
+      CREATE INDEX IF NOT EXISTS idx_media_asset_tags_tag_asset
+        ON media_asset_tags (media_tag_id, media_asset_id);
       CREATE INDEX IF NOT EXISTS idx_memories_workspace_created
         ON memories (workspace_id, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_memories_workspace_state_created

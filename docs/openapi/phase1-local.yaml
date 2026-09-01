@@ -149,13 +149,48 @@ paths:
   /v1/media:
     get:
       operationId: listMedia
-      summary: Liste les médias de démonstration
+      summary: Recherche les métadonnées de médias du workspace local
+      description: >-
+        Lecture locale bornée et sans effet d'écriture. Les filtres se
+        cumulent ; le workspace est résolu côté serveur et ne peut pas être
+        fourni par le client. La réponse ne contient jamais de clé, chemin ou
+        URL de stockage.
       parameters:
+        - name: q
+          in: query
+          required: false
+          description: Recherche littérale dans le nom, la description et les tags.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 160
         - name: status
           in: query
           required: false
           schema:
             $ref: '#/components/schemas/MediaStatus'
+        - name: type
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/MediaType'
+        - name: tag
+          in: query
+          required: false
+          description: Tag exact, normalisé côté serveur.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 80
+        - name: limit
+          in: query
+          required: false
+          description: 50 par défaut ; la pagination par curseur n'est pas encore livrée.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 50
       responses:
         '200':
           description: Médias filtrés dans le workspace local
@@ -164,7 +199,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/MediaListResponse'
         '400':
-          $ref: '#/components/responses/InvalidCommand'
+          $ref: '#/components/responses/InvalidMediaQuery'
     post:
       operationId: importMedia
       summary: Importe un média local privé dans la Content Library
@@ -588,6 +623,12 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
+    InvalidMediaQuery:
+      description: Filtre média invalide ou paramètre reconnu dupliqué
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
     InvalidMemoryProposal:
       description: Proposition de mémoire invalide ou tentative de définir un état, un scope, un identifiant ou un acteur client
       content:
@@ -986,6 +1027,8 @@ components:
             $ref: '#/components/schemas/Track'
     MediaStatus:
       enum: [UNUSED, USED, SCHEDULED, PUBLISHED, ARCHIVED]
+    MediaType:
+      enum: [AUDIO, IMAGE, VIDEO, DOCUMENT, OTHER]
     MediaImportRequest:
       type: object
       required: [file]
@@ -1014,7 +1057,7 @@ components:
         artistProjectId: { type: string }
         filename: { type: string }
         type:
-          enum: [AUDIO, IMAGE, VIDEO, DOCUMENT, OTHER]
+          $ref: '#/components/schemas/MediaType'
         mimeType: { type: string }
         size: { type: integer, minimum: 0 }
         hash: { type: string }

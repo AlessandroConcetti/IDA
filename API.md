@@ -21,7 +21,7 @@ Le premier runtime est une API Fastify locale sur `http://127.0.0.1:8787`, conso
 | `GET /v1/me` | Livrée | Identité et workspace de démonstration, marqués `LOCAL_DEMO`. |
 | `GET /v1/modules` | Livrée | Registre des modules visibles du Command Center. |
 | `GET /v1/system/status` | Livrée | États factuels de la tranche locale ; les intégrations absentes sont `WARNING` ou `DISCONNECTED`. |
-| `GET/PATCH /v1/artist-profile`, `/v1/releases`, `GET/POST /v1/tracks`, `GET/POST /v1/media`, `GET /v1/memories` | Livrées | Données de démonstration isolées par workspace côté serveur. L’Artist Brain, la création bornée d’un morceau Music Brain et l’import local privé d’un média passent par des outils `WRITE` allowlistés ; `GET /v1/media?status=UNUSED` est supporté. |
+| `GET/PATCH /v1/artist-profile`, `/v1/releases`, `GET/POST /v1/tracks`, `GET/POST /v1/media`, `GET /v1/memories` | Livrées | Données de démonstration isolées par workspace côté serveur. L’Artist Brain, la création bornée d’un morceau Music Brain et l’import local privé d’un média passent par des outils `WRITE` allowlistés ; `GET /v1/media` filtre localement par texte, statut, type et tag. |
 | `POST /v1/memories/proposals`, `POST /v1/memories/:memoryId/confirm`, `POST /v1/memories/:memoryId/reject` | Livrées | Flux de mémoire consentie : une préférence commence forcément à `PENDING` et seule une décision humaine explicite peut la faire passer à `CONFIRMED` ou `REJECTED`. |
 | `GET /v1/approvals/queue`, `POST /v1/post-variants/:variantId/approve`, `POST /v1/post-variants/:variantId/reject` | Livrées | Approval Center local : propositions seedées en `REQUESTED`, préconditionnées par un hash de payload et décidées humainement ; aucune programmation ni publication n’en découle seule. |
 | `GET /v1/calendar`, `POST /v1/post-variants/:variantId/internal-schedules` | Livrées | Calendrier éditorial et planification interne d’une variante déjà approuvée ; aucun job, compte social, adaptateur ou appel réseau n’est créé. |
@@ -49,7 +49,14 @@ La commande retourne un objet `data` contenant la commande structurée, les outi
 - L’identifiant `trk_…` est généré côté serveur, la clé primaire le protège contre les collisions et une activité append-only `track.created` est ajoutée dans le journal local.
 - Les valeurs sont bornées (BPM strictement positif et au plus 400, 30 tags maximum, description au plus 4 000 caractères). Une création réussie retourne `201 Created` et le morceau est visible uniquement dans `GET /v1/tracks` du workspace imposé par le serveur.
 
-### Content Library : import local privé
+### Content Library : recherche et import local privé
+
+`GET /v1/media` est une lecture locale sans effet d’écriture. Les filtres optionnels sont `q` (1–160 caractères), `status`, `type`, `tag` (1–80 caractères) et `limit` (entier de 1 à 50, 50 par défaut). Ils se combinent tous ; le résultat est trié de façon stable par création décroissante puis identifiant décroissant.
+
+- `q` cherche littéralement, sans joker client, dans le nom du fichier, sa description et ses tags. Les caractères `%`, `_` et `\` sont échappés côté requête SQL.
+- `tag` est une égalité sur un tag normalisé NFKC, trimé et insensible à la casse ; il ne duplique jamais un média associé à plusieurs tags.
+- Le serveur ne lit que ces filtres reconnus. Un `workspaceId` ou tout autre scope transmis dans l’URL est ignoré et ne peut jamais modifier le workspace serveur. Une valeur invalide ou dupliquée pour un filtre reconnu répond `400 INVALID_MEDIA_QUERY`.
+- La réponse reste limitée au contrat `MediaAsset` : ni `storageKey`, ni chemin local, ni URL signée ne sont sélectionnés ou retournés. Cette recherche n’écrit ni média, ni statut, ni compteur d’usage, ni audit.
 
 `POST /v1/media` accepte uniquement un formulaire `multipart/form-data` contenant un fichier `file` et, au plus une fois chacun, les champs texte optionnels `description` et `tags`. Les tags sont transmis en liste séparée par des virgules, normalisés puis dédupliqués.
 
@@ -147,7 +154,7 @@ JSON API : camelCase
 Base de données : snake_case (non exposé)
 ```
 
-Les listes utilisent une pagination par curseur :
+Les listes cibles utiliseront une pagination par curseur. La recherche locale `GET /v1/media` livrée aujourd’hui est volontairement bornée à `limit ≤ 50` et ne retourne pas encore de curseur :
 
 ```text
 GET /v1/media?limit=50&cursor=…&sort=-createdAt
@@ -267,7 +274,7 @@ POST   /v1/media/:mediaId/tags
 DELETE /v1/media/:mediaId/tags/:tagId
 ```
 
-Le MVP local livre uniquement `POST /v1/media`, vers stockage privé interne et sans URL signée. Le flux ci-dessous reste une cible ultérieure, à activer seulement avec stockage objet et contrôle de sécurité dédiés :
+Le MVP local livre `GET /v1/media` (recherche de métadonnées bornée) et `POST /v1/media`, vers stockage privé interne et sans URL signée. Les prévisualisations, la pagination par curseur, les intentions d’upload et les modifications restent des cibles ultérieures, à activer seulement avec stockage objet et contrôle de sécurité dédiés :
 
 ```text
 Client → POST upload-intents → URL signée courte

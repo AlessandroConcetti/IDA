@@ -25,6 +25,16 @@ export interface TrackCreateInput {
   description?: string;
 }
 
+export type MediaSearchType = "IMAGE" | "VIDEO" | "AUDIO" | "DOCUMENT" | "OTHER";
+
+export interface MediaSearchInput {
+  q?: string;
+  status?: MediaAsset["status"];
+  type?: MediaSearchType;
+  tag?: string;
+  limit?: number;
+}
+
 export type MemoryCategory =
   | "ARTIST_MEMORY"
   | "CONTENT_MEMORY"
@@ -879,11 +889,38 @@ function toMediaAsset(record: Record<string, unknown>, index = 0): MediaAsset {
     status: mediaStatus(record.status),
     detail,
     tone: tones[index % tones.length] ?? "violet",
+    tags,
+    sizeLabel: size,
+    usageCount,
   };
 }
 
 function toMediaAssets(payload: unknown): MediaAsset[] {
   return readDataList(payload, "/v1/media").map(toMediaAsset);
+}
+
+export async function fetchMediaAssets(input: MediaSearchInput = {}): Promise<MediaAsset[]> {
+  const query = new URLSearchParams();
+
+  if (input.q) {
+    query.set("q", input.q);
+  }
+
+  if (input.status) {
+    query.set("status", input.status);
+  }
+
+  if (input.type) {
+    query.set("type", input.type);
+  }
+
+  if (input.tag) {
+    query.set("tag", input.tag);
+  }
+
+  query.set("limit", String(input.limit ?? 24));
+
+  return toMediaAssets(await getApiJson(`/v1/media?${query.toString()}`));
 }
 
 export async function uploadMediaAsset(input: MediaUploadInput): Promise<MediaAsset> {

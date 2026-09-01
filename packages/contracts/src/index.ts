@@ -249,6 +249,21 @@ export const mediaAssetSchema = z.object({
 
 export type MediaAsset = z.infer<typeof mediaAssetSchema>;
 
+// Ce contrat décrit uniquement les filtres de lecture de la bibliothèque. Le
+// workspace, les associations et tout accès au stockage restent hors de la
+// requête client et sont résolus par l'API.
+export const mediaListQuerySchema = z
+  .object({
+    q: z.string().trim().min(1).max(160).optional(),
+    status: mediaStatusSchema.optional(),
+    type: mediaTypeSchema.optional(),
+    tag: z.string().trim().min(1).max(80).optional(),
+    limit: z.coerce.number().int().min(1).max(50).optional(),
+  })
+  .strict();
+
+export type MediaListQuery = z.infer<typeof mediaListQuerySchema>;
+
 export const memoryCategorySchema = z.enum([
   "ARTIST_MEMORY",
   "CONTENT_MEMORY",

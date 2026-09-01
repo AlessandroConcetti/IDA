@@ -60,6 +60,9 @@ export interface MediaAsset {
   status: "UNUSED" | "USED" | "SCHEDULED" | "PUBLISHED" | "ARCHIVED";
   detail: string;
   tone: "violet" | "coral" | "blue";
+  tags?: string[];
+  sizeLabel?: string;
+  usageCount?: number;
 }
 
 export interface SocialCapability {

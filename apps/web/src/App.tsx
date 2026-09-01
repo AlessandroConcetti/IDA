@@ -14,10 +14,13 @@ import {
   fetchArtistBrain,
   fetchDashboardSnapshot,
   fetchEditorialCalendar,
+  fetchMediaAssets,
   fetchMemories,
   fetchTasks,
   IdaApiError,
   isApiConfigured,
+  type MediaSearchInput,
+  type MediaSearchType,
   type MemoryRecord,
   proposePreferenceMemory,
   rejectMemory,
@@ -401,9 +404,9 @@ function TrackPanel({ items, source }: { items: Track[]; source: DashboardSource
   );
 }
 
-function MediaGrid({ assets }: { assets: MediaAsset[] }) {
+function MediaGrid({ assets, detailed = false }: { assets: MediaAsset[]; detailed?: boolean }) {
   return (
-    <section className="media-grid" aria-label="Médias récents">
+    <section className="media-grid" aria-label={detailed ? "Résultats de la Content Library" : "Médias récents"}>
       {assets.map((asset) => (
         <article className="media-card" key={asset.id ?? asset.filename}>
           <div className={`media-thumbnail ${asset.tone}`} aria-hidden="true">
@@ -417,6 +420,26 @@ function MediaGrid({ assets }: { assets: MediaAsset[] }) {
               <span className={`status-tag ${asset.status.toLocaleLowerCase("en-US")}`}>{asset.status}</span>
             </div>
             <p>{asset.detail}</p>
+            {detailed ? (
+              <>
+                <div className="media-library-meta">
+                  <span>{asset.kind}</span>
+                  {asset.sizeLabel ? <span>{asset.sizeLabel}</span> : null}
+                  <span>
+                    {asset.usageCount ?? 0} utilisation{asset.usageCount === 1 ? "" : "s"}
+                  </span>
+                </div>
+                {asset.tags?.length ? (
+                  <div className="media-library-tags">
+                    {asset.tags.map((tag) => (
+                      <span key={tag}>{tag}</span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="media-library-no-tags">Sans tag</p>
+                )}
+              </>
+            ) : null}
           </div>
         </article>
       ))}
@@ -758,6 +781,30 @@ const emptyMediaUploadForm: MediaUploadForm = {
   tags: "",
 };
 
+type MediaSearchForm = {
+  q: string;
+  status: "" | MediaAsset["status"];
+  type: "" | MediaSearchType;
+  tag: string;
+};
+
+const emptyMediaSearchForm: MediaSearchForm = {
+  q: "",
+  status: "",
+  type: "",
+  tag: "",
+};
+
+function mediaSearchInput(form: MediaSearchForm): MediaSearchInput {
+  return {
+    q: optionalFormValue(form.q),
+    status: form.status || undefined,
+    type: form.type || undefined,
+    tag: optionalFormValue(form.tag),
+    limit: 24,
+  };
+}
+
 function displayFileSize(bytes: number): string {
   if (bytes < 1024) {
     return `${bytes} B`;
@@ -770,20 +817,72 @@ function displayFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function ContentView({
-  dashboard,
-  onMediaAssetCreated,
-}: {
-  dashboard: DashboardSnapshot;
-  onMediaAssetCreated: (asset: MediaAsset) => void;
-}) {
+function ContentView({ onMediaAssetCreated }: { onMediaAssetCreated: (asset: MediaAsset) => void }) {
   const [form, setForm] = useState<MediaUploadForm>(emptyMediaUploadForm);
   const [file, setFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [notice, setNotice] = useState("Un fichier à la fois, stocké dans la bibliothèque privée IDA.");
   const [noticeState, setNoticeState] = useState<"default" | "success" | "error">("default");
+  const [searchForm, setSearchForm] = useState<MediaSearchForm>(emptyMediaSearchForm);
+  const [activeSearch, setActiveSearch] = useState<MediaSearchForm>(emptyMediaSearchForm);
+  const [searchResults, setSearchResults] = useState<MediaAsset[]>([]);
+  const [searchState, setSearchState] = useState<"loading" | "ready" | "error">("loading");
+  const [searchNotice, setSearchNotice] = useState("Chargement de la bibliothèque privée…");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const searchRequestRef = useRef(0);
+
+  useEffect(() => {
+    void loadMedia(emptyMediaSearchForm);
+  }, []);
+
+  async function loadMedia(nextSearch: MediaSearchForm) {
+    const requestId = searchRequestRef.current + 1;
+    searchRequestRef.current = requestId;
+    setSearchState("loading");
+    setSearchNotice("Recherche dans les métadonnées privées…");
+
+    try {
+      const assets = await fetchMediaAssets(mediaSearchInput(nextSearch));
+
+      if (searchRequestRef.current !== requestId) {
+        return;
+      }
+
+      setSearchResults(assets);
+      setSearchState("ready");
+      setSearchNotice(
+        assets.length === 0
+          ? "Aucun média ne correspond à ces filtres."
+          : `${assets.length} média${assets.length > 1 ? "s" : ""} trouvé${assets.length > 1 ? "s" : ""} dans ce workspace.`,
+      );
+    } catch (error: unknown) {
+      if (searchRequestRef.current !== requestId) {
+        return;
+      }
+
+      const reason = error instanceof IdaApiError ? error.message : "IDA API est indisponible.";
+      setSearchResults([]);
+      setSearchState("error");
+      setSearchNotice(`La recherche est indisponible : ${reason}`);
+    }
+  }
+
+  function updateSearchField(field: keyof MediaSearchForm, value: string) {
+    setSearchForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function handleSearch(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setActiveSearch(searchForm);
+    void loadMedia(searchForm);
+  }
+
+  function resetSearch() {
+    setSearchForm(emptyMediaSearchForm);
+    setActiveSearch(emptyMediaSearchForm);
+    void loadMedia(emptyMediaSearchForm);
+  }
 
   function setSelectedFile(nextFile: File | undefined) {
     if (!nextFile) {
@@ -842,6 +941,7 @@ function ContentView({
         tags: optionalFormValue(form.tags),
       });
       onMediaAssetCreated(asset);
+      void loadMedia(activeSearch);
       setForm(emptyMediaUploadForm);
       setFile(null);
 
@@ -863,15 +963,105 @@ function ContentView({
 
   return (
     <div className="content-view">
-      <section className="panel wide-panel">
+      <section className="panel wide-panel content-library-card" aria-labelledby="content-library-title">
         <div className="panel-heading">
           <div>
             <p className="eyebrow">CONTENT LIBRARY</p>
-            <h2>Unused, visible, useful.</h2>
+            <h2 id="content-library-title">Find the right asset, safely.</h2>
           </div>
-          <span className="quiet-label">Hash & freshness planned</span>
+          <span className="quiet-label">
+            {searchState === "ready"
+              ? `${searchResults.length} RESULT${searchResults.length === 1 ? "" : "S"}`
+              : "PRIVATE SEARCH"}
+          </span>
         </div>
-        <MediaGrid assets={dashboard.mediaAssets} />
+        <p className="content-library-intro">
+          Recherche locale dans les noms, descriptions et tags du workspace. Aucun fichier, aperçu ou lien de stockage
+          n’est exposé.
+        </p>
+        <form className="content-library-search" noValidate onSubmit={handleSearch}>
+          <label className="content-library-filter content-library-query" htmlFor="content-search-query">
+            <span>Recherche</span>
+            <input
+              id="content-search-query"
+              value={searchForm.q}
+              onChange={(event) => updateSearchField("q", event.target.value)}
+              placeholder="Nom, description ou tag…"
+              maxLength={160}
+            />
+          </label>
+          <label className="content-library-filter" htmlFor="content-search-status">
+            <span>Statut</span>
+            <select
+              id="content-search-status"
+              value={searchForm.status}
+              onChange={(event) => updateSearchField("status", event.target.value)}
+            >
+              <option value="">Tous</option>
+              <option value="UNUSED">Unused</option>
+              <option value="USED">Used</option>
+              <option value="SCHEDULED">Scheduled</option>
+              <option value="PUBLISHED">Published</option>
+              <option value="ARCHIVED">Archived</option>
+            </select>
+          </label>
+          <label className="content-library-filter" htmlFor="content-search-type">
+            <span>Type</span>
+            <select
+              id="content-search-type"
+              value={searchForm.type}
+              onChange={(event) => updateSearchField("type", event.target.value)}
+            >
+              <option value="">Tous</option>
+              <option value="VIDEO">Video</option>
+              <option value="IMAGE">Image</option>
+              <option value="AUDIO">Audio</option>
+              <option value="DOCUMENT">Document</option>
+              <option value="OTHER">Other</option>
+            </select>
+          </label>
+          <label className="content-library-filter" htmlFor="content-search-tag">
+            <span>Tag exact</span>
+            <input
+              id="content-search-tag"
+              value={searchForm.tag}
+              onChange={(event) => updateSearchField("tag", event.target.value)}
+              placeholder="studio"
+              maxLength={80}
+            />
+          </label>
+          <div className="content-library-search-actions">
+            <button className="send-button" type="submit" disabled={searchState === "loading"}>
+              {searchState === "loading" ? "Recherche…" : "Search"}
+              <span aria-hidden="true">↗</span>
+            </button>
+            <button
+              className="content-search-reset"
+              type="button"
+              onClick={resetSearch}
+              disabled={searchState === "loading"}
+            >
+              Reset
+            </button>
+          </div>
+        </form>
+        <p className={`content-library-notice ${searchState}`} role="status" aria-live="polite">
+          <span aria-hidden="true" />
+          {searchNotice}
+        </p>
+        {searchState === "loading" ? <p className="content-library-empty-state">Chargement des résultats…</p> : null}
+        {searchState === "error" ? (
+          <div className="content-library-error-state">
+            <p>La bibliothèque reste inchangée.</p>
+            <button className="content-search-reset" type="button" onClick={() => void loadMedia(activeSearch)}>
+              Réessayer
+            </button>
+          </div>
+        ) : null}
+        {searchState === "ready" && searchResults.length === 0 ? (
+          <p className="content-library-empty-state">Essaie un autre mot-clé ou retire un filtre.</p>
+        ) : null}
+        {searchState === "ready" && searchResults.length > 0 ? <MediaGrid assets={searchResults} detailed /> : null}
       </section>
       <ApprovalCenter />
       <section className="panel content-import-card" aria-labelledby="content-import-title">
@@ -2425,7 +2615,7 @@ function SectionContent({
     case "music":
       return <MusicView dashboard={dashboard} source={source} onTrackCreated={onTrackCreated} />;
     case "content":
-      return <ContentView dashboard={dashboard} onMediaAssetCreated={onMediaAssetCreated} />;
+      return <ContentView onMediaAssetCreated={onMediaAssetCreated} />;
     case "social":
       return <SocialView dashboard={dashboard} source={source} />;
     case "calendar":

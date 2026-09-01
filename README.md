@@ -4,7 +4,7 @@ IDA est un AI Command Center personnel centré sur l'écosystème musical : cata
 
 ## État du projet
 
-La **Phase 0 — architecture et fondations** est terminée. Les premières tranches de **Phase 1** sont en place : un Command Center responsive, une API modulaire locale, des contrats partagés, un Artist Brain réellement éditable, un Music Brain avec ajout local contrôlé de morceaux, une Content Library avec import privé contrôlé, un centre de mémoire consentie, un Task Center actionnable, un Approval Center à décision humaine, un calendrier éditorial et des commandes IDA déterministes en lecture seule.
+La **Phase 0 — architecture et fondations** est terminée. Les premières tranches de **Phase 1** sont en place : un Command Center responsive, une API modulaire locale, des contrats partagés, un Artist Brain réellement éditable, un Music Brain avec ajout local contrôlé de morceaux, une Content Library avec import privé contrôlé et recherche filtrée, un centre de mémoire consentie, un Task Center actionnable, un Approval Center à décision humaine, un calendrier éditorial et des commandes IDA déterministes en lecture seule.
 
 Cette tranche ne contient volontairement ni authentification réelle, ni données utilisateur réelles, ni upload cloud, ni OAuth social, ni publication, ni scheduler, ni paiement. L’Approval Center valide seulement une version exacte d’une proposition. Le calendrier peut ensuite créer une planification interne immuable de cette version, mais ne programme aucune plateforme et ne publie rien. Les modules affichés dans l’interface préparent le même cœur partagé sans prétendre que les intégrations sont déjà actives.
 
@@ -41,4 +41,4 @@ Le web est alors disponible sur `http://127.0.0.1:5173` et l’API locale sur `h
 
 ## Prochain jalon
 
-Terminer Phase 1 avec l’authentification, les vraies données par workspace, la recherche de médias, les prévisualisations et traitements sécurisés, l’historique de commandes et la consultation du journal d’activité. Les connexions sociales restent une Phase 3 contrôlée par les capacités documentées dans `SOCIAL_APIS.md`.
+Terminer Phase 1 avec l’authentification, les vraies données par workspace, les prévisualisations et traitements sécurisés, l’historique de commandes et la consultation du journal d’activité. Les connexions sociales restent une Phase 3 contrôlée par les capacités documentées dans `SOCIAL_APIS.md`.

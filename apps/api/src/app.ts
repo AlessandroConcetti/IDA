@@ -16,7 +16,7 @@ import {
   internalPostScheduleSchema,
   mediaAssetSchema,
   mediaImportSchema,
-  mediaStatusSchema,
+  mediaListQuerySchema,
   memoryDecisionParamsSchema,
   memoryDecisionRequestSchema,
   memoryProposalCreateSchema,
@@ -48,7 +48,6 @@ import {
   type MediaAsset,
   type Memory,
   type MemoryDecision,
-  mediaStatuses,
   type PostVariantDecision,
   type Task,
   type Track,
@@ -371,6 +370,15 @@ class CalendarQueryInputError extends Error {
 
   constructor() {
     super("La fenêtre du calendrier est invalide.");
+  }
+}
+
+class MediaListQueryInputError extends Error {
+  readonly statusCode = 400;
+  readonly code = "INVALID_MEDIA_QUERY";
+
+  constructor() {
+    super("Les filtres de la Content Library sont invalides.");
   }
 }
 
@@ -781,7 +789,11 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
       });
     }
 
-    if (error instanceof InternalPostScheduleInputError || error instanceof CalendarQueryInputError) {
+    if (
+      error instanceof InternalPostScheduleInputError ||
+      error instanceof CalendarQueryInputError ||
+      error instanceof MediaListQueryInputError
+    ) {
       return reply.status(error.statusCode).send({
         error: { code: error.code, message: error.message },
       });
@@ -1245,15 +1257,23 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   });
 
   app.get("/v1/media", async (request) => {
-    const query = isRecord(request.query) ? request.query : {};
-    const candidateStatus = typeof query.status === "string" ? query.status.toUpperCase() : undefined;
+    const rawQuery = isRecord(request.query) ? request.query : {};
+    // Ne lire que les clés de filtre reconnues. Un workspace transmis par le
+    // client est donc volontairement ignoré : le scope vient du contexte
+    // serveur, jamais de l'URL.
+    const query = mediaListQuerySchema.safeParse({
+      q: rawQuery.q,
+      status: typeof rawQuery.status === "string" ? rawQuery.status.toLocaleUpperCase("en-US") : rawQuery.status,
+      type: typeof rawQuery.type === "string" ? rawQuery.type.toLocaleUpperCase("en-US") : rawQuery.type,
+      tag: rawQuery.tag,
+      limit: rawQuery.limit,
+    });
 
-    if (candidateStatus && !mediaStatuses.includes(candidateStatus as (typeof mediaStatuses)[number])) {
-      throw new CommandInputError(`Statut de média invalide : ${candidateStatus}.`);
+    if (!query.success) {
+      throw new MediaListQueryInputError();
     }
 
-    const status = candidateStatus ? mediaStatusSchema.parse(candidateStatus) : undefined;
-    const media = await database.listMedia(demoContext.workspaceId, status);
+    const media = await database.listMedia(demoContext.workspaceId, query.data);
 
     return {
       data: media.map(toMediaAssetResponse),

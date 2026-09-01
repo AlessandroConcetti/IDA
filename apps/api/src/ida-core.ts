@@ -173,7 +173,7 @@ export class DeterministicIdaCore {
       case "UNUSED_CONTENT": {
         const tool: CommandToolUse = { key: "search_unused_media", moduleKey: "CONTENT", permission: "READ" };
         this.gateway.assertAuthorized({ toolKey: tool.key, moduleKey: tool.moduleKey, permission: tool.permission });
-        const items = await this.database.listMedia(demoContext.workspaceId, "UNUSED");
+        const items = await this.database.listMedia(demoContext.workspaceId, { status: "UNUSED" });
 
         return {
           command,
