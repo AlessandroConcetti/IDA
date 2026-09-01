@@ -10,6 +10,7 @@ import type {
   ArtistProfileUpdate,
   CampaignCreate,
   CampaignReleaseLink,
+  ContentRotationCandidate as ContentRotationCandidateContract,
   IdaCommandRun,
   IdaCommandRunCursor,
   MediaImport,
@@ -103,6 +104,16 @@ export type MediaAsset = {
   tags: string[];
   createdAt: string;
   updatedAt: string;
+};
+
+export type ContentRotationCandidate = {
+  id: string;
+  filename: string;
+  mediaType: ContentRotationCandidateContract["type"];
+  description: string | null;
+  tags: string[];
+  createdAt: string;
+  state: "AVAILABLE";
 };
 
 export type MediaImportFile = {
@@ -485,6 +496,18 @@ function toMediaAsset(row: ScalarRow): MediaAsset {
     tags: asStringArray(row.tags),
     createdAt: asTimestamp(row.createdAt) ?? "1970-01-01T00:00:00.000Z",
     updatedAt: asTimestamp(row.updatedAt) ?? "1970-01-01T00:00:00.000Z",
+  };
+}
+
+function toContentRotationCandidate(row: ScalarRow): ContentRotationCandidate {
+  return {
+    id: asString(row.id),
+    filename: asString(row.filename),
+    mediaType: asString(row.mediaType) as ContentRotationCandidate["mediaType"],
+    description: asNullableString(row.description),
+    tags: asStringArray(row.tags),
+    createdAt: asTimestamp(row.createdAt) ?? "1970-01-01T00:00:00.000Z",
+    state: "AVAILABLE",
   };
 }
 
@@ -1587,6 +1610,54 @@ export class DemoDatabase {
     );
 
     return result.rows.map(toMediaAsset);
+  }
+
+  async listContentRotationCandidates(workspaceId: string, limit = 12): Promise<ContentRotationCandidate[]> {
+    const result = await this.pglite.query<ScalarRow>(
+      `
+        WITH candidate_assets AS (
+          SELECT
+            asset.id,
+            asset.workspace_id,
+            asset.filename,
+            asset.media_type,
+            asset.description,
+            asset.created_at
+          FROM media_assets asset
+          WHERE asset.workspace_id = $1
+            AND asset.status = 'UNUSED'
+            -- Une association, même incohérente ou étrangère, retire le média
+            -- des candidats. Cela évite de le reproposer tant que la relation
+            -- n'a pas été explicitement résolue par le produit.
+            AND NOT EXISTS (
+              SELECT 1
+              FROM post_variant_media link
+              WHERE link.media_asset_id = asset.id
+            )
+          ORDER BY asset.created_at DESC, asset.id DESC
+          LIMIT $2
+        )
+        SELECT
+          asset.id,
+          asset.filename,
+          asset.media_type AS "mediaType",
+          asset.description,
+          asset.created_at AS "createdAt",
+          COALESCE(
+            json_agg(tag.name ORDER BY tag.name) FILTER (WHERE tag.name IS NOT NULL),
+            '[]'::json
+          ) AS tags
+        FROM candidate_assets asset
+        LEFT JOIN media_asset_tags asset_tag ON asset_tag.media_asset_id = asset.id
+        LEFT JOIN media_tags tag ON tag.id = asset_tag.media_tag_id
+          AND tag.workspace_id = asset.workspace_id
+        GROUP BY asset.id, asset.workspace_id, asset.filename, asset.media_type, asset.description, asset.created_at
+        ORDER BY asset.created_at DESC, asset.id DESC
+      `,
+      [workspaceId, limit],
+    );
+
+    return result.rows.map(toContentRotationCandidate);
   }
 
   async hasMediaWithHash(workspaceId: string, sha256: string): Promise<boolean> {
@@ -3413,8 +3484,13 @@ export class DemoDatabase {
         ON command_runs (workspace_id, actor_user_id, created_at DESC, id DESC);
       CREATE INDEX IF NOT EXISTS idx_media_workspace_status
         ON media_assets (workspace_id, status);
+      CREATE INDEX IF NOT EXISTS idx_media_unused_workspace_created_id
+        ON media_assets (workspace_id, created_at DESC, id DESC)
+        WHERE status = 'UNUSED';
       CREATE INDEX IF NOT EXISTS idx_media_asset_tags_tag_asset
         ON media_asset_tags (media_tag_id, media_asset_id);
+      CREATE INDEX IF NOT EXISTS idx_post_variant_media_media_asset
+        ON post_variant_media (media_asset_id);
       CREATE INDEX IF NOT EXISTS idx_memories_workspace_created
         ON memories (workspace_id, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_memories_workspace_state_created

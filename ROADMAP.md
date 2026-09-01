@@ -66,7 +66,7 @@ Créer le premier produit réellement utilisable : un Command Center responsive 
 - commandes textuelles déterministes de lecture : journée, contenus inutilisés et état système ;
 - Artist Brain éditable : identité, ton, genres, influences, audience, objectifs et vocabulaire, avec validation, permission `WRITE` interne et persistance locale ;
 - Music Brain : création locale contrôlée d’un morceau avec métadonnées, validation stricte, scope résolu par le serveur, outil `WRITE` allowlisté et audit append-only ;
-- Content Library : import local privé et recherche filtrée de métadonnées, avec limites, hash SHA-256, détection de doublon, tags normalisés, stockage à clé générée, lecture bornée isolée au workspace et audit append-only pour l’import ;
+- Content Library : import local privé et recherche filtrée de métadonnées, avec limites, hash SHA-256, détection de doublon, tags normalisés, stockage à clé générée, lecture bornée isolée au workspace, audit append-only pour l’import et projection de rotation factuelle des médias `UNUSED` sans lien éditorial ;
 - Campaign Brief Registry : liste et création locale de briefs internes `DRAFT`, nom normalisé unique par workspace, lien optionnel vers une release du même workspace/projet protégé par version, outil `CAMPAIGNS` / `WRITE` et audit redacted, sans date, pilier, contenu, calendrier ni effet externe ;
 - Memory Consent Center : proposition de préférence en `PENDING`, décision humaine explicite et finale, scope serveur, timestamps persistés et audit sans contenu libre ;
 - Task Center : création locale contrôlée, échéance facultative, finalisation explicite idempotente, scope serveur et audit append-only sans contenu libre ;

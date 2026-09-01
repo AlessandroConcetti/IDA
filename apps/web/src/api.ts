@@ -73,6 +73,20 @@ export interface MediaSearchInput {
   limit?: number;
 }
 
+export interface ContentRotationCandidate {
+  id: string;
+  filename: string;
+  type: MediaSearchType;
+  description?: string;
+  tags: string[];
+  createdAt: string;
+  state: "AVAILABLE";
+}
+
+export interface ContentRotationInput {
+  limit?: number;
+}
+
 export type MemoryCategory =
   | "ARTIST_MEMORY"
   | "CONTENT_MEMORY"
@@ -1150,6 +1164,45 @@ function toMediaAssets(payload: unknown): MediaAsset[] {
   return readDataList(payload, "/v1/media").map(toMediaAsset);
 }
 
+function toContentRotationCandidate(record: Record<string, unknown>): ContentRotationCandidate {
+  const id = readString(record.id);
+  const filename = readString(record.filename);
+  const type = readString(record.type);
+  const createdAt = readString(record.createdAt);
+  const state = record.state;
+
+  if (
+    !id ||
+    !filename ||
+    !createdAt ||
+    Number.isNaN(Date.parse(createdAt)) ||
+    state !== "AVAILABLE" ||
+    (type !== "IMAGE" && type !== "VIDEO" && type !== "AUDIO" && type !== "DOCUMENT" && type !== "OTHER")
+  ) {
+    throw new IdaApiError("Un candidat de rotation IDA est invalide.");
+  }
+
+  return {
+    id,
+    filename,
+    type,
+    description: readString(record.description),
+    tags: readStringArray(record.tags),
+    createdAt,
+    state,
+  };
+}
+
+function toContentRotationCandidates(payload: unknown): ContentRotationCandidate[] {
+  const data = readDataObject(payload, "/v1/content/rotation");
+
+  if (!Array.isArray(data.candidates) || !data.candidates.every(isRecord)) {
+    throw new IdaApiError("La réponse /v1/content/rotation n’a pas le format attendu.");
+  }
+
+  return data.candidates.map(toContentRotationCandidate);
+}
+
 export async function fetchMediaAssets(input: MediaSearchInput = {}): Promise<MediaAsset[]> {
   const query = new URLSearchParams();
 
@@ -1172,6 +1225,14 @@ export async function fetchMediaAssets(input: MediaSearchInput = {}): Promise<Me
   query.set("limit", String(input.limit ?? 24));
 
   return toMediaAssets(await getApiJson(`/v1/media?${query.toString()}`));
+}
+
+export async function fetchContentRotationCandidates(
+  input: ContentRotationInput = {},
+): Promise<ContentRotationCandidate[]> {
+  const query = new URLSearchParams({ limit: String(input.limit ?? 6) });
+
+  return toContentRotationCandidates(await getApiJson(`/v1/content/rotation?${query.toString()}`));
 }
 
 export async function uploadMediaAsset(input: MediaUploadInput): Promise<MediaAsset> {

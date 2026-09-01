@@ -21,6 +21,9 @@ import {
   campaignReleaseLinkParamsSchema,
   campaignReleaseLinkSchema,
   campaignSchema,
+  contentRotationCandidateSchema,
+  contentRotationQuerySchema,
+  contentRotationResponseSchema,
   idaCommandRunCursorSchema,
   idaCommandRunListQuerySchema,
   idaCommandRunListResponseSchema,
@@ -57,6 +60,7 @@ import {
   type CalendarItem,
   type Campaign,
   type CommandRunHistoryEntry,
+  type ContentRotationCandidate,
   DemoDatabase,
   type DemoDatabaseOptions,
   type InternalPostSchedule,
@@ -415,6 +419,15 @@ class MediaListQueryInputError extends Error {
   }
 }
 
+class ContentRotationQueryInputError extends Error {
+  readonly statusCode = 400;
+  readonly code = "INVALID_CONTENT_ROTATION_QUERY";
+
+  constructor() {
+    super("Les paramètres de rotation de contenus sont invalides.");
+  }
+}
+
 class ActivityLogQueryInputError extends Error {
   readonly statusCode = 400;
   readonly code = "INVALID_ACTIVITY_LOG_QUERY";
@@ -513,6 +526,18 @@ function toMediaAssetResponse(asset: MediaAsset) {
     lastUsedAt: asset.lastUsedAt ?? undefined,
     createdAt: asset.createdAt,
     updatedAt: asset.updatedAt,
+  });
+}
+
+function toContentRotationCandidateResponse(candidate: ContentRotationCandidate) {
+  return contentRotationCandidateSchema.parse({
+    id: candidate.id,
+    filename: candidate.filename,
+    type: candidate.mediaType,
+    description: optionalString(candidate.description),
+    tags: candidate.tags,
+    createdAt: candidate.createdAt,
+    state: candidate.state,
   });
 }
 
@@ -927,6 +952,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
       error instanceof InternalPostScheduleInputError ||
       error instanceof CalendarQueryInputError ||
       error instanceof MediaListQueryInputError ||
+      error instanceof ContentRotationQueryInputError ||
       error instanceof ActivityLogQueryInputError ||
       error instanceof CommandRunHistoryQueryInputError
     ) {
@@ -1523,6 +1549,22 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     return {
       data: media.map(toMediaAssetResponse),
     };
+  });
+
+  app.get("/v1/content/rotation", async (request) => {
+    const query = contentRotationQuerySchema.safeParse(request.query);
+
+    if (!query.success) {
+      throw new ContentRotationQueryInputError();
+    }
+
+    const candidates = await database.listContentRotationCandidates(demoContext.workspaceId, query.data.limit ?? 12);
+
+    return contentRotationResponseSchema.parse({
+      data: {
+        candidates: candidates.map(toContentRotationCandidateResponse),
+      },
+    });
   });
 
   app.post("/v1/media", async (request, reply) => {

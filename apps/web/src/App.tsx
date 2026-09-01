@@ -6,6 +6,7 @@ import {
   type CampaignCreateInput,
   type CampaignRecord,
   type CampaignStatus,
+  type ContentRotationCandidate,
   completeTask,
   confirmMemory,
   createCampaign,
@@ -19,6 +20,7 @@ import {
   fetchApprovalQueue,
   fetchArtistBrain,
   fetchCampaigns,
+  fetchContentRotationCandidates,
   fetchDashboardSnapshot,
   fetchEditorialCalendar,
   fetchIdaCommandRuns,
@@ -983,6 +985,98 @@ function displayFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function formatContentRotationDate(value: string): string {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.valueOf())) {
+    return "Date indisponible";
+  }
+
+  return new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short" }).format(date);
+}
+
+function ContentRotationPanel({ refreshVersion }: { refreshVersion: number }) {
+  const [candidates, setCandidates] = useState<ContentRotationCandidate[]>([]);
+  const [source, setSource] = useState<"loading" | "api" | "unavailable">(isApiConfigured ? "loading" : "unavailable");
+  const [notice, setNotice] = useState(
+    isApiConfigured
+      ? "Vérification des médias réellement disponibles…"
+      : "La rotation nécessite la connexion à IDA API.",
+  );
+  const title =
+    source === "loading"
+      ? "Checking availability."
+      : source === "unavailable"
+        ? "Availability unavailable."
+        : candidates.length > 0
+          ? "Available assets."
+          : "Nothing free yet.";
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    if (!isApiConfigured) {
+      return () => {
+        isCurrent = false;
+      };
+    }
+
+    setSource("loading");
+    void fetchContentRotationCandidates({ limit: 6 })
+      .then((nextCandidates) => {
+        if (!isCurrent) {
+          return;
+        }
+
+        setCandidates(nextCandidates);
+        setSource("api");
+        setNotice(
+          nextCandidates.length === 0
+            ? "Aucun média libre pour le moment. Les médias déjà liés à une proposition restent volontairement exclus."
+            : `${nextCandidates.length} média${nextCandidates.length > 1 ? "s" : ""} libre${nextCandidates.length > 1 ? "s" : ""} à considérer.`,
+        );
+      })
+      .catch((error: unknown) => {
+        if (!isCurrent) {
+          return;
+        }
+
+        const reason = error instanceof IdaApiError ? error.message : "IDA API est indisponible.";
+        setCandidates([]);
+        setSource("unavailable");
+        setNotice(`Rotation indisponible : ${reason}`);
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [refreshVersion]);
+
+  return (
+    <section className="panel freshness-card content-rotation-card" aria-labelledby="content-rotation-title">
+      <p className="eyebrow">CONTENT ROTATION</p>
+      <strong>{source === "api" ? candidates.length : "—"}</strong>
+      <h2 id="content-rotation-title">{title}</h2>
+      <p>{notice}</p>
+      {source === "api" && candidates.length > 0 ? (
+        <ol className="content-rotation-list" aria-label="Médias actuellement disponibles">
+          {candidates.map((candidate) => (
+            <li key={candidate.id}>
+              <div>
+                <strong>{candidate.filename}</strong>
+                <span>
+                  {candidate.type} · ajouté {formatContentRotationDate(candidate.createdAt)}
+                </span>
+              </div>
+              <em>{candidate.state}</em>
+            </li>
+          ))}
+        </ol>
+      ) : null}
+    </section>
+  );
+}
+
 function ContentView({ onMediaAssetCreated }: { onMediaAssetCreated: (asset: MediaAsset) => void }) {
   const [form, setForm] = useState<MediaUploadForm>(emptyMediaUploadForm);
   const [file, setFile] = useState<File | null>(null);
@@ -995,6 +1089,7 @@ function ContentView({ onMediaAssetCreated }: { onMediaAssetCreated: (asset: Med
   const [searchResults, setSearchResults] = useState<MediaAsset[]>([]);
   const [searchState, setSearchState] = useState<"loading" | "ready" | "error">("loading");
   const [searchNotice, setSearchNotice] = useState("Chargement de la bibliothèque privée…");
+  const [rotationVersion, setRotationVersion] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const searchRequestRef = useRef(0);
 
@@ -1108,6 +1203,7 @@ function ContentView({ onMediaAssetCreated }: { onMediaAssetCreated: (asset: Med
       });
       onMediaAssetCreated(asset);
       void loadMedia(activeSearch);
+      setRotationVersion((current) => current + 1);
       setForm(emptyMediaUploadForm);
       setFile(null);
 
@@ -1319,12 +1415,7 @@ function ContentView({ onMediaAssetCreated }: { onMediaAssetCreated: (asset: Med
           </div>
         </form>
       </section>
-      <section className="panel freshness-card">
-        <p className="eyebrow">FRESHNESS</p>
-        <strong>86</strong>
-        <h2>Healthy rotation.</h2>
-        <p>Les scores deviendront factuels une fois les usages synchronisés avec l’API.</p>
-      </section>
+      <ContentRotationPanel refreshVersion={rotationVersion} />
     </div>
   );
 }

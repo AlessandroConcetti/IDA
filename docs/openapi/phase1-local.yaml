@@ -352,6 +352,34 @@ paths:
           $ref: '#/components/responses/MediaFileTooLarge'
         '415':
           $ref: '#/components/responses/UnsupportedMediaFile'
+  /v1/content/rotation:
+    get:
+      operationId: listContentRotationCandidates
+      summary: Liste les médias réellement disponibles pour une rotation
+      description: >-
+        Lecture locale, bornée et sans effet d'écriture. Elle retourne
+        uniquement les médias UNUSED du workspace résolu côté serveur qui ne
+        possèdent aucun lien post_variant_media. Elle ne calcule aucun score
+        de fraîcheur et n'expose ni hash, stockage, compteur d'usage ni lien.
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: 12 par défaut.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 12
+            default: 12
+      responses:
+        '200':
+          description: Candidats disponibles dans un ordre stable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContentRotationResponse'
+        '400':
+          $ref: '#/components/responses/InvalidContentRotationQuery'
   /v1/memories:
     get:
       operationId: listMemories
@@ -833,6 +861,12 @@ components:
             $ref: '#/components/schemas/ErrorResponse'
     InvalidMediaQuery:
       description: Filtre média invalide ou paramètre reconnu dupliqué
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InvalidContentRotationQuery:
+      description: Query de rotation inconnue, dupliquée ou limite invalide
       content:
         application/json:
           schema:
@@ -1411,6 +1445,37 @@ components:
       properties:
         data:
           $ref: '#/components/schemas/MediaAsset'
+    ContentRotationCandidate:
+      type: object
+      additionalProperties: false
+      required: [id, filename, type, tags, createdAt, state]
+      properties:
+        id: { type: string }
+        filename: { type: string }
+        type:
+          $ref: '#/components/schemas/MediaType'
+        description: { type: string }
+        tags:
+          type: array
+          items: { type: string }
+        createdAt: { type: string, format: date-time }
+        state:
+          const: AVAILABLE
+    ContentRotationResponse:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required: [candidates]
+          properties:
+            candidates:
+              type: array
+              maxItems: 12
+              items:
+                $ref: '#/components/schemas/ContentRotationCandidate'
     Memory:
       type: object
       required: [id, workspaceId, category, content, state, createdAt, updatedAt]

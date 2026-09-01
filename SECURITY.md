@@ -143,6 +143,7 @@ Demande d’upload autorisée → URL signée courte vers zone de quarantaine
 - Les URLs de lecture sont signées, courtes et liées à un objet autorisé. Les médias non publiés ne doivent pas être indexables ou publics.
 - Le hash de déduplication est utile, mais son usage doit rester limité au workspace afin de ne pas révéler indirectement qu’un autre utilisateur possède le même fichier.
 - Une recherche de bibliothèque ne renvoie que des métadonnées autorisées et applique le workspace côté serveur ; clés de stockage, chemins et URLs signées ne sont ni sélectionnés ni rendus. Les motifs de recherche sont liés comme paramètres SQL et leurs caractères joker sont échappés.
+- La projection locale de rotation de contenus limite strictement `limit`, impose le workspace côté serveur et ne rend que les métadonnées minimales d’un média `UNUSED` sans lien éditorial. Elle ne retourne ni hash, clé de stockage, compteur d’usage, statut détaillé ni relation de post, et sa lecture n’écrit ni audit ni état.
 - Prévoir une option de suppression des métadonnées GPS/EXIF des dérivés destinés à la publication.
 
 ## 8. API, limites et traitements asynchrones

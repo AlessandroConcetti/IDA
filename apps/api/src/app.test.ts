@@ -93,6 +93,7 @@ describe("IDA API — première tranche Phase 1", () => {
       "/v1/campaigns",
       "/v1/tracks",
       "/v1/media",
+      "/v1/content/rotation",
       "/v1/memories",
       "/v1/approvals/queue",
       "/v1/calendar",
@@ -532,6 +533,174 @@ describe("IDA API — première tranche Phase 1", () => {
     );
     expect(body.data.some((asset) => asset.id === "med_other_workspace")).toBe(false);
     expect(body.data.some((asset) => asset.filename === "private-other-video.mp4")).toBe(false);
+  });
+
+  it("propose seulement les médias réellement libres pour la rotation, sans effet de bord", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "ida-content-rotation-"));
+    let setupDatabase: DemoDatabase | undefined;
+    let isolatedApp: Awaited<ReturnType<typeof createApp>> | undefined;
+    let inspectedDatabase: DemoDatabase | undefined;
+
+    try {
+      setupDatabase = await DemoDatabase.open({ dataDir });
+      await setupDatabase.pglite.exec(`
+        INSERT INTO media_assets (
+          id, workspace_id, artist_project_id, filename, media_type, mime_type,
+          byte_size, sha256, status, description, usage_count, last_used_at, created_at, updated_at
+        )
+        VALUES
+          (
+            'med_rotation_old', 'wsp_demo_aless', 'prj_demo_aless', 'rotation-old.jpg', 'IMAGE', 'image/jpeg',
+            104, 'demo-hash-rotation-old', 'UNUSED', 'Candidat libre plus ancien.', 0, NULL,
+            '2026-08-20T08:00:00.000Z', '2026-08-20T08:00:00.000Z'
+          ),
+          (
+            'med_rotation_new', 'wsp_demo_aless', 'prj_demo_aless', 'rotation-new.mp4', 'VIDEO', 'video/mp4',
+            105, 'demo-hash-rotation-new', 'UNUSED', 'Candidat libre le plus récent.', 0, NULL,
+            '2026-08-21T08:00:00.000Z', '2026-08-21T08:00:00.000Z'
+          ),
+          (
+            'med_rotation_used', 'wsp_demo_aless', 'prj_demo_aless', 'rotation-used.jpg', 'IMAGE', 'image/jpeg',
+            106, 'demo-hash-rotation-used', 'USED', 'Déjà utilisé.', 3, '2026-08-22T08:00:00.000Z',
+            '2026-08-22T08:00:00.000Z', '2026-08-22T08:00:00.000Z'
+          ),
+          (
+            'med_rotation_linked', 'wsp_demo_aless', 'prj_demo_aless', 'rotation-linked.jpg', 'IMAGE', 'image/jpeg',
+            107, 'demo-hash-rotation-linked', 'UNUSED', 'Déjà lié à une proposition.', 0, NULL,
+            '2026-08-23T08:00:00.000Z', '2026-08-23T08:00:00.000Z'
+          ),
+          (
+            'med_rotation_other', 'wsp_other', 'prj_other_workspace', 'rotation-other.jpg', 'IMAGE', 'image/jpeg',
+            108, 'demo-hash-rotation-other', 'UNUSED', 'Candidat privé hors workspace.', 0, NULL,
+            '2026-08-24T08:00:00.000Z', '2026-08-24T08:00:00.000Z'
+          );
+
+        INSERT INTO media_tags (id, workspace_id, name, normalized_name)
+        VALUES ('tag_rotation_candidate', 'wsp_demo_aless', 'rotation', 'rotation')
+        ON CONFLICT (id) DO NOTHING;
+
+        INSERT INTO media_asset_tags (media_asset_id, media_tag_id)
+        VALUES ('med_rotation_new', 'tag_rotation_candidate')
+        ON CONFLICT (media_asset_id, media_tag_id) DO NOTHING;
+
+        INSERT INTO post_variant_media (post_variant_id, media_asset_id, workspace_id, sort_order)
+        VALUES ('variant_lumiere_instagram', 'med_rotation_linked', 'wsp_demo_aless', 1)
+        ON CONFLICT (post_variant_id, media_asset_id) DO NOTHING;
+      `);
+      const beforeAssets = await setupDatabase.pglite.query<{
+        id: string;
+        status: string;
+        usageCount: number;
+        lastUsedAt: string | null;
+      }>(
+        `
+          SELECT id, status, usage_count AS "usageCount", last_used_at AS "lastUsedAt"
+          FROM media_assets
+          WHERE id LIKE 'med_rotation_%'
+          ORDER BY id
+        `,
+      );
+      const beforeActivities = await setupDatabase.pglite.query<{ count: number }>(
+        `
+          SELECT COUNT(*)::int AS count
+          FROM activity_logs
+          WHERE workspace_id = 'wsp_demo_aless'
+        `,
+      );
+      await setupDatabase.close();
+      setupDatabase = undefined;
+
+      isolatedApp = await createApp({ dataDir });
+      const invalidQueries = [
+        "/v1/content/rotation?workspaceId=wsp_other",
+        "/v1/content/rotation?limit=0",
+        "/v1/content/rotation?limit=13",
+        "/v1/content/rotation?limit=1&limit=2",
+      ];
+
+      for (const url of invalidQueries) {
+        const response = await isolatedApp.inject({ method: "GET", url });
+        expect(response.statusCode, url).toBe(400);
+        expect(response.json()).toMatchObject({ error: { code: "INVALID_CONTENT_ROTATION_QUERY" } });
+      }
+
+      const rotation = await isolatedApp.inject({ method: "GET", url: "/v1/content/rotation?limit=12" });
+      expect(rotation.statusCode).toBe(200);
+      const body = rotation.json() as {
+        data: { candidates: Array<Record<string, unknown>> };
+      };
+      expect(body.data.candidates.map((candidate) => candidate.id)).toEqual(["med_rotation_new", "med_rotation_old"]);
+      expect(body.data.candidates[0]).toEqual({
+        id: "med_rotation_new",
+        filename: "rotation-new.mp4",
+        type: "VIDEO",
+        description: "Candidat libre le plus récent.",
+        tags: ["rotation"],
+        createdAt: "2026-08-21T08:00:00.000Z",
+        state: "AVAILABLE",
+      });
+      expect(Object.keys(body.data.candidates[1] ?? {}).sort()).toEqual([
+        "createdAt",
+        "description",
+        "filename",
+        "id",
+        "state",
+        "tags",
+        "type",
+      ]);
+      const serialized = JSON.stringify(body);
+      for (const forbiddenValue of [
+        "rotation-linked.jpg",
+        "rotation-used.jpg",
+        "rotation-other.jpg",
+        "wsp_demo_aless",
+        "wsp_other",
+        "demo-hash",
+        "usageCount",
+        "lastUsedAt",
+        "mimeType",
+        "status",
+        "workspaceId",
+      ]) {
+        expect(serialized).not.toContain(forbiddenValue);
+      }
+
+      const limited = await isolatedApp.inject({ method: "GET", url: "/v1/content/rotation?limit=1" });
+      expect((limited.json() as { data: { candidates: Array<{ id: string }> } }).data.candidates).toEqual([
+        expect.objectContaining({ id: "med_rotation_new" }),
+      ]);
+
+      await isolatedApp.close();
+      isolatedApp = undefined;
+      inspectedDatabase = await DemoDatabase.open({ dataDir, seed: false });
+      const afterAssets = await inspectedDatabase.pglite.query<{
+        id: string;
+        status: string;
+        usageCount: number;
+        lastUsedAt: string | null;
+      }>(
+        `
+          SELECT id, status, usage_count AS "usageCount", last_used_at AS "lastUsedAt"
+          FROM media_assets
+          WHERE id LIKE 'med_rotation_%'
+          ORDER BY id
+        `,
+      );
+      const afterActivities = await inspectedDatabase.pglite.query<{ count: number }>(
+        `
+          SELECT COUNT(*)::int AS count
+          FROM activity_logs
+          WHERE workspace_id = 'wsp_demo_aless'
+        `,
+      );
+      expect(afterAssets.rows).toEqual(beforeAssets.rows);
+      expect(afterActivities.rows[0]?.count).toBe(beforeActivities.rows[0]?.count);
+    } finally {
+      await inspectedDatabase?.close();
+      await isolatedApp?.close();
+      await setupDatabase?.close();
+      await rm(dataDir, { recursive: true, force: true });
+    }
   });
 
   it("recherche les médias avec des filtres cumulés sans exposer le stockage privé", async () => {

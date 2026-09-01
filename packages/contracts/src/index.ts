@@ -355,6 +355,43 @@ export const mediaListQuerySchema = z
 
 export type MediaListQuery = z.infer<typeof mediaListQuerySchema>;
 
+// La rotation locale ne classe ni ne note les médias : elle ne propose que
+// ceux qui sont UNUSED et sans aucun lien éditorial. Un lien, même incomplet,
+// bloque le média de façon conservative jusqu'à une future vue explicative.
+export const contentRotationCandidateSchema = z
+  .object({
+    id: entityIdSchema,
+    filename: z.string().trim().min(1).max(255),
+    type: mediaTypeSchema,
+    description: mediaDescriptionSchema.optional(),
+    tags: z.array(mediaTagSchema).max(30),
+    createdAt: timestampSchema,
+    state: z.literal("AVAILABLE"),
+  })
+  .strict();
+
+export type ContentRotationCandidate = z.infer<typeof contentRotationCandidateSchema>;
+
+export const contentRotationQuerySchema = z
+  .object({
+    limit: z.coerce.number().int().min(1).max(12).optional(),
+  })
+  .strict();
+
+export type ContentRotationQuery = z.infer<typeof contentRotationQuerySchema>;
+
+export const contentRotationResponseSchema = z
+  .object({
+    data: z
+      .object({
+        candidates: z.array(contentRotationCandidateSchema).max(12),
+      })
+      .strict(),
+  })
+  .strict();
+
+export type ContentRotationResponse = z.infer<typeof contentRotationResponseSchema>;
+
 export const memoryCategorySchema = z.enum([
   "ARTIST_MEMORY",
   "CONTENT_MEMORY",

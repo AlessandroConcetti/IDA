@@ -1119,6 +1119,67 @@ h3 {
   line-height: 0.9;
 }
 
+.content-rotation-card {
+  align-self: start;
+  justify-content: flex-start;
+}
+
+.content-rotation-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.content-rotation-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.content-rotation-list div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.content-rotation-list strong {
+  overflow: hidden;
+  margin: 0;
+  color: #ececf3;
+  font-size: 0.69rem;
+  font-weight: 690;
+  letter-spacing: 0;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.content-rotation-list span,
+.content-rotation-list em {
+  color: #979dac;
+  font-size: 0.59rem;
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.content-rotation-list em {
+  flex: none;
+  padding: 4px 5px;
+  color: #88ddc2;
+  border: 1px solid rgba(102, 219, 181, 0.22);
+  border-radius: 5px;
+  background: rgba(102, 219, 181, 0.07);
+}
+
 .campaign-card {
   min-height: 240px;
   background:
