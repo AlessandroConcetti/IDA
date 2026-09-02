@@ -93,6 +93,8 @@ type AppError = Error & {
 };
 
 type MediaImportFields = {
+  releaseId?: string;
+  trackId?: string;
   description?: string;
   tags?: string;
 };
@@ -103,6 +105,8 @@ type ParsedMediaImport = {
   mediaType: "IMAGE" | "VIDEO" | "AUDIO" | "DOCUMENT";
   mimeType: string;
   extension: string;
+  releaseId?: string;
+  trackId?: string;
   description?: string;
   tags: string[];
 };
@@ -121,10 +125,10 @@ const mediaMaxBytes = 25 * 1024 * 1024;
 const mediaMultipartLimits = {
   fieldNameSize: 32,
   fieldSize: 8 * 1024,
-  fields: 2,
+  fields: 4,
   fileSize: mediaMaxBytes,
   files: 1,
-  parts: 3,
+  parts: 5,
 } as const;
 const defaultStorageDir = fileURLToPath(new URL("../.storage", import.meta.url));
 
@@ -443,6 +447,10 @@ function toMediaAssetResponse(asset: MediaAsset) {
     id: asset.id,
     workspaceId: demoContext.workspaceId,
     artistProjectId: optionalString(asset.projectId),
+    releaseId: optionalString(asset.releaseId),
+    releaseTitle: optionalString(asset.releaseTitle),
+    trackId: optionalString(asset.trackId),
+    trackTitle: optionalString(asset.trackTitle),
     filename: asset.filename,
     type: asset.mediaType,
     mimeType: asset.mimeType,
@@ -488,7 +496,10 @@ async function parseMediaImport(request: FastifyRequest): Promise<ParsedMediaImp
     }
 
     if (
-      (part.fieldname !== "description" && part.fieldname !== "tags") ||
+      (part.fieldname !== "releaseId" &&
+        part.fieldname !== "trackId" &&
+        part.fieldname !== "description" &&
+        part.fieldname !== "tags") ||
       part.fieldnameTruncated ||
       part.valueTruncated ||
       typeof part.value !== "string" ||
@@ -505,7 +516,7 @@ async function parseMediaImport(request: FastifyRequest): Promise<ParsedMediaImp
     throw new MediaImportError(
       400,
       "INVALID_MEDIA_IMPORT",
-      "Seuls les champs file, description et tags sont acceptés une seule fois.",
+      "Seuls les champs file, releaseId, trackId, description et tags sont acceptés une seule fois.",
     );
   }
 
@@ -518,6 +529,8 @@ async function parseMediaImport(request: FastifyRequest): Promise<ParsedMediaImp
   }
 
   const metadata = mediaImportSchema.safeParse({
+    releaseId: fields.releaseId,
+    trackId: fields.trackId,
     description: fields.description,
     tags: parseMediaTags(fields.tags),
   });
@@ -534,6 +547,8 @@ async function parseMediaImport(request: FastifyRequest): Promise<ParsedMediaImp
     mediaType: supported.mediaType,
     mimeType: file.mimeType.toLocaleLowerCase("en-US"),
     extension: supported.extension,
+    releaseId: metadata.data.releaseId,
+    trackId: metadata.data.trackId,
     description: metadata.data.description,
     tags: metadata.data.tags,
   };
@@ -1827,6 +1842,20 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
         await removePrivateMedia(stored.filePath);
         return reply.status(404).send({
           error: { code: "ARTIST_PROJECT_NOT_FOUND", message: "Projet artistique introuvable." },
+        });
+      }
+
+      if (result.kind === "release-not-found") {
+        await removePrivateMedia(stored.filePath);
+        return reply.status(404).send({
+          error: { code: "RELEASE_NOT_FOUND", message: "Release introuvable pour ce média." },
+        });
+      }
+
+      if (result.kind === "track-not-found") {
+        await removePrivateMedia(stored.filePath);
+        return reply.status(404).send({
+          error: { code: "TRACK_NOT_FOUND", message: "Morceau introuvable pour ce média." },
         });
       }
 

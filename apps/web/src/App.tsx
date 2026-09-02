@@ -34,6 +34,7 @@ import {
   fetchReleases,
   fetchSocialPlatformCapabilities,
   fetchTasks,
+  fetchTrackReferences,
   IdaApiError,
   type IdaCommandRunRecord,
   isApiConfigured,
@@ -53,6 +54,7 @@ import {
   type TaskCreateInput,
   type TaskRecord,
   type TrackCreateInput,
+  type TrackReference,
   updateArtistBrain,
   updateCampaignRelease,
   uploadMediaAsset,
@@ -1614,11 +1616,15 @@ function ReleaseRegistry({ onReleaseCreated }: { onReleaseCreated: (release: Rel
 const maximumMediaUploadBytes = 25 * 1024 * 1024;
 
 type MediaUploadForm = {
+  releaseId: string;
+  trackId: string;
   description: string;
   tags: string;
 };
 
 const emptyMediaUploadForm: MediaUploadForm = {
+  releaseId: "",
+  trackId: "",
   description: "",
   tags: "",
 };
@@ -1753,6 +1759,11 @@ function ContentRotationPanel({ refreshVersion }: { refreshVersion: number }) {
 
 function ContentView({ onMediaAssetCreated }: { onMediaAssetCreated: (asset: MediaAsset) => void }) {
   const [form, setForm] = useState<MediaUploadForm>(emptyMediaUploadForm);
+  const [releases, setReleases] = useState<ReleaseRecord[]>([]);
+  const [tracks, setTracks] = useState<TrackReference[]>([]);
+  const [referenceSource, setReferenceSource] = useState<"loading" | "api" | "unavailable">(
+    isApiConfigured ? "loading" : "unavailable",
+  );
   const [file, setFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -1769,6 +1780,38 @@ function ContentView({ onMediaAssetCreated }: { onMediaAssetCreated: (asset: Med
 
   useEffect(() => {
     void loadMedia(emptyMediaSearchForm);
+  }, []);
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    if (!isApiConfigured) {
+      return () => {
+        isCurrent = false;
+      };
+    }
+
+    void Promise.all([fetchReleases(), fetchTrackReferences()])
+      .then(([nextReleases, nextTracks]) => {
+        if (!isCurrent) {
+          return;
+        }
+
+        setReleases(nextReleases);
+        setTracks(nextTracks);
+        setReferenceSource("api");
+      })
+      .catch(() => {
+        if (!isCurrent) {
+          return;
+        }
+
+        setReferenceSource("unavailable");
+      });
+
+    return () => {
+      isCurrent = false;
+    };
   }, []);
 
   async function loadMedia(nextSearch: MediaSearchForm) {
@@ -1872,6 +1915,8 @@ function ContentView({ onMediaAssetCreated }: { onMediaAssetCreated: (asset: Med
     try {
       const asset = await uploadMediaAsset({
         file,
+        releaseId: optionalFormValue(form.releaseId),
+        trackId: optionalFormValue(form.trackId),
         description: optionalFormValue(form.description),
         tags: optionalFormValue(form.tags),
       });
@@ -2009,7 +2054,8 @@ function ContentView({ onMediaAssetCreated }: { onMediaAssetCreated: (asset: Med
           <span className="status-tag demo">PRIVATE</span>
         </div>
         <p className="content-import-intro">
-          Import local uniquement : aucun post, brouillon public ou action sociale n’est créé ici.
+          Import local uniquement : une release ou un morceau local peut être choisi, sans post, brouillon public ou
+          action sociale.
         </p>
         <p className={`content-import-notice ${noticeState}`} role="status">
           <span aria-hidden="true" />
@@ -2055,6 +2101,38 @@ function ContentView({ onMediaAssetCreated }: { onMediaAssetCreated: (asset: Med
             </span>
           </button>
           <div className="content-import-fields">
+            <label className="content-import-field">
+              <span>Release liée</span>
+              <select
+                value={form.releaseId}
+                onChange={(event) => updateField("releaseId", event.target.value)}
+                disabled={isUploading || referenceSource !== "api"}
+              >
+                <option value="">
+                  {referenceSource === "loading" ? "Chargement des releases…" : "Aucune release"}
+                </option>
+                {releases.map((release) => (
+                  <option key={release.id} value={release.id}>
+                    {releaseOptionLabel(release)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="content-import-field">
+              <span>Morceau lié</span>
+              <select
+                value={form.trackId}
+                onChange={(event) => updateField("trackId", event.target.value)}
+                disabled={isUploading || referenceSource !== "api"}
+              >
+                <option value="">{referenceSource === "loading" ? "Chargement des morceaux…" : "Aucun morceau"}</option>
+                {tracks.map((track) => (
+                  <option key={track.id} value={track.id}>
+                    {track.releaseTitle ? `${track.title} · ${track.releaseTitle}` : track.title}
+                  </option>
+                ))}
+              </select>
+            </label>
             <label className="content-import-field content-import-field-wide">
               <span>Description</span>
               <textarea
@@ -2081,7 +2159,10 @@ function ContentView({ onMediaAssetCreated }: { onMediaAssetCreated: (asset: Med
             </div>
           ) : null}
           <div className="content-import-actions">
-            <p>IDA vérifiera le fichier côté serveur avant de le rendre disponible dans ce workspace.</p>
+            <p>
+              IDA vérifiera le fichier et les références choisies dans le même workspace et projet avant de les rendre
+              disponibles. Les médias existants ne sont pas modifiés ici.
+            </p>
             <button className="send-button" type="submit" disabled={isUploading || !file}>
               {isUploading ? "Importation…" : "Add media"}
               <span aria-hidden="true">↗</span>

@@ -389,10 +389,12 @@ paths:
       summary: Importe un média local privé dans la Content Library
       description: >-
         Accepte exactement un fichier et les champs texte optionnels description
-        et tags (liste séparée par des virgules). Le workspace, le projet et
-        l'acteur sont imposés par le serveur ; l'outil interne allowlisté
-        import_media utilise CONTENT/WRITE. Aucun chemin, URL de stockage,
-        scope client, publication ou appel externe n'est accepté.
+        et tags (liste séparée par des virgules), ainsi que les références
+        optionnelles releaseId et trackId. Chaque référence doit appartenir au
+        même workspace et projet artistique que le média. Le workspace, le
+        projet et l'acteur sont imposés par le serveur ; l'outil interne
+        allowlisté import_media utilise CONTENT/WRITE. Aucun chemin, URL de
+        stockage, scope client, publication ou appel externe n'est accepté.
       requestBody:
         required: true
         content:
@@ -411,7 +413,7 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
-          $ref: '#/components/responses/NotFound'
+          $ref: '#/components/responses/MediaReferenceNotFound'
         '409':
           $ref: '#/components/responses/DuplicateMedia'
         '413':
@@ -1044,6 +1046,12 @@ components:
             $ref: '#/components/schemas/ErrorResponse'
     InvalidMediaImport:
       description: Formulaire media invalide, champ inattendu ou tentative de définir le scope client
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    MediaReferenceNotFound:
+      description: Release ou morceau compatible introuvable dans le workspace et projet artistique autorisés
       content:
         application/json:
           schema:
@@ -1806,6 +1814,12 @@ components:
           type: string
           minLength: 1
           maxLength: 4000
+        releaseId:
+          type: string
+          description: Release existante du même workspace et projet artistique, résolue côté serveur.
+        trackId:
+          type: string
+          description: Morceau existant du même workspace et projet artistique, résolu côté serveur.
         tags:
           type: string
           description: Liste de 30 tags maximum, séparés par des virgules.
@@ -1817,6 +1831,10 @@ components:
         id: { type: string }
         workspaceId: { type: string }
         artistProjectId: { type: string }
+        releaseId: { type: string }
+        releaseTitle: { type: string, minLength: 1, maxLength: 240 }
+        trackId: { type: string }
+        trackTitle: { type: string, minLength: 1, maxLength: 240 }
         filename: { type: string }
         type:
           $ref: '#/components/schemas/MediaType'

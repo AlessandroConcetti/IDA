@@ -1173,6 +1173,8 @@ describe("IDA API — première tranche Phase 1", () => {
           contentType: "image/jpeg",
           value: file,
         },
+        { name: "releaseId", value: "rel_lumiere_noire" },
+        { name: "trackId", value: "trk_lumiere_noire" },
         { name: "description", value: "Photo studio importée localement." },
         { name: "tags", value: "Studio, Vertical, studio" },
       ]),
@@ -1185,6 +1187,10 @@ describe("IDA API — première tranche Phase 1", () => {
         id: expect.stringMatching(/^med_[a-f0-9]{32}$/),
         workspaceId: "wsp_demo_aless",
         artistProjectId: "prj_demo_aless",
+        releaseId: "rel_lumiere_noire",
+        releaseTitle: "Lumière Noire",
+        trackId: "trk_lumiere_noire",
+        trackTitle: "Lumière Noire",
         filename: "studio-frame.jpg",
         type: "IMAGE",
         mimeType: "image/jpeg",
@@ -1200,11 +1206,208 @@ describe("IDA API — première tranche Phase 1", () => {
 
     const listing = await app.inject({ method: "GET", url: "/v1/media?status=UNUSED" });
     expect(listing.statusCode).toBe(200);
-    expect((listing.json() as { data: Array<{ hash: string; filename: string; tags: string[] }> }).data).toEqual(
+    expect(
+      (
+        listing.json() as {
+          data: Array<{ hash: string; filename: string; releaseId?: string; trackId?: string; tags: string[] }>;
+        }
+      ).data,
+    ).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ hash: expectedHash, filename: "studio-frame.jpg", tags: ["studio", "vertical"] }),
+        expect.objectContaining({
+          hash: expectedHash,
+          filename: "studio-frame.jpg",
+          releaseId: "rel_lumiere_noire",
+          trackId: "trk_lumiere_noire",
+          tags: ["studio", "vertical"],
+        }),
       ]),
     );
+  });
+
+  it("refuse les références release ou morceau hors workspace pendant un import sans créer de média", async () => {
+    const initial = await app.inject({ method: "GET", url: "/v1/media" });
+    const initialCount = (initial.json() as { data: unknown[] }).data.length;
+
+    const foreignRelease = await app.inject({
+      method: "POST",
+      url: "/v1/media",
+      ...multipartPayload([
+        {
+          name: "file",
+          filename: "foreign-release.png",
+          contentType: "image/png",
+          value: Buffer.from("foreign-release"),
+        },
+        { name: "releaseId", value: "rel_other_workspace" },
+      ]),
+    });
+    const foreignTrack = await app.inject({
+      method: "POST",
+      url: "/v1/media",
+      ...multipartPayload([
+        { name: "file", filename: "foreign-track.png", contentType: "image/png", value: Buffer.from("foreign-track") },
+        { name: "trackId", value: "trk_other_workspace" },
+      ]),
+    });
+
+    expect(foreignRelease.statusCode).toBe(404);
+    expect(foreignRelease.json()).toMatchObject({ error: { code: "RELEASE_NOT_FOUND" } });
+    expect(foreignTrack.statusCode).toBe(404);
+    expect(foreignTrack.json()).toMatchObject({ error: { code: "TRACK_NOT_FOUND" } });
+
+    const after = await app.inject({ method: "GET", url: "/v1/media" });
+    expect((after.json() as { data: unknown[] }).data).toHaveLength(initialCount);
+  });
+
+  it("répare et protège les références DAM hors scope sans laisser de métadonnées libres dans l’audit", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "ida-media-reference-migration-"));
+    const isolatedStorageDir = await mkdtemp(join(tmpdir(), "ida-media-reference-storage-"));
+    let legacyDatabase: DemoDatabase | undefined;
+    let upgradedDatabase: DemoDatabase | undefined;
+    let upgradedApp: Awaited<ReturnType<typeof createApp>> | undefined;
+
+    try {
+      legacyDatabase = await DemoDatabase.open({ dataDir });
+      await legacyDatabase.pglite.exec(`
+        INSERT INTO artist_projects (id, workspace_id, name, status)
+        VALUES ('prj_media_other_project', 'wsp_demo_aless', 'Autre projet DAM', 'ACTIVE');
+        INSERT INTO releases (
+          id, workspace_id, artist_project_id, title, release_type, release_date, label, status, description
+        )
+        VALUES (
+          'rel_media_other_project', 'wsp_demo_aless', 'prj_media_other_project',
+          'Release DAM autre projet', 'SINGLE', NULL, NULL, 'UNRELEASED', NULL
+        );
+        INSERT INTO tracks (
+          id, workspace_id, artist_project_id, release_id, title, artist_credit, status
+        )
+        VALUES (
+          'trk_media_other_project', 'wsp_demo_aless', 'prj_media_other_project', NULL,
+          'Morceau DAM autre projet', 'Aless', 'DEMO'
+        );
+        DROP TRIGGER IF EXISTS media_assets_reference_scope_guard ON media_assets;
+        UPDATE media_assets
+        SET release_id = 'rel_other_workspace', track_id = 'trk_other_workspace'
+        WHERE id = 'med_studio_light';
+      `);
+      await legacyDatabase.close();
+      legacyDatabase = undefined;
+
+      upgradedDatabase = await DemoDatabase.open({ dataDir, seed: false });
+      const repaired = await upgradedDatabase.pglite.query<{ releaseId: string | null; trackId: string | null }>(`
+        SELECT release_id AS "releaseId", track_id AS "trackId"
+        FROM media_assets
+        WHERE id = 'med_studio_light'
+      `);
+      expect(repaired.rows[0]).toMatchObject({ releaseId: null, trackId: null });
+
+      await expect(
+        upgradedDatabase.pglite.exec(`
+          UPDATE media_assets
+          SET release_id = 'rel_other_workspace'
+          WHERE id = 'med_studio_light';
+        `),
+      ).rejects.toThrow(/même workspace et projet artistique/u);
+      await expect(
+        upgradedDatabase.pglite.exec(`
+          UPDATE media_assets
+          SET release_id = 'rel_media_other_project'
+          WHERE id = 'med_studio_light';
+        `),
+      ).rejects.toThrow(/même workspace et projet artistique/u);
+      await expect(
+        upgradedDatabase.pglite.exec(`
+          UPDATE media_assets
+          SET track_id = 'trk_other_workspace'
+          WHERE id = 'med_studio_light';
+        `),
+      ).rejects.toThrow(/même workspace et projet artistique/u);
+      await expect(
+        upgradedDatabase.pglite.exec(`
+          UPDATE media_assets
+          SET track_id = 'trk_media_other_project'
+          WHERE id = 'med_studio_light';
+        `),
+      ).rejects.toThrow(/même workspace et projet artistique/u);
+      await upgradedDatabase.close();
+      upgradedDatabase = undefined;
+
+      upgradedApp = await createApp({ dataDir, storageDir: isolatedStorageDir });
+      const projectMismatch = await upgradedApp.inject({
+        method: "POST",
+        url: "/v1/media",
+        ...multipartPayload([
+          {
+            name: "file",
+            filename: "other-project-release.png",
+            contentType: "image/png",
+            value: Buffer.from("other-project-release"),
+          },
+          { name: "releaseId", value: "rel_media_other_project" },
+        ]),
+      });
+      const trackMismatch = await upgradedApp.inject({
+        method: "POST",
+        url: "/v1/media",
+        ...multipartPayload([
+          {
+            name: "file",
+            filename: "other-project-track.png",
+            contentType: "image/png",
+            value: Buffer.from("other-project-track"),
+          },
+          { name: "trackId", value: "trk_media_other_project" },
+        ]),
+      });
+      expect(projectMismatch.statusCode).toBe(404);
+      expect(projectMismatch.json()).toMatchObject({ error: { code: "RELEASE_NOT_FOUND" } });
+      expect(trackMismatch.statusCode).toBe(404);
+      expect(trackMismatch.json()).toMatchObject({ error: { code: "TRACK_NOT_FOUND" } });
+
+      const imported = await upgradedApp.inject({
+        method: "POST",
+        url: "/v1/media",
+        ...multipartPayload([
+          {
+            name: "file",
+            filename: "audit-linked-media.png",
+            contentType: "image/png",
+            value: Buffer.from("audit-linked-media"),
+          },
+          { name: "releaseId", value: "rel_lumiere_noire" },
+          { name: "trackId", value: "trk_lumiere_noire" },
+          { name: "description", value: "Description qui ne doit pas passer dans l’audit." },
+          { name: "tags", value: "privé, audit" },
+        ]),
+      });
+      expect(imported.statusCode).toBe(201);
+      const mediaId = (imported.json() as { data: { id: string } }).data.id;
+      await upgradedApp.close();
+      upgradedApp = undefined;
+
+      upgradedDatabase = await DemoDatabase.open({ dataDir, seed: false });
+      const audit = await upgradedDatabase.pglite.query<{ payload: string }>(
+        `
+        SELECT payload::text AS payload
+        FROM activity_logs
+        WHERE workspace_id = 'wsp_demo_aless'
+          AND entity_id = $1
+          AND action = 'media.imported'
+      `,
+        [mediaId],
+      );
+      expect(audit.rows[0]?.payload).toBe('{"mediaType":"IMAGE","hasRelease":true,"hasTrack":true}');
+      expect(audit.rows[0]?.payload).not.toContain("audit-linked-media.png");
+      expect(audit.rows[0]?.payload).not.toContain("Description qui ne doit pas passer dans l’audit");
+      expect(audit.rows[0]?.payload).not.toContain("privé");
+    } finally {
+      await legacyDatabase?.close();
+      await upgradedDatabase?.close();
+      await upgradedApp?.close();
+      await rm(dataDir, { recursive: true, force: true });
+      await rm(isolatedStorageDir, { recursive: true, force: true });
+    }
   });
 
   it("sert un aperçu privé borné et compatible avec la lecture audio/vidéo sans exposer le stockage", async () => {

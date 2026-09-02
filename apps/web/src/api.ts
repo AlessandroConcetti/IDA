@@ -75,6 +75,12 @@ export interface TrackCreateInput {
   description?: string;
 }
 
+export interface TrackReference {
+  id: string;
+  title: string;
+  releaseTitle?: string;
+}
+
 export type MediaSearchType = "IMAGE" | "VIDEO" | "AUDIO" | "DOCUMENT" | "OTHER";
 
 export interface MediaSearchInput {
@@ -295,6 +301,8 @@ export interface EditorialCalendarSnapshot {
 
 export interface MediaUploadInput {
   file: File;
+  releaseId?: string;
+  trackId?: string;
   description?: string;
   tags?: string;
 }
@@ -1276,8 +1284,29 @@ function toTrack(record: Record<string, unknown>): Track {
   };
 }
 
+function toTrackReference(record: Record<string, unknown>): TrackReference {
+  const id = readString(record.id);
+  const title = readString(record.title);
+
+  if (!id || !title) {
+    throw new IdaApiError("Un morceau proposé pour association média est invalide.");
+  }
+
+  const releaseTitle = readString(record.releaseTitle);
+
+  return {
+    id,
+    title,
+    ...(releaseTitle === undefined ? {} : { releaseTitle }),
+  };
+}
+
 function toTracks(payload: unknown): Track[] {
   return readDataList(payload, "/v1/tracks").map(toTrack);
+}
+
+export async function fetchTrackReferences(): Promise<TrackReference[]> {
+  return readDataList(await getApiJson("/v1/tracks"), "/v1/tracks").map(toTrackReference);
 }
 
 export async function createTrack(input: TrackCreateInput): Promise<Track> {
@@ -1309,15 +1338,20 @@ function toMediaAsset(record: Record<string, unknown>, index = 0): MediaAsset {
   const id = readString(record.id);
 
   const description = readString(record.description);
+  const trackTitle = readString(record.trackTitle);
+  const releaseTitle = readString(record.releaseTitle);
   const tags = Array.isArray(record.tags)
     ? record.tags.filter((tag): tag is string => typeof tag === "string" && tag.length > 0)
     : [];
   const usageCount = readNumber(record.usageCount) ?? 0;
   const size = formatFileSize(record.size);
   const previewAvailable = record.previewAvailable === true;
-  const detail =
-    description ??
-    (tags.length > 0 ? tags.join(" · ") : (size ?? `${usageCount} utilisation${usageCount === 1 ? "" : "s"}`));
+  const relationship = trackTitle ? `Morceau · ${trackTitle}` : releaseTitle ? `Release · ${releaseTitle}` : undefined;
+  const fallbackDetail =
+    tags.length > 0 ? tags.join(" · ") : (size ?? `${usageCount} utilisation${usageCount === 1 ? "" : "s"}`);
+  const detail = relationship
+    ? [relationship, description ?? fallbackDetail].join(" · ")
+    : (description ?? fallbackDetail);
 
   return {
     id,
@@ -1573,6 +1607,14 @@ export async function uploadMediaAsset(input: MediaUploadInput): Promise<MediaAs
 
   if (input.description) {
     body.append("description", input.description);
+  }
+
+  if (input.releaseId) {
+    body.append("releaseId", input.releaseId);
+  }
+
+  if (input.trackId) {
+    body.append("trackId", input.trackId);
   }
 
   if (input.tags) {

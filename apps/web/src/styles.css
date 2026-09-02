@@ -2651,6 +2651,7 @@ h3 {
 }
 
 .content-import-field input,
+.content-import-field select,
 .content-import-field textarea {
   width: 100%;
   min-width: 0;
@@ -2671,6 +2672,7 @@ h3 {
 }
 
 .content-import-field input:focus,
+.content-import-field select:focus,
 .content-import-field textarea:focus {
   border-color: rgba(164, 152, 255, 0.7);
   background: rgba(5, 7, 11, 0.74);
@@ -2682,6 +2684,7 @@ h3 {
 }
 
 .content-import-field input:disabled,
+.content-import-field select:disabled,
 .content-import-field textarea:disabled {
   opacity: 0.65;
 }

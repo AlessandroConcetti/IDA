@@ -94,6 +94,8 @@ export type Track = {
 export type MediaAsset = {
   id: string;
   projectId: string | null;
+  releaseId: string | null;
+  trackId: string | null;
   filename: string;
   mediaType: string;
   mimeType: string;
@@ -144,7 +146,9 @@ export type PrivateMediaFile = {
 export type CreateMediaResult =
   | { kind: "created"; asset: MediaAsset }
   | { kind: "duplicate" }
-  | { kind: "project-not-found" };
+  | { kind: "project-not-found" }
+  | { kind: "release-not-found" }
+  | { kind: "track-not-found" };
 
 export type Memory = {
   id: string;
@@ -536,6 +540,8 @@ function toMediaAsset(row: ScalarRow): MediaAsset {
   return {
     id: asString(row.id),
     projectId: asNullableString(row.projectId),
+    releaseId: asNullableString(row.releaseId),
+    trackId: asNullableString(row.trackId),
     filename: asString(row.filename),
     mediaType: asString(row.mediaType),
     mimeType: asString(row.mimeType),
@@ -1756,6 +1762,8 @@ export class DemoDatabase {
         SELECT
           asset.id,
           asset.artist_project_id AS "projectId",
+          asset.release_id AS "releaseId",
+          asset.track_id AS "trackId",
           asset.filename,
           asset.media_type AS "mediaType",
           asset.mime_type AS "mimeType",
@@ -1778,8 +1786,12 @@ export class DemoDatabase {
           ) AS tags
         FROM media_assets asset
         LEFT JOIN artist_projects project ON project.id = asset.artist_project_id AND project.workspace_id = asset.workspace_id
-        LEFT JOIN releases release ON release.id = asset.release_id AND release.workspace_id = asset.workspace_id
-        LEFT JOIN tracks track ON track.id = asset.track_id AND track.workspace_id = asset.workspace_id
+        LEFT JOIN releases release ON release.id = asset.release_id
+          AND release.workspace_id = asset.workspace_id
+          AND release.artist_project_id = asset.artist_project_id
+        LEFT JOIN tracks track ON track.id = asset.track_id
+          AND track.workspace_id = asset.workspace_id
+          AND track.artist_project_id = asset.artist_project_id
         LEFT JOIN media_asset_tags asset_tag ON asset_tag.media_asset_id = asset.id
         LEFT JOIN media_tags tag ON tag.id = asset_tag.media_tag_id AND tag.workspace_id = asset.workspace_id
         WHERE ${whereClauses.join("\n          AND ")}
@@ -1929,19 +1941,66 @@ export class DemoDatabase {
       }
 
       const projectId = asString(project.id);
+      let releaseTitle: string | null = null;
+      let trackTitle: string | null = null;
+
+      if (input.releaseId) {
+        const releaseResult = await transaction.query<ScalarRow>(
+          `
+            SELECT title
+            FROM releases
+            WHERE id = $1
+              AND workspace_id = $2
+              AND artist_project_id = $3
+            LIMIT 1
+          `,
+          [input.releaseId, workspaceId, projectId],
+        );
+        const release = releaseResult.rows[0];
+
+        if (!release) {
+          return { kind: "release-not-found" };
+        }
+
+        releaseTitle = asString(release.title);
+      }
+
+      if (input.trackId) {
+        const trackResult = await transaction.query<ScalarRow>(
+          `
+            SELECT title
+            FROM tracks
+            WHERE id = $1
+              AND workspace_id = $2
+              AND artist_project_id = $3
+            LIMIT 1
+          `,
+          [input.trackId, workspaceId, projectId],
+        );
+        const track = trackResult.rows[0];
+
+        if (!track) {
+          return { kind: "track-not-found" };
+        }
+
+        trackTitle = asString(track.title);
+      }
+
       const mediaId = `med_${randomUUID().replaceAll("-", "")}`;
       const normalizedTags = [...new Set(input.tags.map(normalizeMediaTag))];
       const created = await transaction.query<ScalarRow>(
         `
           INSERT INTO media_assets (
-            id, workspace_id, artist_project_id, filename, media_type, mime_type,
-            byte_size, sha256, storage_key, status, description
+            id, workspace_id, artist_project_id, release_id, track_id, filename,
+            media_type, mime_type, byte_size, sha256, storage_key, status, description
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'UNUSED', $10)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'UNUSED', $12)
           ON CONFLICT (workspace_id, sha256) DO NOTHING
           RETURNING
             id,
             artist_project_id AS "projectId",
+            release_id AS "releaseId",
+            track_id AS "trackId",
             filename,
             media_type AS "mediaType",
             mime_type AS "mimeType",
@@ -1959,6 +2018,8 @@ export class DemoDatabase {
           mediaId,
           workspaceId,
           projectId,
+          input.releaseId ?? null,
+          input.trackId ?? null,
           file.filename,
           file.mediaType,
           file.mimeType,
@@ -1974,7 +2035,7 @@ export class DemoDatabase {
         return { kind: "duplicate" };
       }
 
-      const asset = toMediaAsset(row);
+      const asset = toMediaAsset({ ...row, releaseTitle, trackTitle });
 
       for (const tagName of normalizedTags) {
         const tagResult = await transaction.query<ScalarRow>(
@@ -2014,12 +2075,9 @@ export class DemoDatabase {
           actorUserId,
           asset.id,
           JSON.stringify({
-            filename: asset.filename,
             mediaType: asset.mediaType,
-            mimeType: asset.mimeType,
-            byteSize: asset.byteSize,
-            sha256: asset.sha256,
-            tags: normalizedTags,
+            hasRelease: asset.releaseId !== null,
+            hasTrack: asset.trackId !== null,
           }),
         ],
       );
@@ -4049,6 +4107,33 @@ export class DemoDatabase {
               AND release.artist_project_id = track.artist_project_id
           );
       ALTER TABLE media_assets
+        ADD COLUMN IF NOT EXISTS release_id TEXT REFERENCES releases(id);
+      ALTER TABLE media_assets
+        ADD COLUMN IF NOT EXISTS track_id TEXT REFERENCES tracks(id);
+      -- Les médias locaux existants peuvent provenir d'un runtime qui ne
+      -- contrôlait pas encore ces références. Les détacher avant la garde
+      -- évite de conserver une association d'un autre workspace ou projet.
+      UPDATE media_assets AS asset
+        SET release_id = NULL
+        WHERE release_id IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1
+            FROM releases AS release
+            WHERE release.id = asset.release_id
+              AND release.workspace_id = asset.workspace_id
+              AND release.artist_project_id = asset.artist_project_id
+          );
+      UPDATE media_assets AS asset
+        SET track_id = NULL
+        WHERE track_id IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1
+            FROM tracks AS track
+            WHERE track.id = asset.track_id
+              AND track.workspace_id = asset.workspace_id
+              AND track.artist_project_id = asset.artist_project_id
+          );
+      ALTER TABLE media_assets
         ADD COLUMN IF NOT EXISTS storage_key TEXT;
       ALTER TABLE media_assets
         ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
@@ -4137,6 +4222,49 @@ export class DemoDatabase {
       CREATE TRIGGER tracks_release_scope_guard
       BEFORE INSERT OR UPDATE OF release_id, workspace_id, artist_project_id ON tracks
       FOR EACH ROW EXECUTE FUNCTION enforce_track_release_scope();
+
+      -- Les champs directs du DAM sont temporaires mais doivent respecter les
+      -- mêmes frontières de workspace/projet que les futures tables de
+      -- liaison. Une association n'est jamais autorisée sans projet commun.
+      CREATE OR REPLACE FUNCTION enforce_media_asset_reference_scope()
+      RETURNS TRIGGER AS $$
+      BEGIN
+        IF NEW.release_id IS NOT NULL
+          AND (
+            NEW.artist_project_id IS NULL
+            OR NOT EXISTS (
+              SELECT 1
+              FROM releases AS release
+              WHERE release.id = NEW.release_id
+                AND release.workspace_id = NEW.workspace_id
+                AND release.artist_project_id = NEW.artist_project_id
+            )
+          ) THEN
+          RAISE EXCEPTION 'La release liée doit appartenir au même workspace et projet artistique que le média.';
+        END IF;
+
+        IF NEW.track_id IS NOT NULL
+          AND (
+            NEW.artist_project_id IS NULL
+            OR NOT EXISTS (
+              SELECT 1
+              FROM tracks AS track
+              WHERE track.id = NEW.track_id
+                AND track.workspace_id = NEW.workspace_id
+                AND track.artist_project_id = NEW.artist_project_id
+            )
+          ) THEN
+          RAISE EXCEPTION 'Le morceau lié doit appartenir au même workspace et projet artistique que le média.';
+        END IF;
+
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+
+      DROP TRIGGER IF EXISTS media_assets_reference_scope_guard ON media_assets;
+      CREATE TRIGGER media_assets_reference_scope_guard
+      BEFORE INSERT OR UPDATE OF release_id, track_id, workspace_id, artist_project_id ON media_assets
+      FOR EACH ROW EXECUTE FUNCTION enforce_media_asset_reference_scope();
     `);
 
     await this.migrateRequestedApprovalPayloadHashes();

@@ -336,10 +336,13 @@ const mediaDescriptionSchema = z.string().trim().min(1).max(4_000);
 const mediaTagSchema = z.string().trim().min(1).max(80);
 
 // Les métadonnées multipart sont converties par l'API avant validation. Le
-// fichier, son scope et ses associations ne font jamais partie de ce contrat
-// client : ils sont traités ou résolus exclusivement côté serveur.
+// fichier et le scope ne font jamais partie de ce contrat client. Les seules
+// associations admises sont des références optionnelles, ensuite résolues dans
+// le même workspace et projet côté serveur.
 export const mediaImportSchema = z
   .object({
+    releaseId: entityIdSchema.optional(),
+    trackId: entityIdSchema.optional(),
     description: mediaDescriptionSchema.optional(),
     tags: z.array(mediaTagSchema).max(30).default([]),
   })
@@ -358,7 +361,9 @@ export const mediaAssetSchema = z.object({
   hash: z.string().trim().min(1),
   createdAtSource: timestampSchema.optional(),
   releaseId: entityIdSchema.optional(),
+  releaseTitle: releaseTitleSchema.optional(),
   trackId: entityIdSchema.optional(),
+  trackTitle: trackTitleSchema.optional(),
   tags: z.array(mediaTagSchema).default([]),
   description: mediaDescriptionSchema.optional(),
   status: mediaStatusSchema,
