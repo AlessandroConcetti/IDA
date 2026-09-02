@@ -707,7 +707,7 @@ paths:
     get:
       operationId: listTasks
       summary: Liste les tâches du workspace local
-      description: Les tâches sans échéance restent visibles ici, mais n'apparaissent pas dans la projection Today.
+      description: Les tâches sans échéance restent visibles ici, mais n'apparaissent pas dans la commande de journée civile.
       responses:
         '200':
           description: Tâches structurées du workspace local
@@ -2043,7 +2043,7 @@ components:
                 createdAt: { type: string, format: date-time }
                 updatedAt: { type: string, format: date-time }
             kind:
-              enum: [TODAY, UNUSED_CONTENT, SYSTEM, HELP]
+              enum: [TODAY, TOMORROW, UNUSED_CONTENT, SYSTEM, HELP]
             message: { type: string }
             tools:
               type: array
@@ -2063,3 +2063,7 @@ components:
                 Résultat borné par le kind. Pour UNUSED_CONTENT, items contient
                 uniquement des ContentRotationCandidate AVAILABLE : aucun hash,
                 stockage, compteur, statut brut ou média déjà lié n’est rendu.
+                Pour TODAY ou TOMORROW, les items ne contiennent que les tâches
+                à échéance et les éléments éditoriaux internes valides de la
+                fenêtre civile du workspace ; une planification interne n'est
+                jamais une livraison sociale.

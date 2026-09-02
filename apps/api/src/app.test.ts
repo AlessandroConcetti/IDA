@@ -197,6 +197,135 @@ describe("IDA API — première tranche Phase 1", () => {
     });
   });
 
+  it("prépare un jour civil du workspace sans lire les anciennes publications, y compris demain", async () => {
+    const today = await app.inject({
+      method: "POST",
+      url: "/v1/ida/commands",
+      payload: { message: "IDA, qu’est-ce que j’ai aujourd’hui ?" },
+    });
+    expect(today.statusCode).toBe(200);
+    const todayBody = today.json() as {
+      data: {
+        kind: string;
+        command: { intent: string };
+        message: string;
+        tools: Array<{ key: string; moduleKey: string; permission: string }>;
+        result: { items: Array<{ id: string; kind: string; title: string; dueAt: string; status: string }> };
+      };
+    };
+
+    expect(todayBody.data).toMatchObject({
+      kind: "TODAY",
+      command: { intent: "PREPARE_DAY" },
+      message: "Aujourd’hui, tu as 2 éléments à suivre dans IDA.",
+      tools: [{ key: "get_today", moduleKey: "TASKS", permission: "READ" }],
+    });
+    expect(todayBody.data.result.items).toEqual([
+      {
+        id: "task_caption_review",
+        kind: "TASK",
+        title: "Valider la caption de Lumière Noire",
+        dueAt: "2026-08-30T10:00:00.000Z",
+        status: "TODO",
+      },
+      {
+        id: "task_campaign_review",
+        kind: "TASK",
+        title: "Finaliser le brief de campagne",
+        dueAt: "2026-08-30T14:00:00.000Z",
+        status: "IN_PROGRESS",
+      },
+    ]);
+    expect(todayBody.data.result.items.map((item) => item.id)).not.toContain("scheduled_studio");
+    expect(todayBody.data.result.items.map((item) => item.id)).not.toContain("task_other_workspace");
+
+    const tomorrowTask = await app.inject({
+      method: "POST",
+      url: "/v1/tasks",
+      payload: { title: "Vérifier le master demain", dueAt: "2026-08-30T22:30:00.000Z" },
+    });
+    expect(tomorrowTask.statusCode).toBe(201);
+    const tomorrowTaskId = (tomorrowTask.json() as { data: { id: string } }).data.id;
+
+    const tomorrow = await app.inject({
+      method: "POST",
+      url: "/v1/ida/commands",
+      payload: { message: "IDA, prépare demain." },
+    });
+    expect(tomorrow.statusCode).toBe(200);
+    expect(tomorrow.json()).toMatchObject({
+      data: {
+        kind: "TOMORROW",
+        command: { intent: "PREPARE_DAY" },
+        message: "Demain, tu as 1 élément à suivre dans IDA.",
+        result: {
+          items: [
+            {
+              id: tomorrowTaskId,
+              kind: "TASK",
+              title: "Vérifier le master demain",
+              dueAt: "2026-08-30T22:30:00.000Z",
+              status: "TODO",
+            },
+          ],
+        },
+      },
+    });
+  });
+
+  it("inclut un snapshot interne valide dans la journée sans le présenter comme une publication", async () => {
+    const dayStorageDir = await mkdtemp(join(tmpdir(), "ida-today-internal-schedule-"));
+    let dayApp: Awaited<ReturnType<typeof createApp>> | undefined;
+
+    try {
+      dayApp = await createApp({
+        dataDir: "memory://",
+        storageDir: dayStorageDir,
+        now: () => new Date("2026-09-01T09:00:00.000Z"),
+      });
+      const queue = await dayApp.inject({ method: "GET", url: "/v1/approvals/queue" });
+      const proposal = (
+        queue.json() as { data: Array<{ approvalId: string; variantId: string; payloadHash: string }> }
+      ).data.find((item) => item.variantId === "variant_lumiere_instagram");
+      const payload = { approvalId: proposal?.approvalId, expectedPayloadHash: proposal?.payloadHash };
+
+      expect(
+        (
+          await dayApp.inject({
+            method: "POST",
+            url: `/v1/post-variants/${proposal?.variantId}/approve`,
+            payload,
+          })
+        ).statusCode,
+      ).toBe(200);
+      const scheduled = await dayApp.inject({
+        method: "POST",
+        url: `/v1/post-variants/${proposal?.variantId}/internal-schedules`,
+        payload,
+      });
+      expect(scheduled.statusCode).toBe(201);
+      const scheduleId = (scheduled.json() as { data: { id: string } }).data.id;
+
+      const command = await dayApp.inject({
+        method: "POST",
+        url: "/v1/ida/commands",
+        payload: { message: "IDA, prépare ma journée." },
+      });
+      expect(command.statusCode).toBe(200);
+      const items = (
+        command.json() as { data: { result: { items: Array<{ id: string; kind: string; status: string }> } } }
+      ).data.result.items;
+
+      expect(items).toEqual([
+        expect.objectContaining({ id: scheduleId, kind: "INTERNAL_SCHEDULE", status: "SCHEDULED_INTERNAL" }),
+      ]);
+      expect(items.map((item) => item.id)).not.toContain("scheduled_studio");
+    } finally {
+      await dayApp?.close();
+      await rm(dayStorageDir, { recursive: true, force: true });
+    }
+  });
+
   it("expose une matrice sociale déclarative sans compte, secret ni effet d’audit", async () => {
     const activityBefore = await app.inject({ method: "GET", url: "/v1/activity-logs?limit=30" });
     expect(activityBefore.statusCode).toBe(200);

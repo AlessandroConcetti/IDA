@@ -14,6 +14,7 @@ import { ToolGateway } from "@ida/domain";
 import { toContentRotationCandidateResponse } from "./content-rotation.js";
 import type { DemoDatabase, TodayItem } from "./database.js";
 import { demoContext } from "./demo-context.js";
+import { getWorkspaceDayRange } from "./workspace-time.js";
 
 export class CommandInputError extends Error {
   readonly statusCode = 400;
@@ -25,7 +26,7 @@ export class CommandInputError extends Error {
   }
 }
 
-type DeterministicCommandKind = "TODAY" | "UNUSED_CONTENT" | "SYSTEM" | "HELP";
+type DeterministicCommandKind = "TODAY" | "TOMORROW" | "UNUSED_CONTENT" | "SYSTEM" | "HELP";
 
 export type CommandToolUse = {
   key: string;
@@ -65,23 +66,31 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function normalize(text: string): string {
   return text
     .normalize("NFD")
+    .replace(/[’‘`]/gu, "'")
     .replace(/\p{Diacritic}/gu, "")
     .toLocaleLowerCase("fr-FR")
     .replace(/\s+/gu, " ")
     .trim();
 }
 
-function classify(message: string): { kind: DeterministicCommandKind; intent: IdaCommandIntent } {
+function classify(message: string): {
+  kind: DeterministicCommandKind;
+  intent: IdaCommandIntent;
+  dayOffset?: 0 | 1;
+} {
   const normalized = normalize(message);
+
+  if (normalized.includes("demain") || normalized.includes("tomorrow")) {
+    return { kind: "TOMORROW", intent: "PREPARE_DAY", dayOffset: 1 };
+  }
 
   if (
     normalized.includes("aujourd'hui") ||
     normalized.includes("aujourdhui") ||
     normalized.includes("today") ||
-    normalized.includes("prepare ma journee") ||
-    normalized.includes("prepare demain")
+    normalized.includes("prepare ma journee")
   ) {
-    return { kind: "TODAY", intent: "PREPARE_DAY" };
+    return { kind: "TODAY", intent: "PREPARE_DAY", dayOffset: 0 };
   }
 
   if (normalized.includes("inutilise") || normalized.includes("unused")) {
@@ -182,7 +191,8 @@ export class DeterministicIdaCore {
     }
 
     const classified = classify(input.data.message);
-    const timestamp = this.now().toISOString();
+    const commandNow = this.now();
+    const timestamp = commandNow.toISOString();
     const command = idaCommandSchema.parse({
       id: `cmd_${randomUUID()}`,
       ...input.data,
@@ -194,17 +204,26 @@ export class DeterministicIdaCore {
     });
 
     switch (classified.kind) {
-      case "TODAY": {
+      case "TODAY":
+      case "TOMORROW": {
         const tool: CommandToolUse = { key: "get_today", moduleKey: "TASKS", permission: "READ" };
         this.gateway.assertAuthorized({ toolKey: tool.key, moduleKey: tool.moduleKey, permission: tool.permission });
-        const items = await this.database.listToday(demoContext.workspaceId);
+        const timezone = await this.database.getWorkspaceTimezone(demoContext.workspaceId);
+
+        if (!timezone) {
+          throw new Error("Le fuseau du workspace est introuvable.");
+        }
+
+        const dayRange = getWorkspaceDayRange(commandNow, timezone, classified.dayOffset ?? 0);
+        const items = await this.database.listToday(demoContext.workspaceId, dayRange.from, dayRange.to);
+        const dayLabel = classified.kind === "TODAY" ? "Aujourd’hui" : "Demain";
 
         return this.complete(command, {
           kind: classified.kind,
           message:
             items.length === 0
-              ? "Ton agenda IDA est libre pour le moment."
-              : `Aujourd’hui, tu as ${items.length} élément${items.length > 1 ? "s" : ""} à suivre dans IDA.`,
+              ? `${dayLabel}, ton agenda IDA est libre pour le moment.`
+              : `${dayLabel}, tu as ${items.length} élément${items.length > 1 ? "s" : ""} à suivre dans IDA.`,
           tools: [tool],
           result: { items },
         });
@@ -250,7 +269,7 @@ export class DeterministicIdaCore {
         return this.complete(command, {
           kind: classified.kind,
           message:
-            "Je peux actuellement résumer ta journée, lister les médias réellement disponibles à proposer et expliquer l’état du système. Essaie : « Qu’est-ce que j’ai aujourd’hui ? »",
+            "Je peux actuellement résumer aujourd’hui ou demain, lister les médias réellement disponibles à proposer et expliquer l’état du système. Essaie : « Qu’est-ce que j’ai aujourd’hui ? »",
           tools: [tool],
           result: {},
         });

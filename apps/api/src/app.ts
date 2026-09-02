@@ -77,6 +77,7 @@ import {
 } from "./database.js";
 import { demoContext, demoWorkspace } from "./demo-context.js";
 import { CommandInputError, DeterministicIdaCore } from "./ida-core.js";
+import { defaultCalendarRange, getWorkspaceDayRange, type ResolvedCalendarRange } from "./workspace-time.js";
 
 export type CreateAppOptions = DemoDatabaseOptions & {
   now?: () => Date;
@@ -158,133 +159,7 @@ function timestampFromDate(value: string | null, fallback: string): string | und
   return new Date(`${value}T00:00:00.000Z`).toISOString() || fallback;
 }
 
-type ZonedDateParts = {
-  year: number;
-  month: number;
-  day: number;
-  hour: number;
-  minute: number;
-  second: number;
-};
-
-type ResolvedCalendarRange = {
-  view: CalendarView;
-  from: string;
-  to: string;
-  timezone: string;
-};
-
 const maximumCalendarWindowMilliseconds = 62 * 24 * 60 * 60 * 1_000;
-
-function localDateParts(date: Date, timezone: string): ZonedDateParts {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: timezone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(date);
-  const values = new Map(parts.map((part) => [part.type, part.value]));
-
-  return {
-    year: Number(values.get("year")),
-    month: Number(values.get("month")),
-    day: Number(values.get("day")),
-    hour: Number(values.get("hour")),
-    minute: Number(values.get("minute")),
-    second: Number(values.get("second")),
-  };
-}
-
-function localDateString(date: Date, timezone: string): string {
-  const parts = localDateParts(date, timezone);
-
-  return `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}`;
-}
-
-function zonedDateTimeToIso(parts: ZonedDateParts, timezone: string): string {
-  // La date civile de la vue doit être calculée dans le fuseau du workspace,
-  // puis convertie en UTC. L'itération recalcule l'offset après le premier
-  // essai, y compris autour d'un changement d'heure.
-  const targetAsUtc = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
-  let instant = targetAsUtc;
-
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const observed = localDateParts(new Date(instant), timezone);
-    const observedAsUtc = Date.UTC(
-      observed.year,
-      observed.month - 1,
-      observed.day,
-      observed.hour,
-      observed.minute,
-      observed.second,
-    );
-    const nextInstant = targetAsUtc - (observedAsUtc - instant);
-
-    if (nextInstant === instant) {
-      break;
-    }
-
-    instant = nextInstant;
-  }
-
-  return new Date(instant).toISOString();
-}
-
-function addUtcDays(parts: ZonedDateParts, days: number): ZonedDateParts {
-  const date = new Date(Date.UTC(parts.year, parts.month - 1, parts.day + days));
-
-  return {
-    year: date.getUTCFullYear(),
-    month: date.getUTCMonth() + 1,
-    day: date.getUTCDate(),
-    hour: 0,
-    minute: 0,
-    second: 0,
-  };
-}
-
-function defaultCalendarRange(now: Date, timezone: string, view: CalendarView): ResolvedCalendarRange {
-  const localNow = localDateParts(now, timezone);
-  let start: ZonedDateParts = {
-    year: localNow.year,
-    month: localNow.month,
-    day: localNow.day,
-    hour: 0,
-    minute: 0,
-    second: 0,
-  };
-  let end: ZonedDateParts;
-
-  if (view === "DAY") {
-    end = addUtcDays(start, 1);
-  } else if (view === "WEEK") {
-    const weekday = new Date(Date.UTC(start.year, start.month - 1, start.day)).getUTCDay();
-    start = addUtcDays(start, -((weekday + 6) % 7));
-    end = addUtcDays(start, 7);
-  } else {
-    start = { ...start, day: 1 };
-    const firstOfNextMonth = new Date(Date.UTC(start.year, start.month, 1));
-    end = {
-      year: firstOfNextMonth.getUTCFullYear(),
-      month: firstOfNextMonth.getUTCMonth() + 1,
-      day: 1,
-      hour: 0,
-      minute: 0,
-      second: 0,
-    };
-  }
-
-  return {
-    view,
-    from: zonedDateTimeToIso(start, timezone),
-    to: zonedDateTimeToIso(end, timezone),
-    timezone,
-  };
-}
 
 function resolveCalendarRange(
   query: { view?: CalendarView; from?: string; to?: string },
@@ -1424,13 +1299,13 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     }
 
     const now = serverNow();
-    const workspaceDate = localDateString(now, timezone);
-    const counts = await database.getCommandCenterSummary(demoContext.workspaceId, workspaceDate);
+    const dayRange = getWorkspaceDayRange(now, timezone);
+    const counts = await database.getCommandCenterSummary(demoContext.workspaceId, dayRange.workspaceDate);
 
     return dashboardSummaryResponseSchema.parse({
       data: {
         generatedAt: now.toISOString(),
-        workspaceDate,
+        workspaceDate: dayRange.workspaceDate,
         timezone,
         ...counts,
       },

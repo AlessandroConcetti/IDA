@@ -290,8 +290,8 @@ export type ApprovalDecisionPreconditionResult =
   | { kind: "opposite-decision" };
 
 // Le scheduler interne possède son propre modèle. Il ne réutilise jamais la
-// table historique `scheduled_posts`, qui reste une projection Today de la
-// démo locale et ne porte pas le snapshot d'une variante approuvée.
+// table historique `scheduled_posts`, qui reste une projection de démonstration
+// locale et ne porte pas le snapshot d'une variante approuvée.
 export type InternalPostSchedule = {
   id: string;
   variantId: string;
@@ -362,7 +362,7 @@ export type InternalPostScheduleCancellationResult =
 
 export type TodayItem = {
   id: string;
-  kind: "TASK" | "SCHEDULED_POST";
+  kind: "TASK" | "INTERNAL_SCHEDULE" | "APPROVED_VARIANT";
   title: string;
   dueAt: string;
   status: string;
@@ -3350,29 +3350,25 @@ export class DemoDatabase {
     });
   }
 
-  async listToday(workspaceId: string): Promise<TodayItem[]> {
-    const result = await this.pglite.query<ScalarRow>(
+  async listToday(workspaceId: string, from: string, to: string): Promise<TodayItem[]> {
+    const tasks = await this.pglite.query<ScalarRow>(
       `
         SELECT id, 'TASK' AS kind, title, due_at AS "dueAt", status
         FROM tasks
         WHERE workspace_id = $1
           AND status IN ('TODO', 'IN_PROGRESS')
           AND due_at IS NOT NULL
-        UNION ALL
-        SELECT id, 'SCHEDULED_POST' AS kind, title, scheduled_at AS "dueAt", status
-        FROM scheduled_posts
-        WHERE workspace_id = $1
-          AND status = 'SCHEDULED'
-        ORDER BY "dueAt" ASC
+          AND due_at >= $2
+          AND due_at < $3
+        ORDER BY due_at ASC, id ASC
         LIMIT 10
       `,
-      [workspaceId],
+      [workspaceId, from, to],
     );
-
-    return result.rows.flatMap((row) => {
+    const taskItems = tasks.rows.flatMap((row) => {
       const dueAt = asTimestamp(row.dueAt);
 
-      // La projection Today ne tolère pas d'échéance absente. Les tâches sans
+      // La projection Day ne tolère pas d'échéance absente. Les tâches sans
       // due_at sont déjà filtrées par SQL ; ce garde-fou évite aussi un faux
       // timestamp si une donnée historique reste incomplète.
       if (!dueAt) {
@@ -3382,13 +3378,34 @@ export class DemoDatabase {
       return [
         {
           id: asString(row.id),
-          kind: asString(row.kind) as TodayItem["kind"],
+          kind: "TASK" as const,
           title: asString(row.title),
           dueAt,
           status: asString(row.status),
         },
       ];
     });
+
+    // Réutiliser la projection calendrier évite d'afficher une ancienne ligne
+    // `scheduled_posts` ou un snapshot devenu obsolète. Les éléments éditoriaux
+    // restent explicitement internes : `INTERNAL_SCHEDULE` n'est jamais une
+    // livraison ou publication sociale.
+    const editorialItems = (await this.listCalendarItems(workspaceId, from, to)).slice(0, 10).map((item) => ({
+      id: item.id,
+      kind: item.kind,
+      title: item.postTitle,
+      dueAt: item.scheduledAt,
+      status: item.state,
+    }));
+
+    return [...taskItems, ...editorialItems]
+      .sort(
+        (left, right) =>
+          left.dueAt.localeCompare(right.dueAt) ||
+          left.kind.localeCompare(right.kind) ||
+          left.id.localeCompare(right.id),
+      )
+      .slice(0, 10);
   }
 
   async listSocialPlatforms(): Promise<SocialPlatform[]> {
@@ -3591,8 +3608,8 @@ export class DemoDatabase {
       );
 
       -- Approval Center local : ces tables sont distinctes de
-      -- scheduled_posts, qui reste la seule projection de démonstration pour
-      -- Today. Une date proposée n'est pas une programmation.
+      -- scheduled_posts, qui reste une projection historique de démonstration.
+      -- Une date proposée n'est pas une programmation.
       CREATE TABLE IF NOT EXISTS posts (
         id TEXT PRIMARY KEY,
         workspace_id TEXT NOT NULL REFERENCES workspaces(id),
