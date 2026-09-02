@@ -88,6 +88,8 @@ export interface MediaSearchInput {
   status?: MediaAsset["status"];
   type?: MediaSearchType;
   tag?: string;
+  releaseId?: string;
+  trackId?: string;
   limit?: number;
 }
 
@@ -1578,6 +1580,14 @@ export async function fetchMediaAssets(input: MediaSearchInput = {}): Promise<Me
 
   if (input.tag) {
     query.set("tag", input.tag);
+  }
+
+  if (input.releaseId) {
+    query.set("releaseId", input.releaseId);
+  }
+
+  if (input.trackId) {
+    query.set("trackId", input.trackId);
   }
 
   query.set("limit", String(input.limit ?? 24));

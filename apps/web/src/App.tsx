@@ -1634,6 +1634,8 @@ type MediaSearchForm = {
   status: "" | MediaAsset["status"];
   type: "" | MediaSearchType;
   tag: string;
+  releaseId: string;
+  trackId: string;
 };
 
 const emptyMediaSearchForm: MediaSearchForm = {
@@ -1641,6 +1643,8 @@ const emptyMediaSearchForm: MediaSearchForm = {
   status: "",
   type: "",
   tag: "",
+  releaseId: "",
+  trackId: "",
 };
 
 function mediaSearchInput(form: MediaSearchForm): MediaSearchInput {
@@ -1649,6 +1653,8 @@ function mediaSearchInput(form: MediaSearchForm): MediaSearchInput {
     status: form.status || undefined,
     type: form.type || undefined,
     tag: optionalFormValue(form.tag),
+    releaseId: optionalFormValue(form.releaseId),
+    trackId: optionalFormValue(form.trackId),
     limit: 24,
   };
 }
@@ -1957,8 +1963,8 @@ function ContentView({ onMediaAssetCreated }: { onMediaAssetCreated: (asset: Med
           </span>
         </div>
         <p className="content-library-intro">
-          Recherche locale dans les noms, descriptions et tags du workspace. Aucun fichier ni lien de stockage n’est
-          exposé ; les aperçus disponibles restent servis par une route privée autorisée.
+          Recherche locale dans les noms, descriptions, tags et liens Music Brain du workspace. Aucun fichier ni lien de
+          stockage n’est exposé ; les aperçus disponibles restent servis par une route privée autorisée.
         </p>
         <form className="content-library-search" noValidate onSubmit={handleSearch}>
           <label className="content-library-filter content-library-query" htmlFor="content-search-query">
@@ -2010,6 +2016,42 @@ function ContentView({ onMediaAssetCreated }: { onMediaAssetCreated: (asset: Med
               placeholder="studio"
               maxLength={80}
             />
+          </label>
+          <label className="content-library-filter content-library-reference-filter" htmlFor="content-search-release">
+            <span>Release liée</span>
+            <select
+              id="content-search-release"
+              value={searchForm.releaseId}
+              onChange={(event) => updateSearchField("releaseId", event.target.value)}
+              disabled={searchState === "loading" || referenceSource !== "api"}
+            >
+              <option value="">
+                {referenceSource === "loading" ? "Chargement des releases…" : "Toutes les releases"}
+              </option>
+              {releases.map((release) => (
+                <option key={release.id} value={release.id}>
+                  {releaseOptionLabel(release)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="content-library-filter content-library-reference-filter" htmlFor="content-search-track">
+            <span>Morceau lié</span>
+            <select
+              id="content-search-track"
+              value={searchForm.trackId}
+              onChange={(event) => updateSearchField("trackId", event.target.value)}
+              disabled={searchState === "loading" || referenceSource !== "api"}
+            >
+              <option value="">
+                {referenceSource === "loading" ? "Chargement des morceaux…" : "Tous les morceaux"}
+              </option>
+              {tracks.map((track) => (
+                <option key={track.id} value={track.id}>
+                  {track.releaseTitle ? `${track.title} · ${track.releaseTitle}` : track.title}
+                </option>
+              ))}
+            </select>
           </label>
           <div className="content-library-search-actions">
             <button className="send-button" type="submit" disabled={searchState === "loading"}>

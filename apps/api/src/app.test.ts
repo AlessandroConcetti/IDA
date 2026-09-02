@@ -1145,6 +1145,35 @@ describe("IDA API — première tranche Phase 1", () => {
     expect((escapedWildcard.json() as { data: unknown[] }).data).toHaveLength(0);
   });
 
+  it("filtre les médias par release ou morceau sans rendre un autre workspace détectable", async () => {
+    const byRelease = await app.inject({ method: "GET", url: "/v1/media?releaseId=rel_lumiere_noire" });
+    expect(byRelease.statusCode).toBe(200);
+    const byReleaseAssets = (byRelease.json() as { data: Array<{ id: string }> }).data;
+    expect(byReleaseAssets).toHaveLength(3);
+    expect(byReleaseAssets.map((asset) => asset.id)).toEqual(
+      expect.arrayContaining(["med_studio_light", "med_night-drive", "med_artwork"]),
+    );
+
+    const byTrack = await app.inject({ method: "GET", url: "/v1/media?trackId=trk_lumiere_noire&status=UNUSED" });
+    expect(byTrack.statusCode).toBe(200);
+    const byTrackAssets = (byTrack.json() as { data: Array<{ id: string }> }).data;
+    expect(byTrackAssets).toHaveLength(2);
+    expect(byTrackAssets.map((asset) => asset.id)).toEqual(
+      expect.arrayContaining(["med_studio_light", "med_night-drive"]),
+    );
+
+    const byBothReferences = await app.inject({
+      method: "GET",
+      url: "/v1/media?releaseId=rel_lumiere_noire&trackId=trk_lumiere_noire&status=UNUSED",
+    });
+    expect(byBothReferences.statusCode).toBe(200);
+    expect((byBothReferences.json() as { data: Array<{ id: string }> }).data).toHaveLength(2);
+
+    const foreignReference = await app.inject({ method: "GET", url: "/v1/media?releaseId=rel_other_workspace" });
+    expect(foreignReference.statusCode).toBe(200);
+    expect((foreignReference.json() as { data: unknown[] }).data).toHaveLength(0);
+  });
+
   it("applique une limite stable aux recherches de médias", async () => {
     const response = await app.inject({ method: "GET", url: "/v1/media?type=VIDEO&limit=2" });
 
@@ -3914,6 +3943,8 @@ describe("IDA API — première tranche Phase 1", () => {
       "/v1/media?limit=0",
       "/v1/media?limit=51",
       "/v1/media?status=UNUSED&status=USED",
+      "/v1/media?releaseId=rel_lumiere_noire&releaseId=rel_afterimage",
+      "/v1/media?trackId=trk_lumiere_noire&trackId=trk_afterimage",
     ];
 
     for (const url of invalidUrls) {

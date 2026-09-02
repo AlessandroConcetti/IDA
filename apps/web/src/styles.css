@@ -2347,6 +2347,10 @@ h3 {
   gap: 7px;
 }
 
+.content-library-reference-filter {
+  grid-column: span 2;
+}
+
 .content-library-filter > span {
   color: #b0b4c1;
   font-size: 0.62rem;
@@ -3741,6 +3745,7 @@ h3 {
   .music-entry-field-wide,
   .content-import-field-wide,
   .content-library-query,
+  .content-library-reference-filter,
   .content-library-search-actions {
     grid-column: auto;
   }

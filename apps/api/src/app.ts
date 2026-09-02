@@ -1724,6 +1724,8 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
       status: typeof rawQuery.status === "string" ? rawQuery.status.toLocaleUpperCase("en-US") : rawQuery.status,
       type: typeof rawQuery.type === "string" ? rawQuery.type.toLocaleUpperCase("en-US") : rawQuery.type,
       tag: rawQuery.tag,
+      releaseId: rawQuery.releaseId,
+      trackId: rawQuery.trackId,
       limit: rawQuery.limit,
     });
 

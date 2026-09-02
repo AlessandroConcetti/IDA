@@ -387,6 +387,8 @@ export const mediaListQuerySchema = z
     status: mediaStatusSchema.optional(),
     type: mediaTypeSchema.optional(),
     tag: z.string().trim().min(1).max(80).optional(),
+    releaseId: entityIdSchema.optional(),
+    trackId: entityIdSchema.optional(),
     limit: z.coerce.number().int().min(1).max(50).optional(),
   })
   .strict();

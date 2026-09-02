@@ -1724,6 +1724,19 @@ export class DemoDatabase {
       whereClauses.push(`asset.media_type = $${values.length}`);
     }
 
+    // Les références sont des filtres de curation, pas un moyen de résoudre
+    // une ressource hors scope : le workspace de l'asset reste toujours la
+    // première contrainte de la requête.
+    if (filters.releaseId) {
+      values.push(filters.releaseId);
+      whereClauses.push(`asset.release_id = $${values.length}`);
+    }
+
+    if (filters.trackId) {
+      values.push(filters.trackId);
+      whereClauses.push(`asset.track_id = $${values.length}`);
+    }
+
     if (filters.q) {
       values.push(`%${escapeLikePattern(filters.q)}%`);
       const searchPlaceholder = `$${values.length}`;

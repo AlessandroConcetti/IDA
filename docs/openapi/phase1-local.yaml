@@ -336,9 +336,11 @@ paths:
       description: >-
         Lecture locale bornée et sans effet d'écriture. Les filtres se
         cumulent ; le workspace est résolu côté serveur et ne peut pas être
-        fourni par le client. La réponse ne contient jamais de clé, chemin ou
-        URL de stockage. previewAvailable indique uniquement l'éligibilité à
-        une route d'aperçu privée autorisée.
+        fourni par le client. Les filtres releaseId et trackId lisent seulement
+        des références déjà portées par les assets de ce workspace : une valeur
+        étrangère ou inconnue retourne une liste vide. La réponse ne contient
+        jamais de clé, chemin ou URL de stockage. previewAvailable indique
+        uniquement l'éligibilité à une route d'aperçu privée autorisée.
       parameters:
         - name: q
           in: query
@@ -366,6 +368,20 @@ paths:
             type: string
             minLength: 1
             maxLength: 80
+        - name: releaseId
+          in: query
+          required: false
+          description: Référence de release déjà liée aux assets du workspace, sans résolution externe.
+          schema:
+            type: string
+            minLength: 1
+        - name: trackId
+          in: query
+          required: false
+          description: Référence de morceau déjà liée aux assets du workspace, sans résolution externe.
+          schema:
+            type: string
+            minLength: 1
         - name: limit
           in: query
           required: false
