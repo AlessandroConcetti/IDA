@@ -21,6 +21,7 @@ Le premier runtime est une API Fastify locale sur `http://127.0.0.1:8787`, conso
 | `GET /v1/me` | Livrée | Identité et workspace de démonstration, marqués `LOCAL_DEMO`. |
 | `GET /v1/modules` | Livrée | Registre des modules visibles du Command Center. |
 | `GET /v1/system/status` | Livrée | États factuels de la tranche locale ; les intégrations absentes sont `WARNING` ou `DISCONNECTED`. |
+| `GET /v1/dashboard/summary` | Livrée | Compteurs factuels et date civile du workspace pour le Command Center ; aucune donnée de livraison, compte social ou contenu libre. |
 | `GET /v1/activity-logs` | Livrée | Timeline d’activité locale en lecture seule : projection bornée de l’audit, filtrée par workspace serveur et sans payload, acteur ni données privées. |
 | `GET/PATCH /v1/artist-profile`, `GET/POST /v1/releases`, `GET/POST /v1/tracks`, `GET/POST /v1/media`, `GET /v1/memories` | Livrées | Données de démonstration isolées par workspace côté serveur. L’Artist Brain, la création bornée de releases et morceaux Music Brain et l’import local privé d’un média passent par des outils `WRITE` allowlistés ; `GET /v1/media` filtre localement par texte, statut, type et tag. |
 | `GET /v1/content/rotation` | Livrée | Projection factuelle de médias `AVAILABLE` : seulement les assets `UNUSED` sans aucun lien éditorial, bornée et isolée au workspace. Elle ne calcule aucun score et n’écrit rien. |
@@ -39,6 +40,17 @@ La commande retourne un objet `data` contenant la commande structurée, les outi
 `GET /v1/social/platforms` retourne uniquement les déclarations de capacité de démonstration : clé de plateforme, version de matrice, booléens OAuth/brouillon/planification/publication/analytics, contraintes d’approbation et de revue, note et date `verifiedAt`. Un booléen à `true` signifie seulement qu’une capacité est documentée pour une future étude d’adaptateur ; il ne prouve ni qu’un compte est connecté, ni qu’un scope est accordé, ni qu’un appel réel est autorisé ou possible.
 
 La route n’accepte aucun paramètre, ne retourne ni `SocialAccount`, identifiant de compte, token, secret, scope accordé, état de connexion ou métrique, et n’appelle aucune plateforme externe. Sa lecture n’écrit ni audit ni état local. Le client doit l’étiqueter comme déclarative et afficher une indisponibilité explicite s’il ne peut pas la lire ; il ne doit jamais en déduire une intégration active.
+
+### Résumé factuel du Command Center
+
+`GET /v1/dashboard/summary` est une lecture sans paramètre du workspace résolu côté serveur. Toute query inconnue, y compris `workspaceId`, est refusée avec `400 INVALID_DASHBOARD_SUMMARY_QUERY`. La réponse contient exactement `generatedAt`, `workspaceDate`, `timezone`, `pendingApprovals`, `activeInternalSchedules`, `activeCampaigns` et `upcomingReleases`.
+
+- `pendingApprovals` applique les mêmes critères que la file d’approbation : une demande doit être `REQUESTED`, liée à la version de variante courante et rester sans livraison configurée. Les demandes devenues obsolètes ne sont pas comptées.
+- `activeInternalSchedules` compte exclusivement les snapshots `internal_post_schedules` à l’état `SCHEDULED`. Ce nombre n’est ni une publication, ni une livraison, ni une planification confirmée chez Instagram, TikTok ou une autre plateforme.
+- `activeCampaigns` compte les briefs internes à l’état `ACTIVE`. La tranche actuelle crée les briefs en `DRAFT`, donc ce compteur peut être nul jusqu’à l’ajout d’une transition dédiée.
+- `upcomingReleases` compte les releases `SCHEDULED` dont la date est égale ou postérieure au jour civil du workspace. Ce jour est calculé côté serveur dans son fuseau et non à partir de l’horloge du navigateur.
+
+La projection ne retourne ni `workspaceId`, acteur, payload, caption, média, hash, compte, token ou état de livraison. Sa consultation ne crée ni audit, ni job, ni appel social. Si l’API n’est pas accessible, le client affiche des valeurs indisponibles plutôt que des compteurs de démonstration.
 
 ### Timeline d’activité System en lecture seule
 
@@ -294,6 +306,7 @@ GET    /v1/me
 GET    /v1/workspaces/current
 PATCH  /v1/workspaces/current
 GET    /v1/system/status
+GET    /v1/dashboard/summary
 GET    /v1/activity-logs
 GET    /health/live
 GET    /health/ready

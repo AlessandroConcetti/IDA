@@ -198,6 +198,17 @@ export type CampaignReleaseLinkResult =
   | { kind: "release-not-found" }
   | { kind: "stale" };
 
+// Cette projection alimente uniquement les indicateurs du Command Center.
+// Elle ne porte aucun payload éditorial, identifiant externe ou état de
+// livraison. Une planification active signifie donc un snapshot interne, pas
+// une publication programmée sur une plateforme sociale.
+export type CommandCenterSummaryCounts = {
+  pendingApprovals: number;
+  activeInternalSchedules: number;
+  activeCampaigns: number;
+  upcomingReleases: number;
+};
+
 export type ActivityLogEntry = {
   id: string;
   action: ActivityLogAction;
@@ -2137,6 +2148,62 @@ export class DemoDatabase {
     );
 
     return result.rows.map(toApprovalQueueItem);
+  }
+
+  async getCommandCenterSummary(workspaceId: string, workspaceDate: string): Promise<CommandCenterSummaryCounts> {
+    // Les quatre compteurs restent dans une seule lecture SQL, entièrement
+    // scopée. Le compteur d'approbations reprend les critères de la queue :
+    // il ne compte pas une demande obsolète, décidée ou non livrable.
+    const result = await this.pglite.query<ScalarRow>(
+      `
+        SELECT
+          (
+            SELECT COUNT(*)::int
+            FROM approvals approval
+            INNER JOIN post_variants variant ON variant.id = approval.post_variant_id
+              AND variant.workspace_id = approval.workspace_id
+            INNER JOIN posts post ON post.id = variant.post_id
+              AND post.workspace_id = variant.workspace_id
+            INNER JOIN social_platforms platform ON platform.id = variant.platform_id
+            WHERE approval.workspace_id = $1
+              AND variant.workspace_id = $1
+              AND post.workspace_id = $1
+              AND approval.state = 'REQUESTED'
+              AND approval.payload_hash = variant.payload_hash
+              AND variant.approval_state = 'REQUESTED'
+              AND variant.delivery_state = 'NOT_CONFIGURED'
+          ) AS "pendingApprovals",
+          (
+            SELECT COUNT(*)::int
+            FROM internal_post_schedules schedule
+            WHERE schedule.workspace_id = $1
+              AND schedule.state = 'SCHEDULED'
+          ) AS "activeInternalSchedules",
+          (
+            SELECT COUNT(*)::int
+            FROM campaigns campaign
+            WHERE campaign.workspace_id = $1
+              AND campaign.status = 'ACTIVE'
+          ) AS "activeCampaigns",
+          (
+            SELECT COUNT(*)::int
+            FROM releases release
+            WHERE release.workspace_id = $1
+              AND release.status = 'SCHEDULED'
+              AND release.release_date IS NOT NULL
+              AND release.release_date >= $2::date
+          ) AS "upcomingReleases"
+      `,
+      [workspaceId, workspaceDate],
+    );
+    const row = result.rows[0];
+
+    return {
+      pendingApprovals: asNumber(row?.pendingApprovals),
+      activeInternalSchedules: asNumber(row?.activeInternalSchedules),
+      activeCampaigns: asNumber(row?.activeCampaigns),
+      upcomingReleases: asNumber(row?.upcomingReleases),
+    };
   }
 
   async preparePostVariantDecision(

@@ -600,6 +600,39 @@ const postObjectiveSchema = z.string().trim().min(1).max(2_000);
 const postRationaleSchema = z.string().trim().min(1).max(4_000);
 const timezoneSchema = z.string().trim().min(1).max(120);
 
+// Résumé factuel du Command Center ---------------------------------------
+//
+// Cette projection ne décrit ni une publication, ni une connexion sociale.
+// Les planifications comptées sont uniquement des snapshots internes actifs
+// (`internal_post_schedules`), distincts de toute livraison externe.
+const dashboardSummaryCountSchema = z.number().int().min(0);
+
+export const dashboardSummaryQuerySchema = z.object({}).strict();
+
+export type DashboardSummaryQuery = z.infer<typeof dashboardSummaryQuerySchema>;
+
+export const dashboardSummarySchema = z
+  .object({
+    generatedAt: timestampSchema,
+    workspaceDate: z.string().date(),
+    timezone: timezoneSchema,
+    pendingApprovals: dashboardSummaryCountSchema,
+    activeInternalSchedules: dashboardSummaryCountSchema,
+    activeCampaigns: dashboardSummaryCountSchema,
+    upcomingReleases: dashboardSummaryCountSchema,
+  })
+  .strict();
+
+export type DashboardSummary = z.infer<typeof dashboardSummarySchema>;
+
+export const dashboardSummaryResponseSchema = z
+  .object({
+    data: dashboardSummarySchema,
+  })
+  .strict();
+
+export type DashboardSummaryResponse = z.infer<typeof dashboardSummaryResponseSchema>;
+
 // Le préfixe rend le type de hash explicite et interdit des valeurs libres
 // susceptibles d'être confondues avec un contenu ou une URL.
 export const payloadHashSchema = z.string().regex(/^sha256:[a-f0-9]{64}$/);

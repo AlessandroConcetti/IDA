@@ -37,13 +37,6 @@ export interface ArtistBrain {
   platformPreferences: Record<string, unknown>;
 }
 
-export interface TodayPriority {
-  label: string;
-  value: string;
-  detail: string;
-  accent: "violet" | "blue" | "amber" | "mint";
-}
-
 export interface Track {
   title: string;
   project: string;
@@ -150,33 +143,6 @@ export const sectionCopy: Record<NavigationId, { eyebrow: string; title: string;
     description: "Chaque intégration garde un état compréhensible.",
   },
 };
-
-export const todayPriorities: TodayPriority[] = [
-  {
-    label: "Approvals",
-    value: "3",
-    detail: "propositions à valider",
-    accent: "violet",
-  },
-  {
-    label: "Scheduled",
-    value: "5",
-    detail: "moments déjà planifiés",
-    accent: "blue",
-  },
-  {
-    label: "Campaigns",
-    value: "1",
-    detail: "campagne active",
-    accent: "amber",
-  },
-  {
-    label: "Releases",
-    value: "2",
-    detail: "échéances à venir",
-    accent: "mint",
-  },
-];
 
 export const tracks: Track[] = [
   {

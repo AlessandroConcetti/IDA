@@ -62,6 +62,23 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SystemStatusListResponse'
+  /v1/dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      summary: Retourne les indicateurs factuels du Command Center
+      description: >-
+        Lecture sans paramètre du workspace résolu côté serveur. Les
+        planifications comptées sont uniquement des snapshots internes actifs,
+        jamais des livraisons ou publications sociales.
+      responses:
+        '200':
+          description: Résumé borné du Command Center et date du workspace
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardSummaryResponse'
+        '400':
+          $ref: '#/components/responses/InvalidDashboardSummaryQuery'
   /v1/activity-logs:
     get:
       operationId: listActivityLogs
@@ -957,6 +974,12 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
+    InvalidDashboardSummaryQuery:
+      description: Query de résumé inconnue ou tentative d'injecter un scope
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
     InvalidMemoryProposal:
       description: Proposition de mémoire invalide ou tentative de définir un état, un scope, un identifiant ou un acteur client
       content:
@@ -1186,6 +1209,47 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SystemStatus'
+    DashboardSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - generatedAt
+        - workspaceDate
+        - timezone
+        - pendingApprovals
+        - activeInternalSchedules
+        - activeCampaigns
+        - upcomingReleases
+      properties:
+        generatedAt:
+          type: string
+          format: date-time
+        workspaceDate:
+          type: string
+          format: date
+        timezone:
+          type: string
+          minLength: 1
+          maxLength: 120
+        pendingApprovals:
+          type: integer
+          minimum: 0
+        activeInternalSchedules:
+          type: integer
+          minimum: 0
+        activeCampaigns:
+          type: integer
+          minimum: 0
+        upcomingReleases:
+          type: integer
+          minimum: 0
+    DashboardSummaryResponse:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/DashboardSummary'
     ActivityLogAction:
       type: string
       enum:

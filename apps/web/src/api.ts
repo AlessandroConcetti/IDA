@@ -30,6 +30,17 @@ export interface DashboardSnapshot {
   systemServices: SystemService[];
   tracks: Track[];
   mediaAssets: MediaAsset[];
+  summary?: CommandCenterSummary;
+}
+
+export interface CommandCenterSummary {
+  generatedAt: string;
+  workspaceDate: string;
+  timezone: string;
+  pendingApprovals: number;
+  activeInternalSchedules: number;
+  activeCampaigns: number;
+  upcomingReleases: number;
 }
 
 export interface ActivityLogRecord {
@@ -670,6 +681,49 @@ function toSystemServices(payload: unknown): SystemService[] {
     state: operationalState(record.state),
     detail: readString(record.message) ?? "État rapporté par IDA API",
   }));
+}
+
+function toCommandCenterSummary(payload: unknown): CommandCenterSummary {
+  const summary = readDataObject(payload, "/v1/dashboard/summary");
+  const generatedAt = readString(summary.generatedAt);
+  const workspaceDate = readString(summary.workspaceDate);
+  const timezone = readString(summary.timezone);
+  const pendingApprovals = readNumber(summary.pendingApprovals);
+  const activeInternalSchedules = readNumber(summary.activeInternalSchedules);
+  const activeCampaigns = readNumber(summary.activeCampaigns);
+  const upcomingReleases = readNumber(summary.upcomingReleases);
+
+  if (
+    !generatedAt ||
+    Number.isNaN(Date.parse(generatedAt)) ||
+    !workspaceDate ||
+    !/^\d{4}-\d{2}-\d{2}$/u.test(workspaceDate) ||
+    !timezone ||
+    pendingApprovals === undefined ||
+    activeInternalSchedules === undefined ||
+    activeCampaigns === undefined ||
+    upcomingReleases === undefined ||
+    !Number.isInteger(pendingApprovals) ||
+    !Number.isInteger(activeInternalSchedules) ||
+    !Number.isInteger(activeCampaigns) ||
+    !Number.isInteger(upcomingReleases) ||
+    pendingApprovals < 0 ||
+    activeInternalSchedules < 0 ||
+    activeCampaigns < 0 ||
+    upcomingReleases < 0
+  ) {
+    throw new IdaApiError("Le résumé du Command Center retourné par IDA API est invalide.");
+  }
+
+  return {
+    generatedAt,
+    workspaceDate,
+    timezone,
+    pendingApprovals,
+    activeInternalSchedules,
+    activeCampaigns,
+    upcomingReleases,
+  };
 }
 
 function toActivityLog(record: Record<string, unknown>): ActivityLogRecord {
@@ -1381,15 +1435,17 @@ export async function uploadMediaAsset(input: MediaUploadInput): Promise<MediaAs
 }
 
 export async function fetchDashboardSnapshot(): Promise<DashboardSnapshot> {
-  const [systemPayload, tracksPayload, mediaPayload] = await Promise.all([
+  const [systemPayload, tracksPayload, mediaPayload, summaryPayload] = await Promise.all([
     getApiJson("/v1/system/status"),
     getApiJson("/v1/tracks"),
     getApiJson("/v1/media"),
+    getApiJson("/v1/dashboard/summary"),
   ]);
 
   return {
     systemServices: toSystemServices(systemPayload),
     tracks: toTracks(tracksPayload),
     mediaAssets: toMediaAssets(mediaPayload),
+    summary: toCommandCenterSummary(summaryPayload),
   };
 }

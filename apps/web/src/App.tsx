@@ -6,6 +6,7 @@ import {
   type CampaignCreateInput,
   type CampaignRecord,
   type CampaignStatus,
+  type CommandCenterSummary,
   type ContentRotationCandidate,
   cancelInternalPostSchedule,
   completeTask,
@@ -69,7 +70,6 @@ import {
   type SystemService,
   sectionCopy,
   type Track,
-  todayPriorities,
 } from "./data";
 
 interface ConversationMessage {
@@ -255,13 +255,79 @@ function ConversationPanel({
   );
 }
 
-function PriorityGrid() {
+function formatDashboardDate(summary: CommandCenterSummary | undefined, source: DashboardSource): string {
+  if (!summary) {
+    return source === "loading" ? "SYNC…" : "DATE API";
+  }
+
+  // `workspaceDate` est déjà résolue dans le fuseau du workspace par l'API.
+  // UTC évite qu'un navigateur situé dans un autre fuseau ne décale ce jour.
+  const date = new Date(`${summary.workspaceDate}T00:00:00.000Z`);
+
+  if (Number.isNaN(date.valueOf())) {
+    return "DATE API";
+  }
+
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+    timeZone: "UTC",
+    weekday: "short",
+  }).formatToParts(date);
+  const values = new Map(parts.map((part) => [part.type, part.value]));
+
+  return `${values.get("weekday") ?? "DATE"} · ${values.get("day") ?? ""} ${values.get("month") ?? ""}`
+    .trim()
+    .toUpperCase();
+}
+
+function PriorityGrid({ summary, source }: { summary?: CommandCenterSummary; source: DashboardSource }) {
+  const unavailableDetail = source === "loading" ? "synchronisation en cours" : "données API indisponibles";
+  const priorities: Array<{
+    label: string;
+    value: number | undefined;
+    detail: string;
+    accent: "violet" | "blue" | "amber" | "mint";
+  }> = summary
+    ? [
+        {
+          label: "Approvals",
+          value: summary.pendingApprovals,
+          detail: "propositions à valider",
+          accent: "violet",
+        },
+        {
+          label: "Plans",
+          value: summary.activeInternalSchedules,
+          detail: "planifications internes actives",
+          accent: "blue",
+        },
+        {
+          label: "Campaigns",
+          value: summary.activeCampaigns,
+          detail: "campagnes actives",
+          accent: "amber",
+        },
+        {
+          label: "Releases",
+          value: summary.upcomingReleases,
+          detail: "releases à venir",
+          accent: "mint",
+        },
+      ]
+    : [
+        { label: "Approvals", value: undefined, detail: unavailableDetail, accent: "violet" },
+        { label: "Plans", value: undefined, detail: unavailableDetail, accent: "blue" },
+        { label: "Campaigns", value: undefined, detail: unavailableDetail, accent: "amber" },
+        { label: "Releases", value: undefined, detail: unavailableDetail, accent: "mint" },
+      ];
+
   return (
     <section className="priority-grid" aria-label="Priorités du jour">
-      {todayPriorities.map((priority) => (
+      {priorities.map((priority) => (
         <article className={`priority-card accent-${priority.accent}`} key={priority.label}>
           <p>{priority.label}</p>
-          <strong>{priority.value}</strong>
+          <strong>{priority.value ?? "—"}</strong>
           <span>{priority.detail}</span>
         </article>
       ))}
@@ -3579,7 +3645,7 @@ function HomeView({
 }) {
   return (
     <>
-      <PriorityGrid />
+      <PriorityGrid summary={dashboard.summary} source={source} />
       <div className="home-grid">
         <CalendarPanel onOpenCalendar={onOpenCalendar} />
         <ConversationPanel messages={messages} />
@@ -3684,7 +3750,7 @@ function App() {
 
         setDashboard(snapshot);
         setDashboardSource("api");
-        setDashboardNotice("Données API synchronisées : système, tracks et médias.");
+        setDashboardNotice("Données API synchronisées : résumé, système, tracks et médias.");
       })
       .catch((error: unknown) => {
         if (!isCurrent) {
@@ -3847,7 +3913,12 @@ function App() {
             <p className="page-description">{section.description}</p>
           </div>
           <div className="topbar-actions">
-            <span className="date-pill">SAT · 30 AUG</span>
+            <span
+              className="date-pill"
+              title={dashboard.summary ? `Date du workspace · ${dashboard.summary.timezone}` : undefined}
+            >
+              {formatDashboardDate(dashboard.summary, dashboardSource)}
+            </span>
             <button className="profile-button" type="button" aria-label="Ouvrir le profil">
               A
             </button>

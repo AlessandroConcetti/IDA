@@ -61,6 +61,7 @@ Créer le premier produit réellement utilisable : un Command Center responsive 
 
 - dépôt TypeScript en workspace, tests, lint et vérification de types ;
 - Command Center React responsive desktop/iPhone avec tous les modules initiaux, dont `SOCIAL`, `CAMPAIGNS`, `ANALYTICS`, `TASKS`, `MEMORY` et `SYSTEM` ;
+- résumé d’accueil factuel du workspace : approbations actionnables, snapshots de planification interne actifs, campagnes actives et releases à venir, avec date calculée côté serveur dans le fuseau du workspace et valeurs indisponibles plutôt que fictives en cas d’API absente ;
 - API Fastify locale, contrats Zod partagés et policy d’outils ;
 - données musicales, médias, mémoire et tâches de démonstration isolées par workspace côté serveur, ainsi qu’une matrice sociale globale déclarative en lecture seule sans compte, token, connexion ni appel externe ;
 - commandes textuelles déterministes de lecture : journée, médias réellement disponibles à proposer (formulation naturelle « contenus inutilisés ») et état système ;

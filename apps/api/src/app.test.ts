@@ -86,6 +86,7 @@ describe("IDA API — première tranche Phase 1", () => {
       "/v1/me",
       "/v1/modules",
       "/v1/system/status",
+      "/v1/dashboard/summary",
       "/v1/activity-logs",
       "/v1/ida/command-runs",
       "/v1/artist-profile",
@@ -107,6 +108,93 @@ describe("IDA API — première tranche Phase 1", () => {
       expect(response.statusCode, url).toBe(200);
       expect(response.json()).toHaveProperty("data");
     }
+  });
+
+  it("expose un résumé factuel du Command Center, scopé et sans effet de bord", async () => {
+    const activityBefore = await app.inject({ method: "GET", url: "/v1/activity-logs?limit=30" });
+    expect(activityBefore.statusCode).toBe(200);
+
+    const response = await app.inject({ method: "GET", url: "/v1/dashboard/summary" });
+    expect(response.statusCode).toBe(200);
+
+    const body = response.json() as { data: Record<string, unknown> };
+    expect(body.data).toEqual({
+      generatedAt: "2026-08-30T09:00:00.000Z",
+      workspaceDate: "2026-08-30",
+      timezone: "Europe/Paris",
+      pendingApprovals: 2,
+      activeInternalSchedules: 0,
+      activeCampaigns: 0,
+      upcomingReleases: 1,
+    });
+    expect(Object.keys(body.data).sort()).toEqual([
+      "activeCampaigns",
+      "activeInternalSchedules",
+      "generatedAt",
+      "pendingApprovals",
+      "timezone",
+      "upcomingReleases",
+      "workspaceDate",
+    ]);
+    expect(body.data).not.toHaveProperty("workspaceId");
+    expect(body.data).not.toHaveProperty("scheduledPosts");
+    expect(body.data).not.toHaveProperty("socialAccounts");
+
+    const injectedScope = await app.inject({ method: "GET", url: "/v1/dashboard/summary?workspaceId=wsp_other" });
+    expect(injectedScope.statusCode).toBe(400);
+    expect(injectedScope.json()).toMatchObject({ error: { code: "INVALID_DASHBOARD_SUMMARY_QUERY" } });
+
+    const activityAfter = await app.inject({ method: "GET", url: "/v1/activity-logs?limit=30" });
+    expect(activityAfter.statusCode).toBe(200);
+    expect(activityAfter.json()).toEqual(activityBefore.json());
+  });
+
+  it("met à jour les compteurs sans confondre planification interne et livraison sociale", async () => {
+    const queue = await app.inject({ method: "GET", url: "/v1/approvals/queue" });
+    const proposal = (
+      queue.json() as { data: Array<{ approvalId: string; variantId: string; payloadHash: string }> }
+    ).data.find((item) => item.variantId === "variant_lumiere_instagram");
+    const payload = { approvalId: proposal?.approvalId, expectedPayloadHash: proposal?.payloadHash };
+
+    const approved = await app.inject({
+      method: "POST",
+      url: `/v1/post-variants/${proposal?.variantId}/approve`,
+      payload,
+    });
+    expect(approved.statusCode).toBe(200);
+
+    const afterApproval = await app.inject({ method: "GET", url: "/v1/dashboard/summary" });
+    expect(afterApproval.statusCode).toBe(200);
+    expect(afterApproval.json()).toMatchObject({
+      data: { pendingApprovals: 1, activeInternalSchedules: 0, activeCampaigns: 0, upcomingReleases: 1 },
+    });
+
+    const scheduled = await app.inject({
+      method: "POST",
+      url: `/v1/post-variants/${proposal?.variantId}/internal-schedules`,
+      payload,
+    });
+    expect(scheduled.statusCode).toBe(201);
+    const scheduleId = (scheduled.json() as { data: { id: string } }).data.id;
+
+    const afterSchedule = await app.inject({ method: "GET", url: "/v1/dashboard/summary" });
+    expect(afterSchedule.statusCode).toBe(200);
+    expect(afterSchedule.json()).toMatchObject({
+      data: { pendingApprovals: 1, activeInternalSchedules: 1, activeCampaigns: 0, upcomingReleases: 1 },
+    });
+
+    const cancelled = await app.inject({
+      method: "POST",
+      url: `/v1/internal-post-schedules/${scheduleId}/cancel`,
+      payload: {},
+    });
+    expect(cancelled.statusCode).toBe(200);
+
+    const afterCancellation = await app.inject({ method: "GET", url: "/v1/dashboard/summary" });
+    expect(afterCancellation.statusCode).toBe(200);
+    expect(afterCancellation.json()).toMatchObject({
+      data: { pendingApprovals: 1, activeInternalSchedules: 0, activeCampaigns: 0, upcomingReleases: 1 },
+    });
   });
 
   it("expose une matrice sociale déclarative sans compte, secret ni effet d’audit", async () => {

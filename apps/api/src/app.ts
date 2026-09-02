@@ -23,6 +23,8 @@ import {
   campaignSchema,
   contentRotationQuerySchema,
   contentRotationResponseSchema,
+  dashboardSummaryQuerySchema,
+  dashboardSummaryResponseSchema,
   idaCommandRunCursorSchema,
   idaCommandRunListQuerySchema,
   idaCommandRunListResponseSchema,
@@ -195,6 +197,12 @@ function localDateParts(date: Date, timezone: string): ZonedDateParts {
     minute: Number(values.get("minute")),
     second: Number(values.get("second")),
   };
+}
+
+function localDateString(date: Date, timezone: string): string {
+  const parts = localDateParts(date, timezone);
+
+  return `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}`;
 }
 
 function zonedDateTimeToIso(parts: ZonedDateParts, timezone: string): string {
@@ -454,6 +462,15 @@ class ActivityLogQueryInputError extends Error {
 
   constructor() {
     super("La pagination de l'historique d'activité est invalide.");
+  }
+}
+
+class DashboardSummaryQueryInputError extends Error {
+  readonly statusCode = 400;
+  readonly code = "INVALID_DASHBOARD_SUMMARY_QUERY";
+
+  constructor() {
+    super("Les paramètres du résumé du Command Center sont invalides.");
   }
 }
 
@@ -984,6 +1001,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
       error instanceof MediaListQueryInputError ||
       error instanceof ContentRotationQueryInputError ||
       error instanceof ActivityLogQueryInputError ||
+      error instanceof DashboardSummaryQueryInputError ||
       error instanceof CommandRunHistoryQueryInputError
     ) {
       return reply.status(error.statusCode).send({
@@ -1389,6 +1407,35 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   app.get("/v1/modules", async () => ({ data: modules.list() }));
 
   app.get("/v1/system/status", async () => ({ data: core.getSystemStatus() }));
+
+  app.get("/v1/dashboard/summary", async (request) => {
+    const query = dashboardSummaryQuerySchema.safeParse(request.query);
+
+    if (!query.success) {
+      throw new DashboardSummaryQueryInputError();
+    }
+
+    // La date de référence est calculée côté serveur dans le fuseau du
+    // workspace ; le client ne peut ni forcer un scope, ni déplacer la date.
+    const timezone = await database.getWorkspaceTimezone(demoContext.workspaceId);
+
+    if (!timezone) {
+      throw new DashboardSummaryQueryInputError();
+    }
+
+    const now = serverNow();
+    const workspaceDate = localDateString(now, timezone);
+    const counts = await database.getCommandCenterSummary(demoContext.workspaceId, workspaceDate);
+
+    return dashboardSummaryResponseSchema.parse({
+      data: {
+        generatedAt: now.toISOString(),
+        workspaceDate,
+        timezone,
+        ...counts,
+      },
+    });
+  });
 
   app.get("/v1/activity-logs", async (request) => {
     const query = activityLogListQuerySchema.safeParse(request.query);
