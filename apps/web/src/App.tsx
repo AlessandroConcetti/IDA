@@ -1045,6 +1045,7 @@ function SocialView({ dashboard, source }: { dashboard: DashboardSnapshot; sourc
 }
 
 type MusicTrackForm = {
+  releaseId: string;
   title: string;
   artistCredit: string;
   genre: string;
@@ -1058,6 +1059,7 @@ type MusicTrackForm = {
 };
 
 const emptyMusicTrackForm: MusicTrackForm = {
+  releaseId: "",
   title: "",
   artistCredit: "",
   genre: "",
@@ -1105,6 +1107,7 @@ function musicTrackFormToInput(form: MusicTrackForm): TrackCreateInput {
   const bpmValue = form.bpm.trim();
 
   return {
+    releaseId: optionalFormValue(form.releaseId),
     title: form.title.trim(),
     artistCredit: form.artistCredit.trim(),
     genre: optionalFormValue(form.genre),
@@ -1140,9 +1143,44 @@ function MusicView({
   onTrackCreated: (track: Track) => void;
 }) {
   const [form, setForm] = useState<MusicTrackForm>(emptyMusicTrackForm);
+  const [releases, setReleases] = useState<ReleaseRecord[]>([]);
+  const [releaseSource, setReleaseSource] = useState<"loading" | "api" | "unavailable">(
+    isApiConfigured ? "loading" : "unavailable",
+  );
   const [notice, setNotice] = useState("Ajoute les métadonnées essentielles. Le workspace est résolu côté serveur.");
   const [noticeState, setNoticeState] = useState<"default" | "success" | "error">("default");
   const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    if (!isApiConfigured) {
+      return () => {
+        isCurrent = false;
+      };
+    }
+
+    void fetchReleases()
+      .then((items) => {
+        if (!isCurrent) {
+          return;
+        }
+
+        setReleases(items);
+        setReleaseSource("api");
+      })
+      .catch(() => {
+        if (!isCurrent) {
+          return;
+        }
+
+        setReleaseSource("unavailable");
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, []);
 
   function updateField(field: keyof MusicTrackForm, value: string) {
     setForm((current) => ({ ...current, [field]: value }));
@@ -1199,7 +1237,8 @@ function MusicView({
           <span className="status-tag demo">LOCAL ONLY</span>
         </div>
         <p className="music-entry-intro">
-          Crée une fiche de morceau contrôlée. Aucun média, lien externe ou contenu public n’est créé ici.
+          Crée une fiche de morceau contrôlée. Tu peux choisir une release locale, sans lier de média, de lien externe
+          ou de contenu public.
         </p>
         <p className={`music-entry-notice ${noticeState}`} role="status">
           <span aria-hidden="true" />
@@ -1237,6 +1276,21 @@ function MusicView({
                 {musicTrackStatuses.map((status) => (
                   <option key={status} value={status}>
                     {status}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="music-entry-field">
+              <span>Release liée</span>
+              <select
+                value={form.releaseId}
+                onChange={(event) => updateField("releaseId", event.target.value)}
+                disabled={isSaving || releaseSource === "loading" || releaseSource === "unavailable"}
+              >
+                <option value="">Aucune release</option>
+                {releases.map((release) => (
+                  <option key={release.id} value={release.id}>
+                    {release.title}
                   </option>
                 ))}
               </select>
@@ -1312,7 +1366,10 @@ function MusicView({
             </label>
           </div>
           <div className="music-entry-actions">
-            <p>Tu pourras relier ce morceau à une release ou à des médias dans une prochaine tranche.</p>
+            <p>
+              La release choisie est vérifiée dans le même workspace et projet. Les médias et les services externes
+              restent absents de cette action.
+            </p>
             <button className="send-button" type="submit" disabled={isSaving}>
               {isSaving ? "Ajout…" : "Add track"}
               <span aria-hidden="true">↗</span>
@@ -1320,7 +1377,12 @@ function MusicView({
           </div>
         </form>
       </section>
-      <ReleaseRegistry />
+      <ReleaseRegistry
+        onReleaseCreated={(release) => {
+          setReleases((current) => [release, ...current.filter((item) => item.id !== release.id)]);
+          setReleaseSource("api");
+        }}
+      />
     </div>
   );
 }
@@ -1338,7 +1400,7 @@ function releaseRegistryDetail(release: ReleaseRecord): string {
   return details.join(" · ");
 }
 
-function ReleaseRegistry() {
+function ReleaseRegistry({ onReleaseCreated }: { onReleaseCreated: (release: ReleaseRecord) => void }) {
   const [releases, setReleases] = useState<ReleaseRecord[]>([]);
   const [source, setSource] = useState<"loading" | "api" | "unavailable">(isApiConfigured ? "loading" : "unavailable");
   const [form, setForm] = useState<MusicReleaseForm>(emptyMusicReleaseForm);
@@ -1405,6 +1467,7 @@ function ReleaseRegistry() {
     try {
       const release = await createRelease(musicReleaseFormToInput(form));
       setReleases((current) => [release, ...current.filter((item) => item.id !== release.id)]);
+      onReleaseCreated(release);
       setSource("api");
       setForm((current) => ({ ...emptyMusicReleaseForm, label: current.label }));
       setNotice(`« ${release.title} » a été ajoutée au registre local.`);
@@ -1428,8 +1491,8 @@ function ReleaseRegistry() {
         <span className="status-tag demo">LOCAL ONLY</span>
       </div>
       <p className="music-entry-intro">
-        Une release pose le contexte de ta sortie. Aucun morceau, média, lien externe, calendrier ou action sociale
-        n’est relié automatiquement.
+        Une release pose le contexte de ta sortie. Elle peut être choisie explicitement lors de l’ajout d’un morceau ;
+        aucun média, lien externe, calendrier ou action sociale n’est relié automatiquement.
       </p>
       <p className={`music-entry-notice ${noticeState}`} role="status" aria-live="polite">
         <span aria-hidden="true" />
@@ -1535,7 +1598,8 @@ function ReleaseRegistry() {
         </div>
         <div className="music-entry-actions">
           <p>
-            Les relations avec les tracks, médias, campagnes et plateformes seront ajoutées par des actions séparées.
+            Les relations avec les médias et plateformes seront ajoutées par des actions séparées. Les campagnes et les
+            morceaux restent des liens internes explicitement contrôlés.
           </p>
           <button className="send-button" type="submit" disabled={isSaving || source === "unavailable"}>
             {isSaving ? "Ajout…" : "Add release"}

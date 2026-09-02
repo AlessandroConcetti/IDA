@@ -307,8 +307,9 @@ paths:
       description: >-
         Utilise le contexte workspace, le projet et l'acteur imposés par le
         serveur, puis l'outil interne allowlisté create_track avec la permission
-        WRITE. Aucun champ de scope, upload, association média ou effet externe
-        n'est accepté.
+        WRITE. releaseId est la seule relation admise : elle doit désigner une
+        release du même workspace et projet artistique. Aucun champ de scope,
+        upload, association média ou effet externe n'est accepté.
       requestBody:
         required: true
         content:
@@ -327,7 +328,7 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
-          $ref: '#/components/responses/NotFound'
+          $ref: '#/components/responses/TrackReleaseNotFound'
   /v1/media:
     get:
       operationId: listMedia
@@ -995,6 +996,12 @@ components:
             $ref: '#/components/schemas/ErrorResponse'
     InvalidTrack:
       description: Corps Music Brain invalide ou tentative de définir le scope client
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    TrackReleaseNotFound:
+      description: Release compatible introuvable dans le workspace et projet artistique autorisés
       content:
         application/json:
           schema:
@@ -1724,6 +1731,7 @@ components:
         workspaceId: { type: string }
         artistProjectId: { type: string }
         releaseId: { type: string }
+        releaseTitle: { type: string, minLength: 1, maxLength: 240 }
         title: { type: string, minLength: 1, maxLength: 240 }
         artistCredit: { type: string, minLength: 1, maxLength: 240 }
         genre: { type: string, minLength: 1, maxLength: 120 }
@@ -1748,6 +1756,9 @@ components:
       required: [title, artistCredit, status]
       additionalProperties: false
       properties:
+        releaseId:
+          type: string
+          description: Release existante du même workspace et projet artistique, résolue côté serveur.
         title: { type: string, minLength: 1, maxLength: 240 }
         artistCredit: { type: string, minLength: 1, maxLength: 240 }
         genre: { type: string, minLength: 1, maxLength: 120 }

@@ -739,6 +739,7 @@ function toTrackResponse(track: Track) {
     workspaceId: demoContext.workspaceId,
     artistProjectId: track.projectId,
     releaseId: optionalString(track.releaseId),
+    releaseTitle: optionalString(track.releaseTitle),
     title: track.title,
     artistCredit: track.artistCredit,
     genre: optionalString(track.genre),
@@ -1679,16 +1680,23 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     });
 
     // Le client ne transmet aucun scope : workspace, projet et acteur sont
-    // résolus par le contexte serveur local avant l'écriture.
-    const track = await database.createTrack(demoContext.workspaceId, demoContext.userId, input.data);
+    // résolus par le contexte serveur local. Une release optionnelle est
+    // vérifiée dans ce même scope avant l'écriture, sans relation implicite.
+    const result = await database.createTrack(demoContext.workspaceId, demoContext.userId, input.data);
 
-    if (!track) {
+    if (result.kind === "project-not-found") {
       return reply.status(404).send({
         error: { code: "ARTIST_PROJECT_NOT_FOUND", message: "Projet artistique introuvable." },
       });
     }
 
-    return reply.status(201).send({ data: toTrackResponse(track) });
+    if (result.kind === "release-not-found") {
+      return reply.status(404).send({
+        error: { code: "RELEASE_NOT_FOUND", message: "Release introuvable pour ce morceau." },
+      });
+    }
+
+    return reply.status(201).send({ data: toTrackResponse(result.track) });
   });
 
   app.get("/v1/media", async (request) => {

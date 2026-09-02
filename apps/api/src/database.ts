@@ -76,6 +76,7 @@ export type Track = {
   id: string;
   projectId: string;
   releaseId: string | null;
+  releaseTitle: string | null;
   title: string;
   artistCredit: string;
   genre: string | null;
@@ -208,6 +209,11 @@ export type CampaignReleaseLinkResult =
   | { kind: "campaign-not-found" }
   | { kind: "release-not-found" }
   | { kind: "stale" };
+
+export type CreateTrackResult =
+  | { kind: "created"; track: Track }
+  | { kind: "project-not-found" }
+  | { kind: "release-not-found" };
 
 // Cette projection alimente uniquement les indicateurs du Command Center.
 // Elle ne porte aucun payload éditorial, identifiant externe ou état de
@@ -510,6 +516,7 @@ function toTrack(row: ScalarRow): Track {
     id: asString(row.id),
     projectId: asString(row.projectId),
     releaseId: asNullableString(row.releaseId),
+    releaseTitle: asNullableString(row.releaseTitle),
     title: asString(row.title),
     artistCredit: asString(row.artistCredit),
     genre: asNullableString(row.genre),
@@ -1547,24 +1554,28 @@ export class DemoDatabase {
     const result = await this.pglite.query<ScalarRow>(
       `
         SELECT
-          id,
-          artist_project_id AS "projectId",
-          release_id AS "releaseId",
-          title,
-          artist_credit AS "artistCredit",
-          genre,
-          bpm,
-          musical_key AS "musicalKey",
-          release_date AS "releaseDate",
-          label,
-          status,
-          tags,
-          description,
-          created_at AS "createdAt",
-          updated_at AS "updatedAt"
-        FROM tracks
-        WHERE workspace_id = $1
-        ORDER BY release_date NULLS LAST, title
+          track.id,
+          track.artist_project_id AS "projectId",
+          track.release_id AS "releaseId",
+          release.title AS "releaseTitle",
+          track.title,
+          track.artist_credit AS "artistCredit",
+          track.genre,
+          track.bpm,
+          track.musical_key AS "musicalKey",
+          track.release_date AS "releaseDate",
+          track.label,
+          track.status,
+          track.tags,
+          track.description,
+          track.created_at AS "createdAt",
+          track.updated_at AS "updatedAt"
+        FROM tracks track
+        LEFT JOIN releases release ON release.id = track.release_id
+          AND release.workspace_id = track.workspace_id
+          AND release.artist_project_id = track.artist_project_id
+        WHERE track.workspace_id = $1
+        ORDER BY track.release_date NULLS LAST, track.title
       `,
       [workspaceId],
     );
@@ -1572,7 +1583,7 @@ export class DemoDatabase {
     return result.rows.map(toTrack);
   }
 
-  async createTrack(workspaceId: string, actorUserId: string, input: TrackCreate): Promise<Track | null> {
+  async createTrack(workspaceId: string, actorUserId: string, input: TrackCreate): Promise<CreateTrackResult> {
     return this.pglite.transaction(async (transaction) => {
       const projectResult = await transaction.query<ScalarRow>(
         `
@@ -1587,30 +1598,55 @@ export class DemoDatabase {
       const project = projectResult.rows[0];
 
       if (!project) {
-        return null;
+        return { kind: "project-not-found" };
       }
 
       const projectId = asString(project.id);
+      let releaseTitle: string | null = null;
+
+      if (input.releaseId) {
+        const releaseResult = await transaction.query<ScalarRow>(
+          `
+            SELECT title
+            FROM releases
+            WHERE id = $1
+              AND workspace_id = $2
+              AND artist_project_id = $3
+            LIMIT 1
+          `,
+          [input.releaseId, workspaceId, projectId],
+        );
+        const release = releaseResult.rows[0];
+
+        if (!release) {
+          return { kind: "release-not-found" };
+        }
+
+        releaseTitle = asString(release.title);
+      }
 
       // Un ID est généré côté serveur et la contrainte primaire conserve la
       // garantie d'unicité même dans le cas extrêmement improbable d'une collision.
+      // Une release éventuelle a déjà été résolue dans le même workspace et
+      // projet artistique ; ni son scope ni son titre ne viennent du client.
       for (let attempt = 0; attempt < 3; attempt += 1) {
         const trackId = `trk_${randomUUID().replaceAll("-", "")}`;
         const result = await transaction.query<ScalarRow>(
           `
             INSERT INTO tracks (
-              id, workspace_id, artist_project_id, title, artist_credit, genre, bpm,
+              id, workspace_id, artist_project_id, release_id, title, artist_credit, genre, bpm,
               musical_key, release_date, label, tags, description, status
             )
             VALUES (
-              $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::json, $12, $13
+              $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::json, $13, $14
             )
             ON CONFLICT (id) DO NOTHING
             RETURNING
-              id,
-              artist_project_id AS "projectId",
-              release_id AS "releaseId",
-              title,
+            id,
+            artist_project_id AS "projectId",
+            release_id AS "releaseId",
+            NULL::TEXT AS "releaseTitle",
+            title,
               artist_credit AS "artistCredit",
               genre,
               bpm,
@@ -1627,6 +1663,7 @@ export class DemoDatabase {
             trackId,
             workspaceId,
             projectId,
+            input.releaseId ?? null,
             input.title,
             input.artistCredit,
             input.genre ?? null,
@@ -1645,7 +1682,7 @@ export class DemoDatabase {
           continue;
         }
 
-        const track = toTrack(row);
+        const track = toTrack({ ...row, releaseTitle });
         await transaction.query(
           `
             INSERT INTO activity_logs (id, workspace_id, actor_user_id, action, entity_type, entity_id, payload)
@@ -1656,11 +1693,11 @@ export class DemoDatabase {
             workspaceId,
             actorUserId,
             track.id,
-            JSON.stringify({ status: track.status, title: track.title }),
+            JSON.stringify({ status: track.status, hasRelease: track.releaseId !== null }),
           ],
         );
 
-        return track;
+        return { kind: "created", track };
       }
 
       throw new Error("Impossible de générer un identifiant unique pour le morceau.");
@@ -3932,6 +3969,8 @@ export class DemoDatabase {
       ALTER TABLE internal_post_schedules
         ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ;
       ALTER TABLE tracks
+        ADD COLUMN IF NOT EXISTS release_id TEXT REFERENCES releases(id);
+      ALTER TABLE tracks
         ADD COLUMN IF NOT EXISTS label TEXT;
       ALTER TABLE tracks
         ADD COLUMN IF NOT EXISTS tags JSON NOT NULL DEFAULT '[]'::json;
@@ -3995,6 +4034,19 @@ export class DemoDatabase {
             WHERE release.id = campaign.release_id
               AND release.workspace_id = campaign.workspace_id
               AND release.artist_project_id = campaign.artist_project_id
+          );
+      -- La même réparation précède la garde de scope des tracks. Un lien
+      -- historique ou écrit par un ancien chemin SQL ne doit jamais faire
+      -- entrer une release d'un autre workspace/projet dans le Music Brain.
+      UPDATE tracks AS track
+        SET release_id = NULL
+        WHERE release_id IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1
+            FROM releases AS release
+            WHERE release.id = track.release_id
+              AND release.workspace_id = track.workspace_id
+              AND release.artist_project_id = track.artist_project_id
           );
       ALTER TABLE media_assets
         ADD COLUMN IF NOT EXISTS storage_key TEXT;
@@ -4062,6 +4114,29 @@ export class DemoDatabase {
       CREATE TRIGGER campaigns_release_scope_guard
       BEFORE INSERT OR UPDATE OF release_id, workspace_id, artist_project_id ON campaigns
       FOR EACH ROW EXECUTE FUNCTION enforce_campaign_release_scope();
+
+      CREATE OR REPLACE FUNCTION enforce_track_release_scope()
+      RETURNS TRIGGER AS $$
+      BEGIN
+        IF NEW.release_id IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1
+            FROM releases AS release
+            WHERE release.id = NEW.release_id
+              AND release.workspace_id = NEW.workspace_id
+              AND release.artist_project_id = NEW.artist_project_id
+          ) THEN
+          RAISE EXCEPTION 'La release liée doit appartenir au même workspace et projet artistique que le morceau.';
+        END IF;
+
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+
+      DROP TRIGGER IF EXISTS tracks_release_scope_guard ON tracks;
+      CREATE TRIGGER tracks_release_scope_guard
+      BEFORE INSERT OR UPDATE OF release_id, workspace_id, artist_project_id ON tracks
+      FOR EACH ROW EXECUTE FUNCTION enforce_track_release_scope();
     `);
 
     await this.migrateRequestedApprovalPayloadHashes();

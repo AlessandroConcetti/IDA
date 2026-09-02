@@ -62,6 +62,7 @@ export interface ActivityLogListInput {
 }
 
 export interface TrackCreateInput {
+  releaseId?: string;
   title: string;
   artistCredit: string;
   genre?: string;
@@ -1267,7 +1268,7 @@ function toTrack(record: Record<string, unknown>): Track {
 
   return {
     title: readString(record.title) ?? "Untitled track",
-    project: readString(record.label, record.artistCredit, record.genre) ?? "Artist workspace",
+    project: readString(record.releaseTitle, record.label, record.artistCredit, record.genre) ?? "Artist workspace",
     status,
     bpm,
     key: readString(record.musicalKey) ?? "Key not set",

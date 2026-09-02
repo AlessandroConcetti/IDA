@@ -287,6 +287,7 @@ export const trackSchema = z.object({
   workspaceId: entityIdSchema,
   artistProjectId: entityIdSchema,
   releaseId: entityIdSchema.optional(),
+  releaseTitle: releaseTitleSchema.optional(),
   title: trackTitleSchema,
   artistCredit: trackArtistCreditSchema,
   genre: trackGenreSchema.optional(),
@@ -304,10 +305,12 @@ export const trackSchema = z.object({
 
 export type Track = z.infer<typeof trackSchema>;
 
-// Le projet et le workspace sont résolus par le backend : le client ne peut
-// pas les injecter dans une création de morceau.
+// Le projet et le workspace sont résolus par le backend. Une release est
+// optionnelle et sera toujours résolue dans ce même scope avant l'écriture :
+// le client ne choisit jamais un workspace, un projet ou un lien arbitraire.
 export const trackCreateSchema = z
   .object({
+    releaseId: entityIdSchema.optional(),
     title: trackTitleSchema,
     artistCredit: trackArtistCreditSchema,
     genre: trackGenreSchema.optional(),

@@ -1502,7 +1502,7 @@ describe("IDA API — première tranche Phase 1", () => {
     );
   });
 
-  it("crée un morceau Music Brain avec un outil WRITE et le conserve dans le workspace serveur", async () => {
+  it("crée un morceau Music Brain lié explicitement à une release locale du même scope", async () => {
     const response = await app.inject({
       method: "POST",
       url: "/v1/tracks",
@@ -1515,6 +1515,7 @@ describe("IDA API — première tranche Phase 1", () => {
         releaseDate: "2026-10-03",
         label: "Aural Motion",
         status: "UNRELEASED",
+        releaseId: "rel_lumiere_noire",
         tags: ["club", "draft"],
         description: "Démo construite autour d’un break progressif.",
       },
@@ -1534,6 +1535,8 @@ describe("IDA API — première tranche Phase 1", () => {
         releaseDate: "2026-10-03",
         label: "Aural Motion",
         status: "UNRELEASED",
+        releaseId: "rel_lumiere_noire",
+        releaseTitle: "Lumière Noire",
         tags: ["club", "draft"],
         description: "Démo construite autour d’un break progressif.",
       },
@@ -1543,6 +1546,27 @@ describe("IDA API — première tranche Phase 1", () => {
     expect(tracks.statusCode).toBe(200);
     expect((tracks.json() as { data: Array<{ title: string; workspaceId: string }> }).data).toEqual(
       expect.arrayContaining([expect.objectContaining({ title: "Signal Horizon", workspaceId: "wsp_demo_aless" })]),
+    );
+  });
+
+  it("refuse une release étrangère pendant la création d’un morceau sans créer de lien", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/tracks",
+      payload: {
+        title: "Tentative de lien privé",
+        artistCredit: "Aless",
+        status: "DEMO",
+        releaseId: "rel_other_workspace",
+      },
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toMatchObject({ error: { code: "RELEASE_NOT_FOUND" } });
+
+    const tracks = await app.inject({ method: "GET", url: "/v1/tracks" });
+    expect((tracks.json() as { data: Array<{ title: string }> }).data).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ title: "Tentative de lien privé" })]),
     );
   });
 
@@ -2023,6 +2047,82 @@ describe("IDA API — première tranche Phase 1", () => {
     } finally {
       await legacyDatabase?.close();
       await upgradedDatabase?.close();
+      await rm(dataDir, { recursive: true, force: true });
+    }
+  });
+
+  it("répare les liens de release Music Brain hors scope et les protège aussi directement en base", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "ida-track-release-migration-"));
+    let legacyDatabase: DemoDatabase | undefined;
+    let upgradedDatabase: DemoDatabase | undefined;
+    let upgradedApp: Awaited<ReturnType<typeof createApp>> | undefined;
+
+    try {
+      legacyDatabase = await DemoDatabase.open({ dataDir });
+      await legacyDatabase.pglite.exec(`
+        INSERT INTO artist_projects (id, workspace_id, name, status)
+        VALUES ('prj_track_other_project', 'wsp_demo_aless', 'Autre projet Music Brain', 'ACTIVE');
+        INSERT INTO releases (
+          id, workspace_id, artist_project_id, title, release_type, release_date, label, status, description
+        )
+        VALUES (
+          'rel_track_other_project', 'wsp_demo_aless', 'prj_track_other_project',
+          'Release Music Brain autre projet', 'SINGLE', NULL, NULL, 'UNRELEASED', NULL
+        );
+        DROP TRIGGER IF EXISTS tracks_release_scope_guard ON tracks;
+        UPDATE tracks
+        SET release_id = 'rel_other_workspace'
+        WHERE id = 'trk_lumiere_noire';
+      `);
+      await legacyDatabase.close();
+      legacyDatabase = undefined;
+
+      // Au redémarrage, la migration détache le lien historique qui n'est plus
+      // dans le scope, avant de remettre la garde pour les futurs writes SQL.
+      upgradedDatabase = await DemoDatabase.open({ dataDir, seed: false });
+      const repaired = await upgradedDatabase.pglite.query<{ releaseId: string | null }>(`
+        SELECT release_id AS "releaseId"
+        FROM tracks
+        WHERE id = 'trk_lumiere_noire'
+      `);
+      expect(repaired.rows[0]).toMatchObject({ releaseId: null });
+
+      await expect(
+        upgradedDatabase.pglite.exec(`
+          UPDATE tracks
+          SET release_id = 'rel_other_workspace'
+          WHERE id = 'trk_lumiere_noire';
+        `),
+      ).rejects.toThrow(/même workspace et projet artistique/u);
+      await expect(
+        upgradedDatabase.pglite.exec(`
+          UPDATE tracks
+          SET release_id = 'rel_track_other_project'
+          WHERE id = 'trk_lumiere_noire';
+        `),
+      ).rejects.toThrow(/même workspace et projet artistique/u);
+      await upgradedDatabase.close();
+      upgradedDatabase = undefined;
+
+      upgradedApp = await createApp({ dataDir, storageDir });
+      const projectMismatch = await upgradedApp.inject({
+        method: "POST",
+        url: "/v1/tracks",
+        payload: {
+          title: "Morceau vers un autre projet",
+          artistCredit: "Aless",
+          status: "DEMO",
+          releaseId: "rel_track_other_project",
+        },
+      });
+      expect(projectMismatch.statusCode).toBe(404);
+      expect(projectMismatch.json()).toMatchObject({ error: { code: "RELEASE_NOT_FOUND" } });
+      await upgradedApp.close();
+      upgradedApp = undefined;
+    } finally {
+      await legacyDatabase?.close();
+      await upgradedDatabase?.close();
+      await upgradedApp?.close();
       await rm(dataDir, { recursive: true, force: true });
     }
   });
