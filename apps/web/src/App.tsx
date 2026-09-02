@@ -7,6 +7,7 @@ import {
   type CampaignRecord,
   type CampaignStatus,
   type ContentRotationCandidate,
+  cancelInternalPostSchedule,
   completeTask,
   confirmMemory,
   createCampaign,
@@ -543,6 +544,7 @@ function activityActionLabel(action: string): string {
     "post_variant.approved": "Proposition approuvée",
     "post_variant.rejected": "Proposition refusée",
     "post_variant.internal_scheduled": "Proposition ajoutée au calendrier interne",
+    "post_variant.internal_schedule_cancelled": "Planification interne annulée",
     "task.created": "Tâche créée",
     "task.completed": "Tâche terminée",
   };
@@ -2118,6 +2120,31 @@ function CalendarView() {
     }
   }
 
+  async function handleCancel(item: EditorialCalendarItem) {
+    if (item.state !== "SCHEDULED_INTERNAL" || activeScheduleId) {
+      return;
+    }
+
+    setActiveScheduleId(item.id);
+    setDecisionNotice(null);
+
+    try {
+      await cancelInternalPostSchedule(item.id);
+      setDecisionState("success");
+      setDecisionNotice(
+        `« ${item.postTitle} » n’est plus planifiée dans IDA. Aucun scheduler ni aucune publication externe n’a été touché.`,
+      );
+      refresh();
+    } catch (error: unknown) {
+      const reason = error instanceof IdaApiError ? error.message : "IDA API est indisponible.";
+      setDecisionState("error");
+      setDecisionNotice(`La planification interne n’a pas pu être annulée : ${reason}`);
+      refresh();
+    } finally {
+      setActiveScheduleId(null);
+    }
+  }
+
   return (
     <div className="page-grid calendar-view editorial-calendar-view">
       <section className="panel wide-panel editorial-calendar-card" aria-labelledby="editorial-calendar-title">
@@ -2209,7 +2236,17 @@ function CalendarView() {
                   >
                     {isScheduling ? "PLANIFICATION…" : "PLANIFIER DANS IDA"}
                   </button>
-                ) : null}
+                ) : (
+                  <button
+                    className="editorial-calendar-cancel-button"
+                    type="button"
+                    disabled={source !== "api" || activeScheduleId !== null}
+                    onClick={() => void handleCancel(item)}
+                    aria-label={`Annuler la planification interne de « ${item.postTitle} »`}
+                  >
+                    {isScheduling ? "ANNULATION…" : "ANNULER LA PLANIFICATION"}
+                  </button>
+                )}
               </article>
             );
           })}

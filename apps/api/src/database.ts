@@ -343,6 +343,12 @@ export type InternalPostScheduleCreateResult =
   | { kind: "time-unavailable" }
   | { kind: "conflict" };
 
+export type InternalPostScheduleCancellationResult =
+  | { kind: "cancelled"; schedule: InternalPostSchedule }
+  | { kind: "already-cancelled"; schedule: InternalPostSchedule }
+  | { kind: "not-found" }
+  | { kind: "not-cancellable" };
+
 export type TodayItem = {
   id: string;
   kind: "TASK" | "SCHEDULED_POST";
@@ -742,20 +748,33 @@ function isExactActiveSchedule(row: ScalarRow, snapshot: InternalScheduleSnapsho
   );
 }
 
-function toInternalPostScheduleFromSnapshot(row: ScalarRow, snapshot: InternalScheduleSnapshot): InternalPostSchedule {
+function toInternalPostSchedule(row: ScalarRow): InternalPostSchedule {
   return {
     id: asString(row.id),
+    variantId: asString(row.variantId),
+    postId: asString(row.postId),
+    platform: asString(row.platform),
+    platformId: asString(row.platformId),
+    scheduledAt: asTimestamp(row.scheduledAt) ?? "1970-01-01T00:00:00.000Z",
+    timezone: asString(row.timezone),
+    state: asString(row.state) as InternalPostSchedule["state"],
+    approvalId: asString(row.approvalId),
+    payloadHash: asString(row.payloadHash),
+    deliveryState: "NOT_CONFIGURED",
+  };
+}
+
+function toInternalPostScheduleFromSnapshot(row: ScalarRow, snapshot: InternalScheduleSnapshot): InternalPostSchedule {
+  return toInternalPostSchedule({
+    ...row,
     variantId: snapshot.variantId,
     postId: snapshot.postId,
     platform: snapshot.platform,
     platformId: snapshot.platformId,
-    scheduledAt: asTimestamp(row.scheduledAt) ?? "1970-01-01T00:00:00.000Z",
-    timezone: asString(row.timezone),
     state: "SCHEDULED",
     approvalId: snapshot.approvalId,
     payloadHash: snapshot.variantPayloadHash,
-    deliveryState: "NOT_CONFIGURED",
-  };
+  });
 }
 
 function toCalendarInternalScheduleItem(row: ScalarRow, snapshot: InternalScheduleSnapshot): CalendarItem {
@@ -2814,6 +2833,102 @@ export class DemoDatabase {
     });
   }
 
+  async cancelInternalPostSchedule(
+    workspaceId: string,
+    actorUserId: string,
+    scheduleId: string,
+    now: string,
+  ): Promise<InternalPostScheduleCancellationResult> {
+    return this.pglite.transaction(async (transaction) => {
+      // Cette transition ne relit volontairement ni l'approbation courante ni
+      // le payload de la variante. Un snapshot actif doit pouvoir être retiré
+      // même si ce payload a depuis été invalidé ; ses champs restent figés.
+      const updated = await transaction.query<ScalarRow>(
+        `
+          UPDATE internal_post_schedules
+          SET
+            state = 'CANCELLED',
+            cancelled_by = $3,
+            cancelled_at = $4
+          FROM post_variants variant
+          INNER JOIN posts post ON post.id = variant.post_id
+            AND post.workspace_id = variant.workspace_id
+          CROSS JOIN social_platforms platform
+          WHERE internal_post_schedules.id = $1
+            AND internal_post_schedules.workspace_id = $2
+            AND internal_post_schedules.post_variant_id = variant.id
+            AND variant.workspace_id = internal_post_schedules.workspace_id
+            AND post.workspace_id = internal_post_schedules.workspace_id
+            AND platform.id = internal_post_schedules.platform_id
+            AND internal_post_schedules.state = 'SCHEDULED'
+          RETURNING internal_post_schedules.id
+        `,
+        [scheduleId, workspaceId, actorUserId, now],
+      );
+
+      // La lecture post-transition reste entièrement dans le workspace
+      // serveur. Elle ne joint jamais l'approbation : son éventuelle
+      // obsolescence ne doit pas empêcher une annulation explicite.
+      const existing = await transaction.query<ScalarRow>(
+        `
+          SELECT
+            schedule.id,
+            schedule.post_variant_id AS "variantId",
+            post.id AS "postId",
+            platform.key AS platform,
+            schedule.platform_id AS "platformId",
+            schedule.scheduled_at AS "scheduledAt",
+            schedule.timezone,
+            schedule.state,
+            schedule.approval_id AS "approvalId",
+            schedule.approved_payload_hash AS "payloadHash"
+          FROM internal_post_schedules schedule
+          INNER JOIN post_variants variant ON variant.id = schedule.post_variant_id
+            AND variant.workspace_id = schedule.workspace_id
+          INNER JOIN posts post ON post.id = variant.post_id
+            AND post.workspace_id = schedule.workspace_id
+          INNER JOIN social_platforms platform ON platform.id = schedule.platform_id
+          WHERE schedule.id = $1
+            AND schedule.workspace_id = $2
+          LIMIT 1
+        `,
+        [scheduleId, workspaceId],
+      );
+      const row = existing.rows[0];
+
+      if (!row) {
+        return { kind: "not-found" };
+      }
+
+      const schedule = toInternalPostSchedule(row);
+
+      if (updated.rows[0]) {
+        await transaction.query(
+          `
+            INSERT INTO activity_logs (id, workspace_id, actor_user_id, action, entity_type, entity_id, payload)
+            VALUES ($1, $2, $3, 'post_variant.internal_schedule_cancelled', 'POST_VARIANT', $4, $5::json)
+          `,
+          [
+            `act_${randomUUID().replaceAll("-", "")}`,
+            workspaceId,
+            actorUserId,
+            schedule.variantId,
+            JSON.stringify({ scheduleId: schedule.id, state: schedule.state }),
+          ],
+        );
+
+        return { kind: "cancelled", schedule };
+      }
+
+      // Un retry ne change ni l'auteur/l'instant de l'annulation ni l'audit.
+      if (schedule.state === "CANCELLED") {
+        return { kind: "already-cancelled", schedule };
+      }
+
+      return { kind: "not-cancellable" };
+    });
+  }
+
   async listCalendarItems(workspaceId: string, from: string, to: string): Promise<CalendarItem[]> {
     const scheduled = await this.pglite.query<ScalarRow>(
       `
@@ -3621,8 +3736,9 @@ export class DemoDatabase {
         WHERE state = 'REQUESTED';
 
       -- La seule transition future autorisée est SCHEDULED -> CANCELLED. Le
-      -- snapshot qui relie une approbation à sa date ne peut jamais être
-      -- réécrit, même depuis un futur appel SQL interne mal câblé.
+      -- snapshot qui relie une approbation à sa date et la première preuve
+      -- d'annulation ne peuvent jamais être réécrits, même depuis un futur
+      -- appel SQL interne mal câblé.
       CREATE OR REPLACE FUNCTION enforce_internal_post_schedule_snapshot_immutable()
       RETURNS TRIGGER AS $$
       BEGIN
@@ -3640,6 +3756,13 @@ export class DemoDatabase {
 
         IF OLD.state = 'CANCELLED' AND NEW.state IS DISTINCT FROM 'CANCELLED' THEN
           RAISE EXCEPTION 'Une planification annulée ne peut pas être réactivée.';
+        END IF;
+
+        IF OLD.state = 'CANCELLED' AND (
+          NEW.cancelled_by IS DISTINCT FROM OLD.cancelled_by
+          OR NEW.cancelled_at IS DISTINCT FROM OLD.cancelled_at
+        ) THEN
+          RAISE EXCEPTION 'La preuve d''annulation est immuable.';
         END IF;
 
         RETURN NEW;
@@ -3671,6 +3794,10 @@ export class DemoDatabase {
         ADD COLUMN IF NOT EXISTS tags JSON NOT NULL DEFAULT '[]'::json;
       ALTER TABLE releases
         ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+      ALTER TABLE internal_post_schedules
+        ADD COLUMN IF NOT EXISTS cancelled_by TEXT REFERENCES users(id);
+      ALTER TABLE internal_post_schedules
+        ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ;
       ALTER TABLE tracks
         ADD COLUMN IF NOT EXISTS label TEXT;
       ALTER TABLE tracks
@@ -3690,6 +3817,22 @@ export class DemoDatabase {
         ALTER COLUMN row_version SET DEFAULT 1;
       ALTER TABLE campaigns
         ALTER COLUMN row_version SET NOT NULL;
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conrelid = 'internal_post_schedules'::regclass
+            AND conname = 'internal_post_schedules_cancellation_check'
+        ) THEN
+          ALTER TABLE internal_post_schedules
+            ADD CONSTRAINT internal_post_schedules_cancellation_check CHECK (
+              (state = 'SCHEDULED' AND cancelled_by IS NULL AND cancelled_at IS NULL)
+              OR (state = 'CANCELLED' AND cancelled_by IS NOT NULL AND cancelled_at IS NOT NULL)
+            );
+        END IF;
+      END;
+      $$;
       -- Une ancienne base locale peut avoir été créée avant la contrainte de
       -- version. Après la normalisation, la remettre garantit aussi les
       -- écritures SQL futures qui ne passeraient pas par l'API.

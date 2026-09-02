@@ -94,6 +94,7 @@ export const activityLogActionValues = [
   "post_variant.approved",
   "post_variant.rejected",
   "post_variant.internal_scheduled",
+  "post_variant.internal_schedule_cancelled",
   "task.created",
   "task.completed",
 ] as const;
@@ -758,6 +759,16 @@ export const internalPostScheduleSchema = z.object({
 });
 
 export type InternalPostSchedule = z.infer<typeof internalPostScheduleSchema>;
+
+// La transition vers CANCELLED est portée par sa route. Le client ne peut ni
+// sélectionner l'acteur, ni réécrire le snapshot, ni injecter un état.
+export const internalPostScheduleCancelRequestSchema = z.object({}).strict();
+
+export const internalPostScheduleCancelParamsSchema = z
+  .object({
+    scheduleId: entityIdSchema,
+  })
+  .strict();
 
 export const socialPlatformCapabilitySchema = z.object({
   platform: socialPlatformSchema,

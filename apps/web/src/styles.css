@@ -3440,6 +3440,28 @@ h3 {
   opacity: 0.55;
 }
 
+.editorial-calendar-cancel-button {
+  width: 100%;
+  min-height: 36px;
+  margin-top: 15px;
+  color: #ffd7d2;
+  border: 1px solid rgba(236, 130, 122, 0.36);
+  border-radius: 9px;
+  background: rgba(195, 81, 73, 0.09);
+  font-size: 0.62rem;
+  font-weight: 780;
+  letter-spacing: 0.065em;
+}
+
+.editorial-calendar-cancel-button:hover:not(:disabled) {
+  border-color: rgba(236, 130, 122, 0.58);
+  background: rgba(195, 81, 73, 0.17);
+}
+
+.editorial-calendar-cancel-button:disabled {
+  opacity: 0.55;
+}
+
 .editorial-calendar-observation {
   grid-column: 1 / -1;
   min-height: 150px;

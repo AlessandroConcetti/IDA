@@ -656,6 +656,36 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /v1/internal-post-schedules/{scheduleId}/cancel:
+    post:
+      operationId: cancelInternalPostSchedule
+      summary: Annule un snapshot de planification interne
+      description: >-
+        Applique uniquement la transition SCHEDULED vers CANCELLED dans le
+        workspace serveur. Le retry est idempotent, ne réécrit pas sa preuve
+        d'annulation et ne crée aucune livraison, publication ou action réseau.
+        Un snapshot devenu stale reste toujours annulable.
+      parameters:
+        - $ref: '#/components/parameters/InternalPostScheduleId'
+      responses:
+        '200':
+          description: Snapshot annulé ou résultat idempotent déjà CANCELLED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalPostScheduleResponse'
+        '400':
+          $ref: '#/components/responses/InvalidInternalPostScheduleCancellation'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/InternalPostScheduleNotFound'
+        '409':
+          description: État de snapshot inattendu, non annulable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /v1/tasks:
     get:
       operationId: listTasks
@@ -818,6 +848,14 @@ components:
       schema:
         type: string
         minLength: 1
+    InternalPostScheduleId:
+      name: scheduleId
+      in: path
+      required: true
+      description: Identifiant de snapshot interne résolu dans le workspace serveur.
+      schema:
+        type: string
+        minLength: 1
     TaskId:
       name: taskId
       in: path
@@ -975,6 +1013,18 @@ components:
             $ref: '#/components/schemas/ErrorResponse'
     InvalidInternalPostSchedule:
       description: Corps de planification interne invalide ou tentative d'injecter date, fuseau, scope, acteur ou état
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InvalidInternalPostScheduleCancellation:
+      description: Annulation de planification interne invalide ou corps non vide
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InternalPostScheduleNotFound:
+      description: Snapshot interne introuvable dans le workspace autorisé
       content:
         application/json:
           schema:
@@ -1151,6 +1201,7 @@ components:
         - post_variant.approved
         - post_variant.rejected
         - post_variant.internal_scheduled
+        - post_variant.internal_schedule_cancelled
         - task.created
         - task.completed
     ActivityLogEntityType:

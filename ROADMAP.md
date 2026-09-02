@@ -71,12 +71,12 @@ Créer le premier produit réellement utilisable : un Command Center responsive 
 - Memory Consent Center : proposition de préférence en `PENDING`, décision humaine explicite et finale, scope serveur, timestamps persistés et audit sans contenu libre ;
 - Task Center : création locale contrôlée, échéance facultative, finalisation explicite idempotente, scope serveur et audit append-only sans contenu libre ;
 - Approval Center : file locale de propositions `REQUESTED`, hash de payload exact, décision humaine contrôlée via `CONTENT` / `APPROVAL_REQUIRED`, audit redacted et aucun effet de programmation ou publication ;
-- Calendar : projection jour/semaine/mois des variantes approuvées et des planifications internes, conflit de créneau plateforme/instant, snapshot hash/date/fuseau immuable, audit redacted et aucun scheduler ni delivery ;
+- Calendar : projection jour/semaine/mois des variantes approuvées et des planifications internes, conflit de créneau plateforme/instant, création et annulation idempotente d’un snapshot, hash/date/fuseau/preuve d’annulation immuables, audit redacted et aucun scheduler ni delivery ;
 - IDA System : timeline d’activité en lecture seule, paginée par cléset, limitée aux actions Phase 1 explicitement autorisées et aux champs sûrs `id`, action, cible et date ; aucun payload, acteur, workspace ou contenu libre n’est exposé par cette vue, et sa consultation n’écrit aucun événement ;
 - IDA History : registre privé local des paires demande/réponse de commandes `READ / COMPLETED`, restauré pour le même acteur/workspace par pagination cléset, sans résultat d’outil, paramètres, raisonnement ni mémoire implicite ; l’écriture est auditée sans texte libre et la consultation reste sans effet ;
 - PGlite uniquement pour le développement/test local ; aucun compte social, aucun token, aucune publication et aucune donnée personnelle réelle.
 
-La tranche suivante de Phase 1 remplace le contexte de démonstration par une vraie identité/workspace, puis ajoute les prévisualisations/traitements média sécurisés et les liens contrôlés restants entre campagnes et ressources artistiques. La suite du calendrier couvrira annulation, surcharge, répétitions et fraîcheur avant toute automatisation ; aucune de ces étapes ne débloque encore la publication sociale.
+La tranche suivante de Phase 1 remplace le contexte de démonstration par une vraie identité/workspace, puis ajoute les prévisualisations/traitements média sécurisés et les liens contrôlés restants entre campagnes et ressources artistiques. La suite du calendrier couvrira surcharge, répétitions et fraîcheur avant toute automatisation ; aucune de ces étapes ne débloque encore la publication sociale.
 
 ### Périmètre
 

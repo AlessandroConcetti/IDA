@@ -1164,6 +1164,10 @@ export async function scheduleApprovedPostVariant(
   });
 }
 
+export async function cancelInternalPostSchedule(scheduleId: string): Promise<void> {
+  await postApiJson(`/v1/internal-post-schedules/${encodeURIComponent(scheduleId)}/cancel`, {});
+}
+
 function toTrack(record: Record<string, unknown>): Track {
   const status = trackStatus(record.status);
   const releaseDate = readString(record.releaseDate);

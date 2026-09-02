@@ -27,6 +27,8 @@ import {
   idaCommandRunListQuerySchema,
   idaCommandRunListResponseSchema,
   idaCommandRunSchema,
+  internalPostScheduleCancelParamsSchema,
+  internalPostScheduleCancelRequestSchema,
   internalPostScheduleSchema,
   mediaAssetSchema,
   mediaImportSchema,
@@ -407,6 +409,15 @@ class InternalPostScheduleInputError extends Error {
 
   constructor() {
     super("La demande de planification interne est invalide.");
+  }
+}
+
+class InternalPostScheduleCancellationInputError extends Error {
+  readonly statusCode = 400;
+  readonly code = "INVALID_INTERNAL_SCHEDULE_CANCELLATION";
+
+  constructor() {
+    super("La demande d'annulation de planification interne est invalide.");
   }
 }
 
@@ -913,6 +924,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     { toolKey: "import_media", moduleKey: "CONTENT", permission: "WRITE" },
     { toolKey: "decide_post_variant", moduleKey: "CONTENT", permission: "APPROVAL_REQUIRED" },
     { toolKey: "schedule_approved_post_variant", moduleKey: "CALENDAR", permission: "APPROVAL_REQUIRED" },
+    { toolKey: "cancel_internal_post_schedule", moduleKey: "CALENDAR", permission: "WRITE" },
   ]);
 
   await app.register(cors, {
@@ -967,6 +979,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
 
     if (
       error instanceof InternalPostScheduleInputError ||
+      error instanceof InternalPostScheduleCancellationInputError ||
       error instanceof CalendarQueryInputError ||
       error instanceof MediaListQueryInputError ||
       error instanceof ContentRotationQueryInputError ||
@@ -1306,6 +1319,47 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     }
 
     return reply.status(201).send({ data: toInternalPostScheduleResponse(result.schedule) });
+  };
+
+  const cancelInternalPostSchedule = async (request: FastifyRequest, reply: FastifyReply) => {
+    const params = internalPostScheduleCancelParamsSchema.safeParse(request.params);
+    // La route ne porte aucune donnée client : elle ne peut donc ni modifier
+    // l'instant/auteur serveur, ni réécrire le snapshot déjà planifié.
+    const body = internalPostScheduleCancelRequestSchema.safeParse(request.body === undefined ? {} : request.body);
+
+    if (!params.success || !body.success) {
+      throw new InternalPostScheduleCancellationInputError();
+    }
+
+    toolGateway.assertAuthorized({
+      toolKey: "cancel_internal_post_schedule",
+      moduleKey: "CALENDAR",
+      permission: "WRITE",
+    });
+
+    const result = await database.cancelInternalPostSchedule(
+      demoContext.workspaceId,
+      demoContext.userId,
+      params.data.scheduleId,
+      serverNow().toISOString(),
+    );
+
+    if (result.kind === "not-found") {
+      return reply.status(404).send({
+        error: { code: "INTERNAL_SCHEDULE_NOT_FOUND", message: "Planification interne introuvable dans ce workspace." },
+      });
+    }
+
+    if (result.kind === "not-cancellable") {
+      return reply.status(409).send({
+        error: {
+          code: "INTERNAL_SCHEDULE_NOT_CANCELLABLE",
+          message: "Cette planification interne ne peut pas être annulée dans son état actuel.",
+        },
+      });
+    }
+
+    return { data: toInternalPostScheduleResponse(result.schedule) };
   };
 
   app.get("/health", async () => ({
@@ -1716,6 +1770,10 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
 
   app.post("/v1/post-variants/:variantId/internal-schedules", async (request, reply) =>
     scheduleApprovedPostVariant(request, reply),
+  );
+
+  app.post("/v1/internal-post-schedules/:scheduleId/cancel", async (request, reply) =>
+    cancelInternalPostSchedule(request, reply),
   );
 
   app.get("/v1/tasks", async () => {

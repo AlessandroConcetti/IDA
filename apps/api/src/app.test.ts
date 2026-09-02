@@ -2721,6 +2721,272 @@ describe("IDA API — première tranche Phase 1", () => {
     }
   });
 
+  it("annule une planification interne de façon strictement scoped et idempotente", async () => {
+    const queue = await app.inject({ method: "GET", url: "/v1/approvals/queue" });
+    const proposal = (
+      queue.json() as { data: Array<{ approvalId: string; variantId: string; payloadHash: string }> }
+    ).data.find((item) => item.variantId === "variant_lumiere_instagram");
+    const schedulePayload = { approvalId: proposal?.approvalId, expectedPayloadHash: proposal?.payloadHash };
+
+    expect(
+      (
+        await app.inject({
+          method: "POST",
+          url: `/v1/post-variants/${proposal?.variantId}/approve`,
+          payload: schedulePayload,
+        })
+      ).statusCode,
+    ).toBe(200);
+
+    const scheduled = await app.inject({
+      method: "POST",
+      url: `/v1/post-variants/${proposal?.variantId}/internal-schedules`,
+      payload: schedulePayload,
+    });
+    expect(scheduled.statusCode).toBe(201);
+    const schedule = (scheduled.json() as { data: { id: string } }).data;
+
+    const injected = await app.inject({
+      method: "POST",
+      url: `/v1/internal-post-schedules/${schedule.id}/cancel`,
+      payload: { state: "CANCELLED", workspaceId: "wsp_other", actorUserId: "usr_other" },
+    });
+    expect(injected.statusCode).toBe(400);
+    expect(injected.json()).toMatchObject({ error: { code: "INVALID_INTERNAL_SCHEDULE_CANCELLATION" } });
+
+    const cancellations = await Promise.all([
+      app.inject({ method: "POST", url: `/v1/internal-post-schedules/${schedule.id}/cancel` }),
+      app.inject({ method: "POST", url: `/v1/internal-post-schedules/${schedule.id}/cancel` }),
+    ]);
+
+    expect(cancellations.map((response) => response.statusCode)).toEqual([200, 200]);
+    for (const cancellation of cancellations) {
+      expect(cancellation.json()).toMatchObject({
+        data: {
+          id: schedule.id,
+          variantId: "variant_lumiere_instagram",
+          postId: "post_lumiere_studio",
+          platform: "INSTAGRAM",
+          scheduledAt: "2026-09-01T18:00:00.000Z",
+          timezone: "Europe/Paris",
+          state: "CANCELLED",
+          approvalId: proposal?.approvalId,
+          payloadHash: proposal?.payloadHash,
+          deliveryState: "NOT_CONFIGURED",
+        },
+      });
+    }
+
+    const calendar = await app.inject({
+      method: "GET",
+      url: "/v1/calendar?view=DAY&from=2026-09-01T00:00:00.000Z&to=2026-09-02T00:00:00.000Z",
+    });
+    expect(calendar.statusCode).toBe(200);
+    const calendarItems = (
+      calendar.json() as { data: { items: Array<{ id: string; variantId: string; state: string }> } }
+    ).data.items;
+    expect(calendarItems.some((item) => item.id === schedule.id)).toBe(false);
+    expect(calendarItems).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "variant_lumiere_instagram",
+          variantId: "variant_lumiere_instagram",
+          state: "READY_TO_SCHEDULE",
+        }),
+      ]),
+    );
+
+    const activity = await app.inject({ method: "GET", url: "/v1/activity-logs?limit=30" });
+    const cancellationActivity = (
+      activity.json() as { data: { items: Array<Record<string, unknown>> } }
+    ).data.items.filter((item) => item.action === "post_variant.internal_schedule_cancelled");
+    expect(cancellationActivity).toHaveLength(1);
+    expect(cancellationActivity[0]).toMatchObject({
+      entityType: "POST_VARIANT",
+      entityId: "variant_lumiere_instagram",
+    });
+    expect(Object.keys(cancellationActivity[0] ?? {}).sort()).toEqual([
+      "action",
+      "createdAt",
+      "entityId",
+      "entityType",
+      "id",
+    ]);
+
+    const missing = await app.inject({ method: "POST", url: "/v1/internal-post-schedules/ips_missing/cancel" });
+    expect(missing.statusCode).toBe(404);
+    expect(missing.json()).toMatchObject({ error: { code: "INTERNAL_SCHEDULE_NOT_FOUND" } });
+  });
+
+  it("annule un snapshot devenu stale sans réécrire sa preuve ni des données externes", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "ida-internal-schedule-cancellation-"));
+    const isolatedStorageDir = await mkdtemp(join(tmpdir(), "ida-internal-schedule-cancellation-storage-"));
+    let currentNow = new Date("2026-08-30T09:00:00.000Z");
+    let setupApp: Awaited<ReturnType<typeof createApp>> | undefined;
+    let cancellationApp: Awaited<ReturnType<typeof createApp>> | undefined;
+    let inspectedDatabase: DemoDatabase | undefined;
+
+    try {
+      setupApp = await createApp({ dataDir, storageDir: isolatedStorageDir, now: () => currentNow });
+      const queue = await setupApp.inject({ method: "GET", url: "/v1/approvals/queue" });
+      const proposal = (
+        queue.json() as { data: Array<{ approvalId: string; variantId: string; payloadHash: string }> }
+      ).data.find((item) => item.variantId === "variant_lumiere_instagram");
+      const schedulePayload = { approvalId: proposal?.approvalId, expectedPayloadHash: proposal?.payloadHash };
+
+      expect(
+        (
+          await setupApp.inject({
+            method: "POST",
+            url: `/v1/post-variants/${proposal?.variantId}/approve`,
+            payload: schedulePayload,
+          })
+        ).statusCode,
+      ).toBe(200);
+      const scheduled = await setupApp.inject({
+        method: "POST",
+        url: `/v1/post-variants/${proposal?.variantId}/internal-schedules`,
+        payload: schedulePayload,
+      });
+      expect(scheduled.statusCode).toBe(201);
+      const scheduleId = (scheduled.json() as { data: { id: string } }).data.id;
+      await setupApp.close();
+      setupApp = undefined;
+
+      inspectedDatabase = await DemoDatabase.open({ dataDir, seed: false });
+      await inspectedDatabase.pglite.query(
+        `
+          UPDATE post_variants
+          SET payload_hash = $1
+          WHERE id = 'variant_lumiere_instagram'
+            AND workspace_id = 'wsp_demo_aless'
+        `,
+        [`sha256:${"e".repeat(64)}`],
+      );
+      await inspectedDatabase.pglite.query(
+        `
+          INSERT INTO internal_post_schedules (
+            id, workspace_id, post_variant_id, approval_id, approved_payload_hash,
+            scheduled_at, timezone, platform_id, state, created_by, created_at
+          )
+          VALUES (
+            'ips_other_workspace', 'wsp_other', 'variant_other_instagram', 'approval_other_instagram', $1,
+            '2026-09-03T18:00:00.000Z', 'Europe/Paris', 'platform_instagram', 'SCHEDULED', 'usr_other',
+            '2026-08-30T09:00:00.000Z'
+          )
+        `,
+        [`sha256:${"a".repeat(64)}`],
+      );
+      await inspectedDatabase.close();
+      inspectedDatabase = undefined;
+
+      currentNow = new Date("2026-09-02T09:00:00.000Z");
+      cancellationApp = await createApp({ dataDir, storageDir: isolatedStorageDir, now: () => currentNow });
+
+      const foreign = await cancellationApp.inject({
+        method: "POST",
+        url: "/v1/internal-post-schedules/ips_other_workspace/cancel",
+      });
+      expect(foreign.statusCode).toBe(404);
+      expect(foreign.json()).toMatchObject({ error: { code: "INTERNAL_SCHEDULE_NOT_FOUND" } });
+
+      const cancelled = await cancellationApp.inject({
+        method: "POST",
+        url: `/v1/internal-post-schedules/${scheduleId}/cancel`,
+      });
+      expect(cancelled.statusCode).toBe(200);
+      expect(cancelled.json()).toMatchObject({ data: { id: scheduleId, state: "CANCELLED" } });
+      await cancellationApp.close();
+      cancellationApp = undefined;
+
+      inspectedDatabase = await DemoDatabase.open({ dataDir, seed: false });
+      const snapshot = await inspectedDatabase.pglite.query<{
+        state: string;
+        approvalId: string;
+        payloadHash: string;
+        scheduledAt: string;
+        timezone: string;
+        platformId: string;
+        createdBy: string;
+        cancelledBy: string;
+        cancelledAt: string;
+      }>(
+        `
+          SELECT
+            state,
+            approval_id AS "approvalId",
+            approved_payload_hash AS "payloadHash",
+            scheduled_at AS "scheduledAt",
+            timezone,
+            platform_id AS "platformId",
+            created_by AS "createdBy",
+            cancelled_by AS "cancelledBy",
+            cancelled_at AS "cancelledAt"
+          FROM internal_post_schedules
+          WHERE id = $1
+            AND workspace_id = 'wsp_demo_aless'
+        `,
+        [scheduleId],
+      );
+      expect(snapshot.rows[0]).toMatchObject({
+        state: "CANCELLED",
+        approvalId: proposal?.approvalId,
+        payloadHash: proposal?.payloadHash,
+        timezone: "Europe/Paris",
+        platformId: "platform_instagram",
+        createdBy: "usr_demo_aless",
+        cancelledBy: "usr_demo_aless",
+      });
+      expect(new Date(snapshot.rows[0]?.scheduledAt ?? "").toISOString()).toBe("2026-09-01T18:00:00.000Z");
+      expect(new Date(snapshot.rows[0]?.cancelledAt ?? "").toISOString()).toBe("2026-09-02T09:00:00.000Z");
+
+      const externalState = await inspectedDatabase.pglite.query<{
+        scheduledPosts: number;
+        deliveryState: string;
+        otherScheduleState: string;
+        cancellationAudits: number;
+      }>(
+        `
+          SELECT
+            (SELECT COUNT(*)::int FROM scheduled_posts WHERE workspace_id = 'wsp_demo_aless') AS "scheduledPosts",
+            (SELECT delivery_state FROM post_variants WHERE id = 'variant_lumiere_instagram') AS "deliveryState",
+            (SELECT state FROM internal_post_schedules WHERE id = 'ips_other_workspace') AS "otherScheduleState",
+            (
+              SELECT COUNT(*)::int
+              FROM activity_logs
+              WHERE workspace_id = 'wsp_demo_aless'
+                AND action = 'post_variant.internal_schedule_cancelled'
+            ) AS "cancellationAudits"
+        `,
+      );
+      expect(externalState.rows[0]).toMatchObject({
+        scheduledPosts: 1,
+        deliveryState: "NOT_CONFIGURED",
+        otherScheduleState: "SCHEDULED",
+        cancellationAudits: 1,
+      });
+
+      await expect(
+        inspectedDatabase.pglite.query(
+          "UPDATE internal_post_schedules SET cancelled_at = '2026-09-03T09:00:00.000Z' WHERE id = $1",
+          [scheduleId],
+        ),
+      ).rejects.toThrow();
+      await expect(
+        inspectedDatabase.pglite.query(
+          "UPDATE internal_post_schedules SET scheduled_at = '2026-09-03T18:00:00.000Z' WHERE id = $1",
+          [scheduleId],
+        ),
+      ).rejects.toThrow();
+    } finally {
+      await inspectedDatabase?.close();
+      await cancellationApp?.close();
+      await setupApp?.close();
+      await rm(dataDir, { recursive: true, force: true });
+      await rm(isolatedStorageDir, { recursive: true, force: true });
+    }
+  });
+
   it("crée une tâche TODO strictement scoped, y compris sans échéance", async () => {
     const response = await app.inject({
       method: "POST",

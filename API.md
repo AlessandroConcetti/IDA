@@ -27,7 +27,7 @@ Le premier runtime est une API Fastify locale sur `http://127.0.0.1:8787`, conso
 | `GET/POST /v1/campaigns`, `PATCH /v1/campaigns/:campaignId/release` | Livrées | Registre local de briefs de campagne internes. La création force `DRAFT`; un lien optionnel vers une release du même workspace et projet est contrôlé par version via `CAMPAIGNS` / `WRITE`, sans créer de planification ni effet externe. |
 | `POST /v1/memories/proposals`, `POST /v1/memories/:memoryId/confirm`, `POST /v1/memories/:memoryId/reject` | Livrées | Flux de mémoire consentie : une préférence commence forcément à `PENDING` et seule une décision humaine explicite peut la faire passer à `CONFIRMED` ou `REJECTED`. |
 | `GET /v1/approvals/queue`, `POST /v1/post-variants/:variantId/approve`, `POST /v1/post-variants/:variantId/reject` | Livrées | Approval Center local : propositions seedées en `REQUESTED`, préconditionnées par un hash de payload et décidées humainement ; aucune programmation ni publication n’en découle seule. |
-| `GET /v1/calendar`, `POST /v1/post-variants/:variantId/internal-schedules` | Livrées | Calendrier éditorial et planification interne d’une variante déjà approuvée ; aucun job, compte social, adaptateur ou appel réseau n’est créé. |
+| `GET /v1/calendar`, `POST /v1/post-variants/:variantId/internal-schedules`, `POST /v1/internal-post-schedules/:scheduleId/cancel` | Livrées | Calendrier éditorial, planification interne d’une variante approuvée et retrait idempotent de cette planification ; aucun job, compte social, adaptateur ou appel réseau n’est créé. |
 | `GET/POST /v1/tasks`, `POST /v1/tasks/:taskId/complete` | Livrées | Task Center local : création interne en `TODO`, finalisation explicite et idempotente, toujours isolées au workspace serveur. |
 | `GET /v1/social/platforms` | Livrée | Matrice déclarative en lecture seule des capacités à vérifier avant intégration. Elle ne représente ni compte, ni token, ni connexion réelle, ni autorisation d’action externe. |
 | `POST /v1/ida/commands`, `GET /v1/ida/command-runs` | Livrées | Commandes déterministes de lecture et historique privé, borné et paginé de leurs paires de messages terminées. |
@@ -46,7 +46,7 @@ La route n’accepte aucun paramètre, ne retourne ni `SocialAccount`, identifia
 
 La réponse est bornée à `{ data: { items, nextCursor? } }`. Chaque item contient exactement `id`, `action`, `entityType`, `entityId` et `createdAt`. Le scope est imposé par le serveur et la pagination par cléset suit `created_at DESC, id DESC` : elle ne calcule aucun total et reste stable lorsque plusieurs entrées partagent le même instant.
 
-La projection ne sélectionne ni ne retourne le `payload` d’audit, `actor_user_id`, `workspace_id`, caption, préférence, hash, token, chemin, média privé ou détail libre. Seules les actions actuellement prévues par la tranche locale sont visibles : `campaign.created`, `campaign.release_linked`, `campaign.release_unlinked`, `release.created`, `track.created`, `media.imported`, `memory.proposed`, `memory.confirmed`, `memory.rejected`, `post_variant.approved`, `post_variant.rejected`, `post_variant.internal_scheduled`, `task.created` et `task.completed`. La consultation est sans effet : elle ne crée aucun nouvel audit. Les futurs domaines, notamment Finance et Banque, restent invisibles jusqu’à la définition et la revue d’une projection dédiée.
+La projection ne sélectionne ni ne retourne le `payload` d’audit, `actor_user_id`, `workspace_id`, caption, préférence, hash, token, chemin, média privé ou détail libre. Seules les actions actuellement prévues par la tranche locale sont visibles : `campaign.created`, `campaign.release_linked`, `campaign.release_unlinked`, `release.created`, `track.created`, `media.imported`, `memory.proposed`, `memory.confirmed`, `memory.rejected`, `post_variant.approved`, `post_variant.rejected`, `post_variant.internal_scheduled`, `post_variant.internal_schedule_cancelled`, `task.created` et `task.completed`. La consultation est sans effet : elle ne crée aucun nouvel audit. Les futurs domaines, notamment Finance et Banque, restent invisibles jusqu’à la définition et la revue d’une projection dédiée.
 
 ### Historique privé des commandes IDA
 
@@ -203,6 +203,8 @@ Sans bornes, le serveur dérive jour, semaine (lundi inclus) ou mois dans le fus
 - Une date absente ou non future selon la même horloge serveur répond `409 SCHEDULE_TIME_UNAVAILABLE`. Un seul snapshot actif est permis par variante et le même couple `(platform_id, scheduled_at)` est exclusif dans un workspace ; ces collisions répondent `409 SCHEDULE_CONFLICT`. Deux plateformes distinctes peuvent utiliser le même instant.
 - Le premier succès retourne `201`; le retry exact d’un snapshot actif retourne `200`, y compris après l’horaire, sans nouvelle écriture. La réponse sûre contient `id`, variante, post, plateforme, date, fuseau, état `SCHEDULED`, approbation, hash et `deliveryState: NOT_CONFIGURED`.
 - La route autorise uniquement l’outil allowlisté `schedule_approved_post_variant` (`CALENDAR` / `APPROVAL_REQUIRED`) avec la preuve déjà résolue de l’approbation humaine. Elle écrit un audit redacted `post_variant.internal_scheduled`, mais ne modifie jamais `scheduled_posts`, les médias, `delivery_state`, approvals, jobs, OAuth, adaptateurs sociaux ou réseau externe.
+- `POST /v1/internal-post-schedules/:scheduleId/cancel` ne reçoit aucun corps. Il applique atomiquement `SCHEDULED → CANCELLED` seulement au snapshot du workspace serveur et fixe l’acteur/l’instant côté serveur. Un retry retourne le même snapshot `CANCELLED` sans réécrire sa preuve d’annulation ni ajouter un second audit. Une ressource absente ou étrangère répond dans les deux cas `404 INTERNAL_SCHEDULE_NOT_FOUND`.
+- Cette annulation ne relit pas le hash ou l’approbation courante : un snapshot devenu obsolète reste toujours retirable. Le tool `cancel_internal_post_schedule` est allowlisté sous `CALENDAR` / `WRITE`; il écrit seulement `post_variant.internal_schedule_cancelled` avec des identifiants et l’état, et ne touche jamais une livraison, publication, scheduler, compte social, média, approval ou `scheduled_posts`.
 
 ### Task Center : finalisation contrôlée
 
@@ -416,6 +418,7 @@ POST   /v1/post-variants/:variantId/request-approval
 POST   /v1/post-variants/:variantId/approve
 POST   /v1/post-variants/:variantId/reject
 POST   /v1/post-variants/:variantId/internal-schedules
+POST   /v1/internal-post-schedules/:scheduleId/cancel
 
 GET    /v1/calendar?from=:iso&to=:iso&view=day|week|month
 GET    /v1/calendar/conflicts?from=:iso&to=:iso
