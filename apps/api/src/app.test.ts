@@ -316,6 +316,43 @@ describe("IDA API — première tranche Phase 1", () => {
     });
   });
 
+  it("explique l’indisponibilité d’une plateforme sans inventer de connexion sociale", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/ida/commands",
+      payload: { message: "IDA, pourquoi TikTok ne fonctionne plus ?" },
+    });
+    expect(response.statusCode).toBe(200);
+
+    const body = response.json() as {
+      data: {
+        kind: string;
+        command: { intent: string; requestedPermission: string };
+        message: string;
+        tools: Array<{ key: string; moduleKey: string; permission: string }>;
+        result: { system: Array<{ component: string; state: string; message: string }> };
+      };
+    };
+
+    expect(body.data).toMatchObject({
+      kind: "SYSTEM",
+      command: { intent: "UNKNOWN", requestedPermission: "READ" },
+      message:
+        "TikTok n’est pas connecté à IDA dans cette tranche locale. Sa matrice de capacités est seulement déclarative : aucun compte lié, OAuth lancé, token ni autorisation de publication n’est actif.",
+      tools: [{ key: "get_system_status", moduleKey: "SYSTEM", permission: "READ" }],
+    });
+    expect(body.data.result.system).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          component: "SOCIAL_ACCOUNTS",
+          state: "DISCONNECTED",
+          message: "Aucun compte social connecté dans cette tranche.",
+        }),
+      ]),
+    );
+    expect(JSON.stringify(body.data.result.system)).not.toContain("TikTok");
+  });
+
   it("inclut un snapshot interne valide dans la journée sans le présenter comme une publication", async () => {
     const dayStorageDir = await mkdtemp(join(tmpdir(), "ida-today-internal-schedule-"));
     let dayApp: Awaited<ReturnType<typeof createApp>> | undefined;

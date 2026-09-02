@@ -28,6 +28,8 @@ export class CommandInputError extends Error {
 
 type DeterministicCommandKind = "TODAY" | "TOMORROW" | "UNUSED_CONTENT" | "SYSTEM" | "HELP";
 
+type SocialPlatformDiagnostic = "Instagram" | "TikTok" | "YouTube" | "Facebook";
+
 export type CommandToolUse = {
   key: string;
   moduleKey: "TASKS" | "CONTENT" | "SYSTEM" | "IDA";
@@ -73,12 +75,34 @@ function normalize(text: string): string {
     .trim();
 }
 
+function socialPlatformFromMessage(normalizedMessage: string): SocialPlatformDiagnostic | undefined {
+  if (normalizedMessage.includes("instagram")) {
+    return "Instagram";
+  }
+
+  if (normalizedMessage.includes("tiktok")) {
+    return "TikTok";
+  }
+
+  if (normalizedMessage.includes("youtube")) {
+    return "YouTube";
+  }
+
+  if (normalizedMessage.includes("facebook")) {
+    return "Facebook";
+  }
+
+  return undefined;
+}
+
 function classify(message: string): {
   kind: DeterministicCommandKind;
   intent: IdaCommandIntent;
   dayOffset?: 0 | 1;
+  socialPlatform?: SocialPlatformDiagnostic;
 } {
   const normalized = normalize(message);
+  const socialPlatform = socialPlatformFromMessage(normalized);
 
   if (normalized.includes("demain") || normalized.includes("tomorrow")) {
     return { kind: "TOMORROW", intent: "PREPARE_DAY", dayOffset: 1 };
@@ -101,9 +125,14 @@ function classify(message: string): {
     normalized.includes("system") ||
     normalized.includes("statut") ||
     normalized.includes("etat") ||
-    normalized.includes("fonctionne")
+    normalized.includes("fonctionne") ||
+    (socialPlatform !== undefined &&
+      (normalized.includes("pourquoi") ||
+        normalized.includes("why") ||
+        normalized.includes("probleme") ||
+        normalized.includes("connecte")))
   ) {
-    return { kind: "SYSTEM", intent: "UNKNOWN" };
+    return { kind: "SYSTEM", intent: "UNKNOWN", socialPlatform };
   }
 
   return { kind: "HELP", intent: "UNKNOWN" };
@@ -128,6 +157,14 @@ function currentSystemStatus(now: string): SystemStatus[] {
       checkedAt: now,
     },
   ].map((status) => systemStatusSchema.parse(status));
+}
+
+function systemMessage(socialPlatform?: SocialPlatformDiagnostic): string {
+  if (socialPlatform) {
+    return `${socialPlatform} n’est pas connecté à IDA dans cette tranche locale. Sa matrice de capacités est seulement déclarative : aucun compte lié, OAuth lancé, token ni autorisation de publication n’est actif.`;
+  }
+
+  return "IDA est en mode démo local : la base est prête, les intégrations externes ne sont pas encore connectées.";
 }
 
 function getMessageFromBody(body: unknown): string {
@@ -256,8 +293,7 @@ export class DeterministicIdaCore {
 
         return this.complete(command, {
           kind: classified.kind,
-          message:
-            "IDA est en mode démo local : la base est prête, les intégrations externes ne sont pas encore connectées.",
+          message: systemMessage(classified.socialPlatform),
           tools: [tool],
           result: { system },
         });
