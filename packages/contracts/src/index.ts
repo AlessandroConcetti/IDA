@@ -359,6 +359,9 @@ export const mediaAssetSchema = z.object({
   tags: z.array(mediaTagSchema).default([]),
   description: mediaDescriptionSchema.optional(),
   status: mediaStatusSchema,
+  // Ce booléen ne révèle aucune clé ou URL de stockage. Il indique seulement
+  // qu'une lecture privée locale peut être demandée pour cet asset autorisé.
+  previewAvailable: z.boolean().default(false),
   usageCount: z.number().int().nonnegative().default(0),
   lastUsedAt: timestampSchema.optional(),
   createdAt: timestampSchema,
@@ -381,6 +384,16 @@ export const mediaListQuerySchema = z
   .strict();
 
 export type MediaListQuery = z.infer<typeof mediaListQuerySchema>;
+
+// La route d'aperçu ne reçoit jamais de chemin, clé de stockage ou workspace.
+// Le scope est toujours résolu par l'API avant de consulter le stockage privé.
+export const mediaPreviewParamsSchema = z
+  .object({
+    mediaId: entityIdSchema.max(80).regex(/^med_[a-z0-9_]+$/i),
+  })
+  .strict();
+
+export type MediaPreviewParams = z.infer<typeof mediaPreviewParamsSchema>;
 
 // La rotation locale ne classe ni ne note les médias : elle ne propose que
 // ceux qui sont UNUSED et sans aucun lien éditorial. Un lien, même incomplet,

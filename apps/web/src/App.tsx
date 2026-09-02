@@ -515,16 +515,80 @@ function TrackPanel({ items, source }: { items: Track[]; source: DashboardSource
   );
 }
 
+function MediaThumbnail({ asset, previewEnabled }: { asset: MediaAsset; previewEnabled: boolean }) {
+  const [previewUnavailable, setPreviewUnavailable] = useState(false);
+  const previewUrl =
+    previewEnabled && asset.previewAvailable && asset.previewUrl && !previewUnavailable ? asset.previewUrl : undefined;
+  const fallbackGlyph =
+    asset.kind === "VIDEO" ? "▶" : asset.kind === "AUDIO" ? "♫" : asset.kind === "IMAGE" ? "◇" : "◫";
+
+  if (!previewUrl) {
+    return (
+      <div className={`media-thumbnail ${asset.tone}`} aria-hidden="true">
+        <span>{fallbackGlyph}</span>
+      </div>
+    );
+  }
+
+  if (asset.kind === "IMAGE") {
+    return (
+      <div className={`media-thumbnail ${asset.tone} has-preview`}>
+        <img
+          src={previewUrl}
+          alt={`Aperçu privé de ${asset.filename}`}
+          loading="lazy"
+          onError={() => setPreviewUnavailable(true)}
+        />
+      </div>
+    );
+  }
+
+  if (asset.kind === "VIDEO") {
+    return (
+      <div className={`media-thumbnail ${asset.tone} has-preview`}>
+        {/* biome-ignore lint/a11y/useMediaCaption: les sous-titres restent une métadonnée volontaire à ajouter, jamais générée ou inventée. */}
+        <video
+          controls
+          playsInline
+          preload="metadata"
+          aria-label={`Aperçu privé de ${asset.filename}`}
+          onError={() => setPreviewUnavailable(true)}
+        >
+          <source src={previewUrl} />
+        </video>
+      </div>
+    );
+  }
+
+  if (asset.kind === "AUDIO") {
+    return (
+      <div className={`media-thumbnail ${asset.tone} has-preview audio-preview`}>
+        {/* biome-ignore lint/a11y/useMediaCaption: les sous-titres restent une métadonnée volontaire à ajouter, jamais générée ou inventée. */}
+        <audio
+          controls
+          preload="metadata"
+          aria-label={`Aperçu privé de ${asset.filename}`}
+          onError={() => setPreviewUnavailable(true)}
+        >
+          <source src={previewUrl} />
+        </audio>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`media-thumbnail ${asset.tone}`} aria-hidden="true">
+      <span>{fallbackGlyph}</span>
+    </div>
+  );
+}
+
 function MediaGrid({ assets, detailed = false }: { assets: MediaAsset[]; detailed?: boolean }) {
   return (
     <section className="media-grid" aria-label={detailed ? "Résultats de la Content Library" : "Médias récents"}>
       {assets.map((asset) => (
         <article className="media-card" key={asset.id ?? asset.filename}>
-          <div className={`media-thumbnail ${asset.tone}`} aria-hidden="true">
-            <span>
-              {asset.kind === "VIDEO" ? "▶" : asset.kind === "AUDIO" ? "♫" : asset.kind === "IMAGE" ? "◇" : "◫"}
-            </span>
-          </div>
+          <MediaThumbnail asset={asset} previewEnabled={detailed} />
           <div className="media-copy">
             <div className="media-title-line">
               <h3>{asset.filename}</h3>
@@ -536,6 +600,7 @@ function MediaGrid({ assets, detailed = false }: { assets: MediaAsset[]; detaile
                 <div className="media-library-meta">
                   <span>{asset.kind}</span>
                   {asset.sizeLabel ? <span>{asset.sizeLabel}</span> : null}
+                  <span>{asset.previewAvailable ? "Aperçu privé" : "Aperçu indisponible"}</span>
                   <span>
                     {asset.usageCount ?? 0} utilisation{asset.usageCount === 1 ? "" : "s"}
                   </span>
@@ -1668,8 +1733,8 @@ function ContentView({ onMediaAssetCreated }: { onMediaAssetCreated: (asset: Med
           </span>
         </div>
         <p className="content-library-intro">
-          Recherche locale dans les noms, descriptions et tags du workspace. Aucun fichier, aperçu ou lien de stockage
-          n’est exposé.
+          Recherche locale dans les noms, descriptions et tags du workspace. Aucun fichier ni lien de stockage n’est
+          exposé ; les aperçus disponibles restent servis par une route privée autorisée.
         </p>
         <form className="content-library-search" noValidate onSubmit={handleSearch}>
           <label className="content-library-filter content-library-query" htmlFor="content-search-query">

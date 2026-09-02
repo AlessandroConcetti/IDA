@@ -56,6 +56,8 @@ export interface MediaAsset {
   tags?: string[];
   sizeLabel?: string;
   usageCount?: number;
+  previewAvailable?: boolean;
+  previewUrl?: string;
 }
 
 export const navigation: NavigationItem[] = [

@@ -67,7 +67,7 @@ Créer le premier produit réellement utilisable : un Command Center responsive 
 - commandes textuelles déterministes de lecture : journée civile du workspace (aujourd’hui ou demain, tâches et calendrier interne valides), médias réellement disponibles à proposer (formulation naturelle « contenus inutilisés ») et état système ;
 - Artist Brain éditable : identité, ton, genres, influences, audience, objectifs et vocabulaire, avec validation, permission `WRITE` interne et persistance locale ;
 - Music Brain : Release Registry et création locale contrôlée de morceaux avec métadonnées, validation stricte, scope résolu par le serveur, outils `WRITE` allowlistés et audits append-only redacted ; une release reste sans association automatique de track, média, lien externe ou publication ;
-- Content Library : import local privé et recherche filtrée de métadonnées, avec limites, hash SHA-256, détection de doublon, tags normalisés, stockage à clé générée, lecture bornée isolée au workspace, audit append-only pour l’import et projection de rotation factuelle des médias `UNUSED` sans lien éditorial ;
+- Content Library : import local privé, recherche filtrée de métadonnées et aperçu autorisé d’images, audios et vidéos importés, avec limites, hash SHA-256, détection de doublon, tags normalisés, stockage à clé générée, lecture bornée isolée au workspace, cache privé, support HTTP Range, audit append-only pour l’import et projection de rotation factuelle des médias `UNUSED` sans lien éditorial ;
 - Campaign Brief Registry : liste et création locale de briefs internes `DRAFT`, nom normalisé unique par workspace, lien optionnel vers une release du même workspace/projet protégé par version, outil `CAMPAIGNS` / `WRITE` et audit redacted, sans date, pilier, contenu, calendrier ni effet externe ;
 - Memory Consent Center : proposition de préférence en `PENDING`, décision humaine explicite et finale, scope serveur, timestamps persistés et audit sans contenu libre ;
 - Task Center : création locale contrôlée, échéance facultative, finalisation explicite idempotente, scope serveur et audit append-only sans contenu libre ;
@@ -77,7 +77,7 @@ Créer le premier produit réellement utilisable : un Command Center responsive 
 - IDA History : registre privé local des paires demande/réponse de commandes `READ / COMPLETED`, restauré pour le même acteur/workspace par pagination cléset, sans résultat d’outil, paramètres, raisonnement ni mémoire implicite ; l’écriture est auditée sans texte libre et la consultation reste sans effet ;
 - PGlite uniquement pour le développement/test local ; aucun compte social, aucun token, aucune publication et aucune donnée personnelle réelle.
 
-La tranche suivante de Phase 1 remplace le contexte de démonstration par une vraie identité/workspace, puis ajoute les prévisualisations/traitements média sécurisés et les liens contrôlés restants entre campagnes et ressources artistiques. La suite du calendrier couvrira surcharge, répétitions et fraîcheur avant toute automatisation ; aucune de ces étapes ne débloque encore la publication sociale.
+La tranche suivante de Phase 1 remplace le contexte de démonstration par une vraie identité/workspace, puis ajoute les traitements média de production et les liens contrôlés restants entre campagnes et ressources artistiques. La suite du calendrier couvrira surcharge, répétitions et fraîcheur avant toute automatisation ; aucune de ces étapes ne débloque encore la publication sociale.
 
 ### Périmètre
 

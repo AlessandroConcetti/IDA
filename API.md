@@ -23,7 +23,7 @@ Le premier runtime est une API Fastify locale sur `http://127.0.0.1:8787`, conso
 | `GET /v1/system/status` | Livrée | États factuels de la tranche locale ; les intégrations absentes sont `WARNING` ou `DISCONNECTED`. |
 | `GET /v1/dashboard/summary` | Livrée | Compteurs factuels et date civile du workspace pour le Command Center ; aucune donnée de livraison, compte social ou contenu libre. |
 | `GET /v1/activity-logs` | Livrée | Timeline d’activité locale en lecture seule : projection bornée de l’audit, filtrée par workspace serveur et sans payload, acteur ni données privées. |
-| `GET/PATCH /v1/artist-profile`, `GET/POST /v1/releases`, `GET/POST /v1/tracks`, `GET/POST /v1/media`, `GET /v1/memories` | Livrées | Données de démonstration isolées par workspace côté serveur. L’Artist Brain, la création bornée de releases et morceaux Music Brain et l’import local privé d’un média passent par des outils `WRITE` allowlistés ; `GET /v1/media` filtre localement par texte, statut, type et tag. |
+| `GET/PATCH /v1/artist-profile`, `GET/POST /v1/releases`, `GET/POST /v1/tracks`, `GET/POST /v1/media`, `GET /v1/media/:mediaId/preview`, `GET /v1/memories` | Livrées | Données de démonstration isolées par workspace côté serveur. L’Artist Brain, la création bornée de releases et morceaux Music Brain et l’import local privé d’un média passent par des outils `WRITE` allowlistés ; `GET /v1/media` filtre les métadonnées et l’aperçu lit uniquement un fichier privé autorisé. |
 | `GET /v1/content/rotation` | Livrée | Projection factuelle de médias `AVAILABLE` : seulement les assets `UNUSED` sans aucun lien éditorial, bornée et isolée au workspace. Elle ne calcule aucun score et n’écrit rien. |
 | `GET/POST /v1/campaigns`, `PATCH /v1/campaigns/:campaignId/release` | Livrées | Registre local de briefs de campagne internes. La création force `DRAFT`; un lien optionnel vers une release du même workspace et projet est contrôlé par version via `CAMPAIGNS` / `WRITE`, sans créer de planification ni effet externe. |
 | `POST /v1/memories/proposals`, `POST /v1/memories/:memoryId/confirm`, `POST /v1/memories/:memoryId/reject` | Livrées | Flux de mémoire consentie : une préférence commence forcément à `PENDING` et seule une décision humaine explicite peut la faire passer à `CONFIRMED` ou `REJECTED`. |
@@ -146,6 +146,12 @@ Ce registre n’est pas encore un historique conversationnel général : il ne s
 - Le fichier est enregistré hors de toute URL publique dans un stockage privé à clé générée côté serveur. La clé, le chemin local et toute URL de stockage restent absents des réponses et des journaux. L’asset démarre à `UNUSED`, ses tags sont associés localement et l’activité append-only `media.imported` est écrite.
 - Une réussite retourne `201 Created` avec le contrat `MediaAsset`, et l’asset est ensuite visible uniquement dans `GET /v1/media` du workspace imposé.
 
+`GET /v1/media/:mediaId/preview` fournit un aperçu local uniquement pour une image, un audio ou une vidéo réellement importés dans le workspace résolu côté serveur. Son identifiant est strict (`med_…`) ; il n’accepte ni clé, chemin, URL, workspace ni autre paramètre client. Le serveur relit la référence privée dans la base, vérifie que la clé générée reste sous le répertoire de stockage, que son hash, extension, MIME, type et taille correspondent, puis lit au plus 25&nbsp;MiB.
+
+- La réponse porte le MIME validé, `Content-Disposition: inline`, `Accept-Ranges: bytes`, `Cache-Control: private, no-store` et `X-Content-Type-Options: nosniff`. Une plage HTTP unique valide retourne `206`; une plage invalide retourne `416` avec `Content-Range: bytes */taille`.
+- Un média absent, hors workspace, historique sans fichier local, PDF ou fichier privé manquant retourne le même `404 MEDIA_PREVIEW_NOT_FOUND`, sans révéler de clé ou de chemin. L’aperçu ne publie rien, ne transmet rien à l’IA ou à un tiers, ne modifie aucun statut et n’écrit aucun audit. Les dérivés, transcodages, scan antivirus, URLs signées et aperçu de document restent des étapes de production séparées.
+- `previewAvailable` indique seulement qu’un asset de ce workspace est éligible à cette route ; ce n’est ni une URL de stockage, ni une permission transférable. Le client construit uniquement l’URL API autorisée à partir de l’identifiant déjà reçu.
+
 ### Rotation de contenu factuelle
 
 `GET /v1/content/rotation` accepte uniquement `limit` (entier de `1` à `12`, `12` par défaut). Tout paramètre inconnu, dupliqué — notamment `workspaceId` — ou toute limite invalide répond `400 INVALID_CONTENT_ROTATION_QUERY`.
@@ -237,7 +243,7 @@ La version machine-lisible de ces routes est disponible dans [`docs/openapi/phas
 
 ```text
 Base URL : /v1
-Content-Type : application/json; charset=utf-8 (sauf POST /v1/media : multipart/form-data)
+Content-Type : application/json; charset=utf-8 (sauf POST /v1/media : multipart/form-data et GET /v1/media/:mediaId/preview : média binaire validé)
 Dates : ISO 8601 UTC, par exemple 2026-08-30T16:00:00Z
 IDs : UUID ou ULID opaques
 JSON API : camelCase
@@ -366,7 +372,7 @@ POST   /v1/media/:mediaId/tags
 DELETE /v1/media/:mediaId/tags/:tagId
 ```
 
-Le MVP local livre `GET /v1/media` (recherche de métadonnées bornée) et `POST /v1/media`, vers stockage privé interne et sans URL signée. Les prévisualisations, la pagination par curseur, les intentions d’upload et les modifications restent des cibles ultérieures, à activer seulement avec stockage objet et contrôle de sécurité dédiés :
+Le MVP local livre `GET /v1/media` (recherche de métadonnées bornée), `POST /v1/media` et `GET /v1/media/:mediaId/preview` pour les images, audios et vidéos importés depuis le stockage privé local. Cette dernière route reste autorisée et vérifiée côté serveur, sans URL signée ni accès direct au stockage. La pagination par curseur, les intentions d’upload, les modifications, les dérivés et les aperçus de production restent des cibles ultérieures, à activer seulement avec stockage objet et contrôle de sécurité dédiés :
 
 ```text
 Client → POST upload-intents → URL signée courte

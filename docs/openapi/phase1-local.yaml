@@ -320,7 +320,8 @@ paths:
         Lecture locale bornée et sans effet d'écriture. Les filtres se
         cumulent ; le workspace est résolu côté serveur et ne peut pas être
         fourni par le client. La réponse ne contient jamais de clé, chemin ou
-        URL de stockage.
+        URL de stockage. previewAvailable indique uniquement l'éligibilité à
+        une route d'aperçu privée autorisée.
       parameters:
         - name: q
           in: query
@@ -400,6 +401,68 @@ paths:
           $ref: '#/components/responses/MediaFileTooLarge'
         '415':
           $ref: '#/components/responses/UnsupportedMediaFile'
+  /v1/media/{mediaId}/preview:
+    get:
+      operationId: previewPrivateMedia
+      summary: Sert un aperçu privé local d'un média importé
+      description: >-
+        Lecture sans effet d'écriture d'une image, vidéo ou audio importé dans
+        le workspace résolu côté serveur. Aucun chemin, clé, URL de stockage,
+        workspace ou paramètre de fichier ne vient du client. La réponse garde
+        le MIME validé, Cache-Control private, no-store et accepte une seule
+        plage HTTP bytes. Un PDF ou un média sans fichier local est traité
+        comme absent, sans détail sur le stockage.
+      parameters:
+        - name: mediaId
+          in: path
+          required: true
+          description: Identifiant opaque du média du workspace courant.
+          schema:
+            type: string
+            maxLength: 80
+            pattern: '^med_[A-Za-z0-9_]+$'
+      responses:
+        '200':
+          description: Média privé complet, avec son Content-Type validé.
+          headers:
+            Accept-Ranges:
+              schema: { type: string, enum: [bytes] }
+            Cache-Control:
+              schema: { type: string, enum: ['private, no-store'] }
+            Content-Length:
+              schema: { type: integer, minimum: 0 }
+        '206':
+          description: Plage unique du média privé.
+          headers:
+            Accept-Ranges:
+              schema: { type: string, enum: [bytes] }
+            Cache-Control:
+              schema: { type: string, enum: ['private, no-store'] }
+            Content-Length:
+              schema: { type: integer, minimum: 0 }
+            Content-Range:
+              schema: { type: string }
+        '400':
+          description: Identifiant de média invalide.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Aperçu absent, hors workspace ou non disponible localement.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '416':
+          description: Plage HTTP invalide pour le média privé.
+          headers:
+            Content-Range:
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /v1/content/rotation:
     get:
       operationId: listContentRotationCandidates
@@ -1606,7 +1669,7 @@ components:
           maxLength: 4096
     MediaAsset:
       type: object
-      required: [id, workspaceId, artistProjectId, filename, type, mimeType, size, hash, tags, status, usageCount, createdAt, updatedAt]
+      required: [id, workspaceId, artistProjectId, filename, type, mimeType, size, hash, tags, status, previewAvailable, usageCount, createdAt, updatedAt]
       properties:
         id: { type: string }
         workspaceId: { type: string }
@@ -1622,6 +1685,9 @@ components:
           items: { type: string }
         status:
           $ref: '#/components/schemas/MediaStatus'
+        previewAvailable:
+          type: boolean
+          description: Éligibilité à GET /v1/media/{mediaId}/preview ; jamais une URL ou clé de stockage.
         usageCount: { type: integer, minimum: 0 }
         lastUsedAt: { type: string, format: date-time }
         createdAt: { type: string, format: date-time }

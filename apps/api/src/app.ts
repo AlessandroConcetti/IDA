@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, unlink, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, isAbsolute, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import cors from "@fastify/cors";
@@ -35,6 +35,7 @@ import {
   mediaAssetSchema,
   mediaImportSchema,
   mediaListQuerySchema,
+  mediaPreviewParamsSchema,
   memoryDecisionParamsSchema,
   memoryDecisionRequestSchema,
   memoryProposalCreateSchema,
@@ -71,6 +72,7 @@ import {
   type Memory,
   type MemoryDecision,
   type PostVariantDecision,
+  type PrivateMediaFile,
   type Release,
   type Task,
   type Track,
@@ -107,6 +109,11 @@ type ParsedMediaImport = {
 type StoredPrivateMedia = {
   storageKey: string;
   filePath: string;
+};
+
+type MediaByteRange = {
+  start: number;
+  end: number;
 };
 
 const mediaMaxBytes = 25 * 1024 * 1024;
@@ -322,6 +329,15 @@ class MediaListQueryInputError extends Error {
   }
 }
 
+class MediaPreviewParamsInputError extends Error {
+  readonly statusCode = 400;
+  readonly code = "INVALID_MEDIA_PREVIEW";
+
+  constructor() {
+    super("L’identifiant de prévisualisation du média est invalide.");
+  }
+}
+
 class ContentRotationQueryInputError extends Error {
   readonly statusCode = 400;
   readonly code = "INVALID_CONTENT_ROTATION_QUERY";
@@ -434,6 +450,7 @@ function toMediaAssetResponse(asset: MediaAsset) {
     tags: asset.tags,
     description: optionalString(asset.description),
     status: asset.status,
+    previewAvailable: asset.previewAvailable,
     usageCount: asset.usageCount,
     lastUsedAt: asset.lastUsedAt ?? undefined,
     createdAt: asset.createdAt,
@@ -550,6 +567,140 @@ async function writePrivateMedia(
   await writeFile(filePath, buffer, { flag: "wx" });
 
   return { storageKey, filePath };
+}
+
+function resolvePrivateMediaPreviewPath(
+  storageDir: string,
+  workspaceId: string,
+  media: PrivateMediaFile,
+): string | undefined {
+  const storageSegments = media.storageKey.split("/");
+  const storageFilename = storageSegments[2];
+  const mediaExtension = storageFilename ? extname(storageFilename).toLocaleLowerCase("en-US") : "";
+  const storedObjectId = storageFilename?.slice(media.sha256.length + 1, -mediaExtension.length);
+  const supported = supportedMediaFiles.some(
+    (candidate) =>
+      candidate.mediaType === media.mediaType &&
+      candidate.mimeType === media.mimeType.toLocaleLowerCase("en-US") &&
+      candidate.extension === mediaExtension,
+  );
+
+  if (
+    !/^[a-f0-9]{64}$/.test(media.sha256) ||
+    storageSegments.length !== 3 ||
+    storageSegments[0] !== workspaceId ||
+    storageSegments[1] !== media.sha256.slice(0, 2) ||
+    !storageFilename?.startsWith(`${media.sha256}-`) ||
+    !storedObjectId ||
+    !/^[a-f0-9]{32}$/.test(storedObjectId) ||
+    !supported
+  ) {
+    return undefined;
+  }
+
+  const storageRoot = resolve(storageDir);
+  const filePath = resolve(storageRoot, ...storageSegments);
+  const locationWithinStorage = relative(storageRoot, filePath);
+
+  if (
+    locationWithinStorage.length === 0 ||
+    locationWithinStorage === ".." ||
+    locationWithinStorage.startsWith(`..${sep}`) ||
+    isAbsolute(locationWithinStorage)
+  ) {
+    return undefined;
+  }
+
+  return filePath;
+}
+
+function isMissingPrivateMedia(error: unknown): boolean {
+  return error instanceof Error && "code" in error && (error.code === "ENOENT" || error.code === "ENOTDIR");
+}
+
+async function readPrivateMediaPreview(
+  storageDir: string,
+  workspaceId: string,
+  media: PrivateMediaFile,
+): Promise<Buffer | undefined> {
+  const filePath = resolvePrivateMediaPreviewPath(storageDir, workspaceId, media);
+
+  if (!filePath || media.byteSize < 0 || media.byteSize > mediaMaxBytes) {
+    return undefined;
+  }
+
+  try {
+    const details = await lstat(filePath);
+
+    if (!details.isFile() || details.isSymbolicLink() || details.size !== media.byteSize) {
+      return undefined;
+    }
+
+    const buffer = await readFile(filePath);
+
+    if (buffer.byteLength !== media.byteSize) {
+      return undefined;
+    }
+
+    return createHash("sha256").update(buffer).digest("hex") === media.sha256 ? buffer : undefined;
+  } catch (error: unknown) {
+    if (isMissingPrivateMedia(error)) {
+      return undefined;
+    }
+
+    throw error;
+  }
+}
+
+function parseMediaByteRange(value: string | undefined, byteSize: number): MediaByteRange | "invalid" | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const header = value.trim();
+
+  if (!header.startsWith("bytes=") || header.includes(",") || byteSize <= 0) {
+    return "invalid";
+  }
+
+  const range = header.slice("bytes=".length);
+  const separator = range.indexOf("-");
+
+  if (separator === -1 || separator !== range.lastIndexOf("-")) {
+    return "invalid";
+  }
+
+  const rawStart = range.slice(0, separator);
+  const rawEnd = range.slice(separator + 1);
+  const isInteger = (part: string) => /^\d+$/u.test(part) && Number.isSafeInteger(Number(part));
+
+  if (rawStart.length === 0) {
+    if (!isInteger(rawEnd) || Number(rawEnd) === 0) {
+      return "invalid";
+    }
+
+    const suffixLength = Number(rawEnd);
+
+    return { start: Math.max(byteSize - suffixLength, 0), end: byteSize - 1 };
+  }
+
+  if (!isInteger(rawStart) || (rawEnd.length > 0 && !isInteger(rawEnd))) {
+    return "invalid";
+  }
+
+  const start = Number(rawStart);
+
+  if (start >= byteSize) {
+    return "invalid";
+  }
+
+  const requestedEnd = rawEnd.length === 0 ? byteSize - 1 : Number(rawEnd);
+
+  if (requestedEnd < start) {
+    return "invalid";
+  }
+
+  return { start, end: Math.min(requestedEnd, byteSize - 1) };
 }
 
 async function removePrivateMedia(filePath: string): Promise<void> {
@@ -874,6 +1025,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
       error instanceof InternalPostScheduleCancellationInputError ||
       error instanceof CalendarQueryInputError ||
       error instanceof MediaListQueryInputError ||
+      error instanceof MediaPreviewParamsInputError ||
       error instanceof ContentRotationQueryInputError ||
       error instanceof ActivityLogQueryInputError ||
       error instanceof DashboardSummaryQueryInputError ||
@@ -1552,6 +1704,52 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     return {
       data: media.map(toMediaAssetResponse),
     };
+  });
+
+  app.get("/v1/media/:mediaId/preview", async (request, reply) => {
+    const params = mediaPreviewParamsSchema.safeParse(request.params);
+
+    if (!params.success) {
+      throw new MediaPreviewParamsInputError();
+    }
+
+    const media = await database.findPrivateMediaFile(demoContext.workspaceId, params.data.mediaId);
+    const buffer = media ? await readPrivateMediaPreview(storageDir, demoContext.workspaceId, media) : undefined;
+
+    // Même réponse pour une ressource inexistante, hors workspace, non
+    // prévisualisable ou manquante du stockage. Aucun détail de stockage n'est
+    // renvoyé et cette lecture ne génère ni audit ni effet de bord.
+    if (!media || !buffer) {
+      return reply.status(404).send({
+        error: { code: "MEDIA_PREVIEW_NOT_FOUND", message: "Aucun aperçu privé n’est disponible pour ce média." },
+      });
+    }
+
+    const byteRange = parseMediaByteRange(request.headers.range, buffer.byteLength);
+
+    if (byteRange === "invalid") {
+      reply.header("Content-Range", `bytes */${buffer.byteLength}`);
+      return reply.status(416).send({
+        error: { code: "MEDIA_PREVIEW_RANGE_INVALID", message: "La plage demandée pour cet aperçu est invalide." },
+      });
+    }
+
+    const content = byteRange ? buffer.subarray(byteRange.start, byteRange.end + 1) : buffer;
+
+    reply
+      .header("Accept-Ranges", "bytes")
+      .header("Cache-Control", "private, no-store")
+      .header("Content-Disposition", "inline")
+      .header("Content-Length", String(content.byteLength))
+      .header("X-Content-Type-Options", "nosniff")
+      .type(media.mimeType);
+
+    if (byteRange) {
+      reply.header("Content-Range", `bytes ${byteRange.start}-${byteRange.end}/${buffer.byteLength}`);
+      return reply.status(206).send(content);
+    }
+
+    return reply.status(200).send(content);
   });
 
   app.get("/v1/content/rotation", async (request) => {

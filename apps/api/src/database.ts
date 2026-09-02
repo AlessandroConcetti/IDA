@@ -99,6 +99,7 @@ export type MediaAsset = {
   byteSize: number;
   sha256: string;
   status: MediaStatus;
+  previewAvailable: boolean;
   description: string | null;
   usageCount: number;
   lastUsedAt: string | null;
@@ -127,6 +128,16 @@ export type MediaImportFile = {
   byteSize: number;
   sha256: string;
   storageKey: string;
+};
+
+// Ce type reste strictement interne à l'API de prévisualisation. Il ne doit
+// jamais traverser un contrat HTTP ou une projection affichée dans l'interface.
+export type PrivateMediaFile = {
+  storageKey: string;
+  sha256: string;
+  mimeType: string;
+  mediaType: "IMAGE" | "VIDEO" | "AUDIO" | "DOCUMENT" | "OTHER";
+  byteSize: number;
 };
 
 export type CreateMediaResult =
@@ -524,6 +535,7 @@ function toMediaAsset(row: ScalarRow): MediaAsset {
     byteSize: asNumber(row.byteSize),
     sha256: asString(row.sha256),
     status: asString(row.status) as MediaStatus,
+    previewAvailable: asBoolean(row.previewAvailable),
     description: asNullableString(row.description),
     usageCount: asNumber(row.usageCount),
     lastUsedAt: asTimestamp(row.lastUsedAt),
@@ -1713,6 +1725,8 @@ export class DemoDatabase {
           asset.byte_size AS "byteSize",
           asset.sha256,
           asset.status,
+          asset.storage_key IS NOT NULL
+            AND asset.media_type IN ('IMAGE', 'VIDEO', 'AUDIO') AS "previewAvailable",
           asset.description,
           asset.usage_count AS "usageCount",
           asset.last_used_at AS "lastUsedAt",
@@ -1740,6 +1754,40 @@ export class DemoDatabase {
     );
 
     return result.rows.map(toMediaAsset);
+  }
+
+  async findPrivateMediaFile(workspaceId: string, mediaId: string): Promise<PrivateMediaFile | undefined> {
+    const result = await this.pglite.query<ScalarRow>(
+      `
+        SELECT
+          storage_key AS "storageKey",
+          sha256,
+          mime_type AS "mimeType",
+          media_type AS "mediaType",
+          byte_size AS "byteSize"
+        FROM media_assets
+        WHERE workspace_id = $1
+          AND id = $2
+          AND storage_key IS NOT NULL
+          AND media_type IN ('IMAGE', 'VIDEO', 'AUDIO')
+        LIMIT 1
+      `,
+      [workspaceId, mediaId],
+    );
+    const row = result.rows[0];
+    const storageKey = row ? asNullableString(row.storageKey) : null;
+
+    if (!row || !storageKey) {
+      return undefined;
+    }
+
+    return {
+      storageKey,
+      sha256: asString(row.sha256),
+      mimeType: asString(row.mimeType),
+      mediaType: asString(row.mediaType) as PrivateMediaFile["mediaType"],
+      byteSize: asNumber(row.byteSize),
+    };
   }
 
   async listContentRotationCandidates(workspaceId: string, limit = 12): Promise<ContentRotationCandidate[]> {
@@ -1863,6 +1911,7 @@ export class DemoDatabase {
             byte_size AS "byteSize",
             sha256,
             status,
+            media_type IN ('IMAGE', 'VIDEO', 'AUDIO') AS "previewAvailable",
             description,
             usage_count AS "usageCount",
             last_used_at AS "lastUsedAt",

@@ -1127,6 +1127,99 @@ describe("IDA API — première tranche Phase 1", () => {
     );
   });
 
+  it("sert un aperçu privé borné et compatible avec la lecture audio/vidéo sans exposer le stockage", async () => {
+    const file = Buffer.from("ida-private-preview-audio-content");
+    const imported = await app.inject({
+      method: "POST",
+      url: "/v1/media",
+      ...multipartPayload([{ name: "file", filename: "preview-check.mp3", contentType: "audio/mpeg", value: file }]),
+    });
+    expect(imported.statusCode).toBe(201);
+    const importedAsset = (imported.json() as { data: { id: string; previewAvailable: boolean } }).data;
+    expect(importedAsset.previewAvailable).toBe(true);
+
+    const listing = await app.inject({ method: "GET", url: "/v1/media?type=AUDIO" });
+    expect(listing.statusCode).toBe(200);
+    const listedAsset = (listing.json() as { data: Array<Record<string, unknown>> }).data.find(
+      (asset) => asset.id === importedAsset.id,
+    );
+    expect(listedAsset).toMatchObject({ id: importedAsset.id, previewAvailable: true });
+    expect(listedAsset).not.toHaveProperty("storageKey");
+    expect(listedAsset).not.toHaveProperty("filePath");
+
+    const pdfImport = await app.inject({
+      method: "POST",
+      url: "/v1/media",
+      ...multipartPayload([
+        { name: "file", filename: "private-notes.pdf", contentType: "application/pdf", value: Buffer.from("%PDF-1.7") },
+      ]),
+    });
+    expect(pdfImport.statusCode).toBe(201);
+    const pdfAsset = (pdfImport.json() as { data: { id: string; previewAvailable: boolean } }).data;
+    expect(pdfAsset.previewAvailable).toBe(false);
+
+    const pdfPreview = await app.inject({ method: "GET", url: `/v1/media/${pdfAsset.id}/preview` });
+    expect(pdfPreview.statusCode).toBe(404);
+    expect(pdfPreview.json()).toMatchObject({ error: { code: "MEDIA_PREVIEW_NOT_FOUND" } });
+
+    const activityBeforePreview = await app.inject({ method: "GET", url: "/v1/activity-logs?limit=30" });
+    expect(activityBeforePreview.statusCode).toBe(200);
+
+    const whole = await app.inject({ method: "GET", url: `/v1/media/${importedAsset.id}/preview` });
+    expect(whole.statusCode).toBe(200);
+    expect(whole.headers["content-type"]).toContain("audio/mpeg");
+    expect(whole.headers["content-length"]).toBe(String(file.byteLength));
+    expect(whole.headers["accept-ranges"]).toBe("bytes");
+    expect(whole.headers["cache-control"]).toBe("private, no-store");
+    expect(whole.headers["x-content-type-options"]).toBe("nosniff");
+    expect(whole.rawPayload).toEqual(file);
+
+    const partial = await app.inject({
+      method: "GET",
+      url: `/v1/media/${importedAsset.id}/preview`,
+      headers: { range: "bytes=4-10" },
+    });
+    expect(partial.statusCode).toBe(206);
+    expect(partial.headers["content-range"]).toBe(`bytes 4-10/${file.byteLength}`);
+    expect(partial.headers["content-length"]).toBe("7");
+    expect(partial.rawPayload).toEqual(file.subarray(4, 11));
+
+    const suffix = await app.inject({
+      method: "GET",
+      url: `/v1/media/${importedAsset.id}/preview`,
+      headers: { range: "bytes=-5" },
+    });
+    expect(suffix.statusCode).toBe(206);
+    expect(suffix.headers["content-range"]).toBe(
+      `bytes ${file.byteLength - 5}-${file.byteLength - 1}/${file.byteLength}`,
+    );
+    expect(suffix.rawPayload).toEqual(file.subarray(-5));
+
+    const malformedRange = await app.inject({
+      method: "GET",
+      url: `/v1/media/${importedAsset.id}/preview`,
+      headers: { range: "bytes=999-1000" },
+    });
+    expect(malformedRange.statusCode).toBe(416);
+    expect(malformedRange.headers["content-range"]).toBe(`bytes */${file.byteLength}`);
+    expect(malformedRange.json()).toMatchObject({ error: { code: "MEDIA_PREVIEW_RANGE_INVALID" } });
+
+    for (const mediaId of ["med_studio_light", "med_other_workspace"]) {
+      const unavailable = await app.inject({ method: "GET", url: `/v1/media/${mediaId}/preview` });
+
+      expect(unavailable.statusCode).toBe(404);
+      expect(unavailable.json()).toMatchObject({ error: { code: "MEDIA_PREVIEW_NOT_FOUND" } });
+    }
+
+    const invalidParams = await app.inject({ method: "GET", url: "/v1/media/not-valid/preview" });
+    expect(invalidParams.statusCode).toBe(400);
+    expect(invalidParams.json()).toMatchObject({ error: { code: "INVALID_MEDIA_PREVIEW" } });
+
+    const activityAfterPreview = await app.inject({ method: "GET", url: "/v1/activity-logs?limit=30" });
+    expect(activityAfterPreview.statusCode).toBe(200);
+    expect(activityAfterPreview.json()).toEqual(activityBeforePreview.json());
+  });
+
   it("conserve un média importé après un redémarrage local", async () => {
     const dataDir = await mkdtemp(join(tmpdir(), "ida-media-data-"));
     const persistentStorageDir = await mkdtemp(join(tmpdir(), "ida-media-private-storage-"));

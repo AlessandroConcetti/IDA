@@ -284,6 +284,13 @@ const configuredApiUrl = import.meta.env.VITE_IDA_API_URL?.trim() ?? "";
 export const apiBaseUrl = configuredApiUrl.replace(/\/+$/, "");
 export const isApiConfigured = true;
 
+// Cette URL pointe vers une route API autorisée, jamais vers une clé ou un
+// chemin de stockage. Lorsque l'authentification réelle arrivera, la même
+// route gardera la vérification de session et de workspace côté serveur.
+export function mediaPreviewUrl(mediaId: string): string {
+  return `${apiBaseUrl}/v1/media/${encodeURIComponent(mediaId)}/preview`;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -1267,6 +1274,7 @@ function formatFileSize(value: unknown): string | undefined {
 
 function toMediaAsset(record: Record<string, unknown>, index = 0): MediaAsset {
   const tones: MediaAsset["tone"][] = ["violet", "blue", "coral"];
+  const id = readString(record.id);
 
   const description = readString(record.description);
   const tags = Array.isArray(record.tags)
@@ -1274,12 +1282,13 @@ function toMediaAsset(record: Record<string, unknown>, index = 0): MediaAsset {
     : [];
   const usageCount = readNumber(record.usageCount) ?? 0;
   const size = formatFileSize(record.size);
+  const previewAvailable = record.previewAvailable === true;
   const detail =
     description ??
     (tags.length > 0 ? tags.join(" · ") : (size ?? `${usageCount} utilisation${usageCount === 1 ? "" : "s"}`));
 
   return {
-    id: readString(record.id),
+    id,
     filename: readString(record.filename) ?? "untitled-asset",
     kind: mediaKind(record.type),
     status: mediaStatus(record.status),
@@ -1288,6 +1297,8 @@ function toMediaAsset(record: Record<string, unknown>, index = 0): MediaAsset {
     tags,
     sizeLabel: size,
     usageCount,
+    previewAvailable,
+    previewUrl: id && previewAvailable ? mediaPreviewUrl(id) : undefined,
   };
 }
 
