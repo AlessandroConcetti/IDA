@@ -140,7 +140,10 @@ paths:
   /v1/releases:
     get:
       operationId: listReleases
-      summary: Liste les releases de démonstration
+      summary: Liste les releases locales du Music Brain
+      description: >-
+        Lecture du workspace résolu côté serveur. Elle ne retourne aucune
+        relation de track ou média, aucun lien externe et n'écrit aucun audit.
       responses:
         '200':
           description: Releases du workspace local
@@ -148,6 +151,34 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ReleaseListResponse'
+    post:
+      operationId: createRelease
+      summary: Crée une release locale dans le Music Brain
+      description: >-
+        Accepte uniquement les métadonnées locales de la release. Le serveur
+        impose workspace, projet, acteur, identifiant et timestamps, puis passe
+        par l'outil allowlisté create_release avec MUSIC/WRITE. La route ne
+        relie ni track, ni média, ni lien externe et ne déclenche aucun effet
+        social, calendrier ou publication.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReleaseCreateRequest'
+      responses:
+        '201':
+          description: Release locale créée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReleaseResponse'
+        '400':
+          $ref: '#/components/responses/InvalidRelease'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /v1/campaigns:
     get:
       operationId: listCampaignBriefs
@@ -834,6 +865,12 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
+    InvalidRelease:
+      description: Corps Release Registry invalide ou tentative de définir le scope, les relations ou les liens externes client
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
     InvalidCampaign:
       description: Corps Campaign Brief invalide ou tentative de définir le scope, le projet, l'acteur ou l'état client
       content:
@@ -1105,6 +1142,7 @@ components:
         - campaign.created
         - campaign.release_linked
         - campaign.release_unlinked
+        - release.created
         - track.created
         - media.imported
         - memory.proposed
@@ -1117,7 +1155,7 @@ components:
         - task.completed
     ActivityLogEntityType:
       type: string
-      enum: [CAMPAIGN, TRACK, MEDIA_ASSET, MEMORY, POST_VARIANT, TASK]
+      enum: [CAMPAIGN, RELEASE, TRACK, MEDIA_ASSET, MEMORY, POST_VARIANT, TASK]
     ActivityLog:
       type: object
       additionalProperties: false
@@ -1256,19 +1294,50 @@ components:
           maxLength: 2000
     Release:
       type: object
+      additionalProperties: false
       required: [id, workspaceId, artistProjectId, title, releaseType, status, createdAt, updatedAt]
       properties:
-        id: { type: string }
-        workspaceId: { type: string }
-        artistProjectId: { type: string }
-        title: { type: string }
-        releaseType: { type: string }
+        id: { type: string, minLength: 1 }
+        workspaceId: { type: string, minLength: 1 }
+        artistProjectId: { type: string, minLength: 1 }
+        title: { type: string, minLength: 1, maxLength: 240 }
+        releaseType: { type: string, minLength: 1, maxLength: 80 }
         releaseDate: { type: string, format: date }
-        label: { type: string }
+        label: { type: string, minLength: 1, maxLength: 240 }
         status:
           enum: [DRAFT, SCHEDULED, RELEASED, ARCHIVED]
+        links:
+          type: array
+          items: { type: string, format: uri }
+        tags:
+          type: array
+          maxItems: 30
+          items: { type: string, minLength: 1, maxLength: 80 }
+        description: { type: string, minLength: 1, maxLength: 4000 }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    ReleaseCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [title, releaseType, status]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 240 }
+        releaseType: { type: string, minLength: 1, maxLength: 80 }
+        releaseDate: { type: string, format: date }
+        label: { type: string, minLength: 1, maxLength: 240 }
+        status:
+          enum: [DRAFT, SCHEDULED, RELEASED, ARCHIVED]
+        tags:
+          type: array
+          maxItems: 30
+          items: { type: string, minLength: 1, maxLength: 80 }
+        description: { type: string, minLength: 1, maxLength: 4000 }
+    ReleaseResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/Release'
     ReleaseListResponse:
       type: object
       required: [data]

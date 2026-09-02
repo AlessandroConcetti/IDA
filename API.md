@@ -22,7 +22,7 @@ Le premier runtime est une API Fastify locale sur `http://127.0.0.1:8787`, conso
 | `GET /v1/modules` | Livrée | Registre des modules visibles du Command Center. |
 | `GET /v1/system/status` | Livrée | États factuels de la tranche locale ; les intégrations absentes sont `WARNING` ou `DISCONNECTED`. |
 | `GET /v1/activity-logs` | Livrée | Timeline d’activité locale en lecture seule : projection bornée de l’audit, filtrée par workspace serveur et sans payload, acteur ni données privées. |
-| `GET/PATCH /v1/artist-profile`, `/v1/releases`, `GET/POST /v1/tracks`, `GET/POST /v1/media`, `GET /v1/memories` | Livrées | Données de démonstration isolées par workspace côté serveur. L’Artist Brain, la création bornée d’un morceau Music Brain et l’import local privé d’un média passent par des outils `WRITE` allowlistés ; `GET /v1/media` filtre localement par texte, statut, type et tag. |
+| `GET/PATCH /v1/artist-profile`, `GET/POST /v1/releases`, `GET/POST /v1/tracks`, `GET/POST /v1/media`, `GET /v1/memories` | Livrées | Données de démonstration isolées par workspace côté serveur. L’Artist Brain, la création bornée de releases et morceaux Music Brain et l’import local privé d’un média passent par des outils `WRITE` allowlistés ; `GET /v1/media` filtre localement par texte, statut, type et tag. |
 | `GET /v1/content/rotation` | Livrée | Projection factuelle de médias `AVAILABLE` : seulement les assets `UNUSED` sans aucun lien éditorial, bornée et isolée au workspace. Elle ne calcule aucun score et n’écrit rien. |
 | `GET/POST /v1/campaigns`, `PATCH /v1/campaigns/:campaignId/release` | Livrées | Registre local de briefs de campagne internes. La création force `DRAFT`; un lien optionnel vers une release du même workspace et projet est contrôlé par version via `CAMPAIGNS` / `WRITE`, sans créer de planification ni effet externe. |
 | `POST /v1/memories/proposals`, `POST /v1/memories/:memoryId/confirm`, `POST /v1/memories/:memoryId/reject` | Livrées | Flux de mémoire consentie : une préférence commence forcément à `PENDING` et seule une décision humaine explicite peut la faire passer à `CONFIRMED` ou `REJECTED`. |
@@ -32,7 +32,7 @@ Le premier runtime est une API Fastify locale sur `http://127.0.0.1:8787`, conso
 | `GET /v1/social/platforms` | Livrée | Matrice déclarative en lecture seule des capacités à vérifier avant intégration. Elle ne représente ni compte, ni token, ni connexion réelle, ni autorisation d’action externe. |
 | `POST /v1/ida/commands`, `GET /v1/ida/command-runs` | Livrées | Commandes déterministes de lecture et historique privé, borné et paginé de leurs paires de messages terminées. |
 
-La commande retourne un objet `data` contenant la commande structurée, les outils de lecture autorisés et un résultat. Une commande réussie ajoute aussi une entrée privée de réhydratation, sans résultat détaillé d’outil, ainsi qu’un audit redacted sans texte libre qui reste invisible dans la timeline. À l’exception de cette écriture locale, de la modification interne de l’Artist Brain, de la création Music Brain bornée, de l’import local privé, du flux de consentement mémoire, du registre de briefs de campagne, de l’Approval Center et du Task Center décrits ci-dessous, toute mutation, publication, intégration externe ou accès financier est hors de cette tranche et reste refusée par conception.
+La commande retourne un objet `data` contenant la commande structurée, les outils de lecture autorisés et un résultat. Une commande réussie ajoute aussi une entrée privée de réhydratation, sans résultat détaillé d’outil, ainsi qu’un audit redacted sans texte libre qui reste invisible dans la timeline. À l’exception de cette écriture locale, de la modification interne de l’Artist Brain, de la création Music Brain bornée de releases et morceaux, de l’import local privé, du flux de consentement mémoire, du registre de briefs de campagne, de l’Approval Center et du Task Center décrits ci-dessous, toute mutation, publication, intégration externe ou accès financier est hors de cette tranche et reste refusée par conception.
 
 ### Matrice de capacités sociales déclarative
 
@@ -46,7 +46,7 @@ La route n’accepte aucun paramètre, ne retourne ni `SocialAccount`, identifia
 
 La réponse est bornée à `{ data: { items, nextCursor? } }`. Chaque item contient exactement `id`, `action`, `entityType`, `entityId` et `createdAt`. Le scope est imposé par le serveur et la pagination par cléset suit `created_at DESC, id DESC` : elle ne calcule aucun total et reste stable lorsque plusieurs entrées partagent le même instant.
 
-La projection ne sélectionne ni ne retourne le `payload` d’audit, `actor_user_id`, `workspace_id`, caption, préférence, hash, token, chemin, média privé ou détail libre. Seules les actions actuellement prévues par la tranche locale sont visibles : `campaign.created`, `campaign.release_linked`, `campaign.release_unlinked`, `track.created`, `media.imported`, `memory.proposed`, `memory.confirmed`, `memory.rejected`, `post_variant.approved`, `post_variant.rejected`, `post_variant.internal_scheduled`, `task.created` et `task.completed`. La consultation est sans effet : elle ne crée aucun nouvel audit. Les futurs domaines, notamment Finance et Banque, restent invisibles jusqu’à la définition et la revue d’une projection dédiée.
+La projection ne sélectionne ni ne retourne le `payload` d’audit, `actor_user_id`, `workspace_id`, caption, préférence, hash, token, chemin, média privé ou détail libre. Seules les actions actuellement prévues par la tranche locale sont visibles : `campaign.created`, `campaign.release_linked`, `campaign.release_unlinked`, `release.created`, `track.created`, `media.imported`, `memory.proposed`, `memory.confirmed`, `memory.rejected`, `post_variant.approved`, `post_variant.rejected`, `post_variant.internal_scheduled`, `task.created` et `task.completed`. La consultation est sans effet : elle ne crée aucun nouvel audit. Les futurs domaines, notamment Finance et Banque, restent invisibles jusqu’à la définition et la revue d’une projection dédiée.
 
 ### Historique privé des commandes IDA
 
@@ -69,7 +69,13 @@ Ce registre n’est pas encore un historique conversationnel général : il ne s
 - La mise à jour est partielle : les champs omis restent inchangés. Le bootstrap PGlite ajoute les colonnes de façon additive et le seed conserve `ON CONFLICT DO NOTHING`, afin de ne jamais remplacer un profil local déjà édité.
 - Les préférences de plateforme sont volontairement bornées à des formats préférés, une cadence hebdomadaire et une note, pour éviter de stocker une configuration externe arbitraire avant l’intégration officielle des plateformes.
 
-### Music Brain : ajout local contrôlé
+### Music Brain : releases et morceaux locaux contrôlés
+
+`GET /v1/releases` liste les releases du workspace imposé par le serveur. `POST /v1/releases` accepte strictement `title`, `releaseType` et `status`, avec `releaseDate`, `label`, `tags` et `description` en option.
+
+- Le corps refuse identifiant, workspace, projet, acteur, liens externes, track, média et tout champ inconnu avec `400 INVALID_RELEASE`. Le serveur résout le workspace, le premier projet artistique et l’acteur ; il génère le préfixe `rel_…`, les timestamps et l’état exactement demandé parmi `DRAFT`, `SCHEDULED`, `RELEASED` ou `ARCHIVED`.
+- L’écriture passe exclusivement par `create_release` (`MUSIC`, `WRITE`). Ses valeurs sont bornées (titre 240, type 80, label 240, 30 tags de 80, description 4 000 caractères) et son audit append-only `release.created` ne garde que type et état, jamais le titre, les tags ou la description libres.
+- Une création renvoie `201 Created` et reste visible uniquement dans le workspace serveur. Elle n’attache aucun track, média, lien externe, campagne, calendrier, action IA, compte social, OAuth, job ou publication ; ces relations garderont leurs propres routes et validations.
 
 `POST /v1/tracks` accepte un morceau interne avec les champs requis `title`, `artistCredit` et `status`, ainsi que les champs optionnels `genre`, `bpm`, `musicalKey`, `releaseDate`, `label`, `tags` et `description`.
 
@@ -422,7 +428,7 @@ POST   /v1/tasks
 POST   /v1/tasks/:taskId/complete
 ```
 
-Dans le runtime local, `GET /v1/campaigns`, `POST /v1/campaigns` et `PATCH /v1/campaigns/:campaignId/release` sont livrés pour un **Campaign Brief Registry** interne en `DRAFT`. `GET/PATCH /v1/campaigns/:campaignId`, les dates, piliers, plans de contenu, posts, tâches et calendrier restent des cibles ultérieures ; ils ne doivent pas être déduits de cette surface minimale.
+Dans le runtime local, `GET/POST /v1/releases`, `GET /v1/campaigns`, `POST /v1/campaigns` et `PATCH /v1/campaigns/:campaignId/release` sont livrés. Le **Release Registry** garde seulement les métadonnées locales d’une sortie ; le **Campaign Brief Registry** reste interne en `DRAFT`. `GET/PATCH /v1/campaigns/:campaignId`, `GET/PATCH /v1/releases/:releaseId`, les associations track/média, dates de campagne, piliers, plans de contenu, posts, tâches et calendrier restent des cibles ultérieures ; ils ne doivent pas être déduits de cette surface minimale.
 
 `approve` est une action humaine authentifiée. Elle enregistre le payload final, l’auteur et l’instant de décision. `schedule` ne peut pas transformer une proposition non approuvée en action publique. Tant qu’aucun adapter social n’est livré, une publication programmée reste un élément de planning interne.
 

@@ -16,6 +16,7 @@ import type {
   MediaImport,
   MediaListQuery,
   MemoryProposalCreate,
+  ReleaseCreate,
   TaskCreate,
   TrackCreate,
 } from "@ida/contracts";
@@ -65,7 +66,10 @@ export type Release = {
   releaseDate: string | null;
   label: string | null;
   status: string;
+  tags: string[];
   description: string | null;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type Track = {
@@ -455,6 +459,22 @@ function asPlatformPreferences(value: unknown): ArtistProfileContract["platformP
 
 function isPersistentDirectory(dataDir: string): boolean {
   return !dataDir.startsWith("memory://");
+}
+
+function toRelease(row: ScalarRow): Release {
+  return {
+    id: asString(row.id),
+    projectId: asString(row.projectId),
+    title: asString(row.title),
+    releaseType: asString(row.releaseType),
+    releaseDate: asDateString(row.releaseDate),
+    label: asNullableString(row.label),
+    status: asString(row.status),
+    tags: asStringArray(row.tags),
+    description: asNullableString(row.description),
+    createdAt: asTimestamp(row.createdAt) ?? "1970-01-01T00:00:00.000Z",
+    updatedAt: asTimestamp(row.updatedAt) ?? "1970-01-01T00:00:00.000Z",
+  };
 }
 
 function toTrack(row: ScalarRow): Track {
@@ -921,24 +941,104 @@ export class DemoDatabase {
           release_date AS "releaseDate",
           label,
           status,
-          description
+          tags,
+          description,
+          created_at AS "createdAt",
+          updated_at AS "updatedAt"
         FROM releases
         WHERE workspace_id = $1
-        ORDER BY release_date NULLS LAST, title
+        ORDER BY release_date NULLS LAST, created_at DESC, id DESC
       `,
       [workspaceId],
     );
 
-    return result.rows.map((row) => ({
-      id: asString(row.id),
-      projectId: asString(row.projectId),
-      title: asString(row.title),
-      releaseType: asString(row.releaseType),
-      releaseDate: asDateString(row.releaseDate),
-      label: asNullableString(row.label),
-      status: asString(row.status),
-      description: asNullableString(row.description),
-    }));
+    return result.rows.map(toRelease);
+  }
+
+  async createRelease(workspaceId: string, actorUserId: string, input: ReleaseCreate): Promise<Release | null> {
+    return this.pglite.transaction(async (transaction) => {
+      const projectResult = await transaction.query<ScalarRow>(
+        `
+          SELECT id
+          FROM artist_projects
+          WHERE workspace_id = $1
+          ORDER BY created_at ASC
+          LIMIT 1
+        `,
+        [workspaceId],
+      );
+      const project = projectResult.rows[0];
+
+      if (!project) {
+        return null;
+      }
+
+      const projectId = asString(project.id);
+
+      // L'identifiant est créé côté serveur et les relations futures (tracks,
+      // médias, liens externes) restent volontairement hors de cette écriture.
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const releaseId = `rel_${randomUUID().replaceAll("-", "")}`;
+        const result = await transaction.query<ScalarRow>(
+          `
+            INSERT INTO releases (
+              id, workspace_id, artist_project_id, title, release_type,
+              release_date, label, status, tags, description
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::json, $10)
+            ON CONFLICT (id) DO NOTHING
+            RETURNING
+              id,
+              artist_project_id AS "projectId",
+              title,
+              release_type AS "releaseType",
+              release_date AS "releaseDate",
+              label,
+              status,
+              tags,
+              description,
+              created_at AS "createdAt",
+              updated_at AS "updatedAt"
+          `,
+          [
+            releaseId,
+            workspaceId,
+            projectId,
+            input.title,
+            input.releaseType,
+            input.releaseDate ?? null,
+            input.label ?? null,
+            input.status,
+            JSON.stringify(input.tags),
+            input.description ?? null,
+          ],
+        );
+        const row = result.rows[0];
+
+        if (!row) {
+          continue;
+        }
+
+        const release = toRelease(row);
+        await transaction.query(
+          `
+            INSERT INTO activity_logs (id, workspace_id, actor_user_id, action, entity_type, entity_id, payload)
+            VALUES ($1, $2, $3, 'release.created', 'RELEASE', $4, $5::json)
+          `,
+          [
+            `act_${randomUUID().replaceAll("-", "")}`,
+            workspaceId,
+            actorUserId,
+            release.id,
+            JSON.stringify({ releaseType: release.releaseType, status: release.status }),
+          ],
+        );
+
+        return release;
+      }
+
+      throw new Error("Impossible de générer un identifiant unique pour la release.");
+    });
   }
 
   async listActivityLogs(
@@ -3204,7 +3304,9 @@ export class DemoDatabase {
         label TEXT,
         status TEXT NOT NULL,
         description TEXT,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+        tags JSON NOT NULL DEFAULT '[]'::json,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
 
       -- Campaign Brief Registry : le brief reste interne. Son unique lien
@@ -3564,6 +3666,10 @@ export class DemoDatabase {
       ALTER TABLE artist_profiles
         ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
       ALTER TABLE artist_profiles
+        ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+      ALTER TABLE releases
+        ADD COLUMN IF NOT EXISTS tags JSON NOT NULL DEFAULT '[]'::json;
+      ALTER TABLE releases
         ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
       ALTER TABLE tracks
         ADD COLUMN IF NOT EXISTS label TEXT;

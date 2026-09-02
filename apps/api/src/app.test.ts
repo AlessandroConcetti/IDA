@@ -1016,6 +1016,102 @@ describe("IDA API — première tranche Phase 1", () => {
     expect(response.json()).toMatchObject({ error: { code: "MEDIA_FILE_TOO_LARGE" } });
   });
 
+  it("crée une release Music Brain strictement scoped et la projette dans la timeline sûre", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/releases",
+      payload: {
+        title: "Phase Écho",
+        releaseType: "SINGLE",
+        releaseDate: "2026-10-03",
+        label: "Aural Motion",
+        status: "DRAFT",
+        tags: ["nocturne", "club"],
+        description: "Première fiche locale d’une sortie à préparer.",
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    const release = (
+      response.json() as {
+        data: {
+          id: string;
+          workspaceId: string;
+          artistProjectId: string;
+          title: string;
+          releaseType: string;
+          releaseDate?: string;
+          label?: string;
+          status: string;
+          tags: string[];
+          description?: string;
+          createdAt: string;
+          updatedAt: string;
+        };
+      }
+    ).data;
+
+    expect(release).toMatchObject({
+      id: expect.stringMatching(/^rel_[a-f0-9]{32}$/),
+      workspaceId: "wsp_demo_aless",
+      artistProjectId: "prj_demo_aless",
+      title: "Phase Écho",
+      releaseType: "SINGLE",
+      releaseDate: "2026-10-03",
+      label: "Aural Motion",
+      status: "DRAFT",
+      tags: ["nocturne", "club"],
+      description: "Première fiche locale d’une sortie à préparer.",
+    });
+    expect(Number.isNaN(Date.parse(release.createdAt))).toBe(false);
+    expect(Number.isNaN(Date.parse(release.updatedAt))).toBe(false);
+
+    const releases = await app.inject({ method: "GET", url: "/v1/releases?workspaceId=wsp_other" });
+    expect(releases.statusCode).toBe(200);
+    expect((releases.json() as { data: Array<{ id: string; workspaceId: string }> }).data).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: release.id, workspaceId: "wsp_demo_aless" })]),
+    );
+    expect(
+      (releases.json() as { data: Array<{ workspaceId: string }> }).data.every(
+        (item) => item.workspaceId === "wsp_demo_aless",
+      ),
+    ).toBe(true);
+
+    const timeline = await app.inject({ method: "GET", url: "/v1/activity-logs?limit=30" });
+    expect(timeline.statusCode).toBe(200);
+    expect((timeline.json() as { data: { items: unknown[] } }).data.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ action: "release.created", entityType: "RELEASE", entityId: release.id }),
+      ]),
+    );
+  });
+
+  it("refuse une release invalide ou toute tentative d’injecter le scope et les relations futures", async () => {
+    const invalid = await app.inject({
+      method: "POST",
+      url: "/v1/releases",
+      payload: {
+        workspaceId: "wsp_other",
+        artistProjectId: "prj_other_workspace",
+        id: "rel_client",
+        title: "Release hors périmètre",
+        releaseType: "SINGLE",
+        status: "DRAFT",
+        links: ["https://example.test/release"],
+        trackId: "trk_other_workspace",
+        mediaId: "med_other_workspace",
+      },
+    });
+
+    expect(invalid.statusCode).toBe(400);
+    expect(invalid.json()).toMatchObject({ error: { code: "INVALID_RELEASE" } });
+
+    const releases = await app.inject({ method: "GET", url: "/v1/releases" });
+    expect((releases.json() as { data: Array<{ title: string }> }).data).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ title: "Release hors périmètre" })]),
+    );
+  });
+
   it("crée un morceau Music Brain avec un outil WRITE et le conserve dans le workspace serveur", async () => {
     const response = await app.inject({
       method: "POST",
@@ -1534,6 +1630,49 @@ describe("IDA API — première tranche Phase 1", () => {
       } finally {
         await upgradedApp.close();
       }
+    } finally {
+      await legacyDatabase?.close();
+      await upgradedDatabase?.close();
+      await rm(dataDir, { recursive: true, force: true });
+    }
+  });
+
+  it("migre une release locale antérieure sans remplacer ses métadonnées", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "ida-release-registry-migration-"));
+    let legacyDatabase: DemoDatabase | undefined;
+    let upgradedDatabase: DemoDatabase | undefined;
+
+    try {
+      legacyDatabase = await DemoDatabase.open({ dataDir });
+      await legacyDatabase.pglite.exec(`
+        ALTER TABLE releases DROP COLUMN tags;
+        ALTER TABLE releases DROP COLUMN updated_at;
+      `);
+      await legacyDatabase.close();
+      legacyDatabase = undefined;
+
+      upgradedDatabase = await DemoDatabase.open({ dataDir, seed: false });
+      const migrated = await upgradedDatabase.pglite.query<{
+        title: string;
+        status: string;
+        tags: string;
+        updatedAt: string;
+      }>(`
+        SELECT
+          title,
+          status,
+          tags::text AS tags,
+          updated_at AS "updatedAt"
+        FROM releases
+        WHERE id = 'rel_lumiere_noire'
+      `);
+
+      expect(migrated.rows[0]).toMatchObject({
+        title: "Lumière Noire",
+        status: "SCHEDULED",
+        tags: "[]",
+      });
+      expect(Number.isNaN(Date.parse(migrated.rows[0]?.updatedAt ?? ""))).toBe(false);
     } finally {
       await legacyDatabase?.close();
       await upgradedDatabase?.close();

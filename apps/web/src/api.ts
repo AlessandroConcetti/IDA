@@ -141,11 +141,30 @@ export interface TaskCreateInput {
 
 export type CampaignStatus = "DRAFT" | "ACTIVE" | "PAUSED" | "COMPLETED" | "ARCHIVED";
 
+export type ReleaseStatus = "DRAFT" | "SCHEDULED" | "RELEASED" | "ARCHIVED";
+
 export interface ReleaseRecord {
   id: string;
   artistProjectId: string;
   title: string;
+  releaseType: string;
+  status: ReleaseStatus;
   releaseDate?: string;
+  label?: string;
+  tags: string[];
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ReleaseCreateInput {
+  title: string;
+  releaseType: string;
+  status: ReleaseStatus;
+  releaseDate?: string;
+  label?: string;
+  tags?: string[];
+  description?: string;
 }
 
 export interface CampaignRecord {
@@ -827,12 +846,37 @@ function toCampaign(record: Record<string, unknown>): CampaignRecord {
   };
 }
 
+function releaseStatus(value: unknown): ReleaseStatus | undefined {
+  if (value === "DRAFT" || value === "SCHEDULED" || value === "RELEASED" || value === "ARCHIVED") {
+    return value;
+  }
+
+  return undefined;
+}
+
 function toRelease(record: Record<string, unknown>): ReleaseRecord {
   const id = readString(record.id);
   const artistProjectId = readString(record.artistProjectId);
   const title = readString(record.title);
+  const releaseType = readString(record.releaseType);
+  const status = releaseStatus(record.status);
+  const createdAt = readString(record.createdAt);
+  const updatedAt = readString(record.updatedAt);
+  const tags = record.tags;
 
-  if (!id || !artistProjectId || !title) {
+  if (
+    !id ||
+    !artistProjectId ||
+    !title ||
+    !releaseType ||
+    !status ||
+    !createdAt ||
+    !updatedAt ||
+    Number.isNaN(Date.parse(createdAt)) ||
+    Number.isNaN(Date.parse(updatedAt)) ||
+    !Array.isArray(tags) ||
+    !tags.every((tag) => typeof tag === "string" && tag.trim().length > 0)
+  ) {
     throw new IdaApiError("La réponse release d’IDA API n’a pas le format attendu.");
   }
 
@@ -842,7 +886,14 @@ function toRelease(record: Record<string, unknown>): ReleaseRecord {
     id,
     artistProjectId,
     title,
+    releaseType,
+    status,
     ...(releaseDate === undefined ? {} : { releaseDate }),
+    ...(readString(record.label) === undefined ? {} : { label: readString(record.label) }),
+    tags: tags.map((tag) => tag.trim()),
+    ...(readString(record.description) === undefined ? {} : { description: readString(record.description) }),
+    createdAt,
+    updatedAt,
   };
 }
 
@@ -852,6 +903,12 @@ export async function fetchCampaigns(): Promise<CampaignRecord[]> {
 
 export async function fetchReleases(): Promise<ReleaseRecord[]> {
   return readDataList(await getApiJson("/v1/releases"), "/v1/releases").map(toRelease);
+}
+
+export async function createRelease(input: ReleaseCreateInput): Promise<ReleaseRecord> {
+  const payload = await postApiJson("/v1/releases", input);
+
+  return toRelease(readDataObjectOrDirect(payload, "/v1/releases"));
 }
 
 export async function createCampaign(input: CampaignCreateInput): Promise<CampaignRecord> {

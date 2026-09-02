@@ -39,6 +39,7 @@ import {
   postVariantDecisionRequestSchema,
   postVariantDecisionSchema,
   postVariantInternalScheduleRequestSchema,
+  releaseCreateSchema,
   releaseSchema,
   socialPlatformCapabilitySchema,
   taskCompleteParamsSchema,
@@ -66,6 +67,7 @@ import {
   type Memory,
   type MemoryDecision,
   type PostVariantDecision,
+  type Release,
   type Task,
   type Track,
 } from "./database.js";
@@ -324,6 +326,15 @@ class TrackInputError extends Error {
 
   constructor() {
     super("Les champs transmis pour le morceau sont invalides.");
+  }
+}
+
+class ReleaseInputError extends Error {
+  readonly statusCode = 400;
+  readonly code = "INVALID_RELEASE";
+
+  constructor() {
+    super("Les champs transmis pour la release sont invalides.");
   }
 }
 
@@ -689,6 +700,24 @@ function toTrackResponse(track: Track) {
   });
 }
 
+function toReleaseResponse(release: Release) {
+  return releaseSchema.parse({
+    id: release.id,
+    workspaceId: demoContext.workspaceId,
+    artistProjectId: release.projectId,
+    title: release.title,
+    releaseType: release.releaseType,
+    releaseDate: optionalString(release.releaseDate),
+    label: optionalString(release.label),
+    status: release.status,
+    description: optionalString(release.description),
+    links: [],
+    tags: release.tags,
+    createdAt: release.createdAt,
+    updatedAt: release.updatedAt,
+  });
+}
+
 function toCampaignResponse(campaign: Campaign) {
   return campaignSchema.parse({
     id: campaign.id,
@@ -877,6 +906,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     { toolKey: "reject_memory", moduleKey: "MEMORY", permission: "WRITE" },
     { toolKey: "create_task", moduleKey: "TASKS", permission: "WRITE" },
     { toolKey: "complete_task", moduleKey: "TASKS", permission: "WRITE" },
+    { toolKey: "create_release", moduleKey: "MUSIC", permission: "WRITE" },
     { toolKey: "create_track", moduleKey: "MUSIC", permission: "WRITE" },
     { toolKey: "create_campaign", moduleKey: "CAMPAIGNS", permission: "WRITE" },
     { toolKey: "link_campaign_release", moduleKey: "CAMPAIGNS", permission: "WRITE" },
@@ -918,6 +948,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     }
 
     if (
+      error instanceof ReleaseInputError ||
       error instanceof TaskInputError ||
       error instanceof TaskCompletionInputError ||
       error instanceof CampaignInputError ||
@@ -1369,27 +1400,37 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
 
   app.get("/v1/releases", async () => {
     const releases = await database.listReleases(demoContext.workspaceId);
-    const timestamp = "2026-08-30T00:00:00.000Z";
 
     return {
-      data: releases.map((release) =>
-        releaseSchema.parse({
-          id: release.id,
-          workspaceId: demoContext.workspaceId,
-          artistProjectId: release.projectId,
-          title: release.title,
-          releaseType: release.releaseType,
-          releaseDate: optionalString(release.releaseDate),
-          label: optionalString(release.label),
-          status: release.status,
-          description: optionalString(release.description),
-          links: [],
-          tags: [],
-          createdAt: timestamp,
-          updatedAt: timestamp,
-        }),
-      ),
+      data: releases.map(toReleaseResponse),
     };
+  });
+
+  app.post("/v1/releases", async (request, reply) => {
+    const input = releaseCreateSchema.safeParse(request.body);
+
+    if (!input.success) {
+      throw new ReleaseInputError();
+    }
+
+    toolGateway.assertAuthorized({
+      toolKey: "create_release",
+      moduleKey: "MUSIC",
+      permission: "WRITE",
+    });
+
+    // Scope, projet, acteur, identifiant, timestamps et relations restent
+    // imposés par le serveur. Cette écriture ne relie encore aucun track ou
+    // média et ne crée aucun appel externe.
+    const release = await database.createRelease(demoContext.workspaceId, demoContext.userId, input.data);
+
+    if (!release) {
+      return reply.status(404).send({
+        error: { code: "ARTIST_PROJECT_NOT_FOUND", message: "Projet artistique introuvable." },
+      });
+    }
+
+    return reply.status(201).send({ data: toReleaseResponse(release) });
   });
 
   app.get("/v1/campaigns", async () => {

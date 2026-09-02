@@ -10,6 +10,7 @@ import {
   completeTask,
   confirmMemory,
   createCampaign,
+  createRelease,
   createTask,
   createTrack,
   type DashboardSnapshot,
@@ -36,7 +37,9 @@ import {
   type MediaSearchType,
   type MemoryRecord,
   proposePreferenceMemory,
+  type ReleaseCreateInput,
   type ReleaseRecord,
+  type ReleaseStatus,
   rejectMemory,
   rejectPostVariant,
   type SocialPlatform,
@@ -531,6 +534,7 @@ function activityActionLabel(action: string): string {
     "campaign.created": "Campaign Brief créé",
     "campaign.release_linked": "Release rattachée à une campagne",
     "campaign.release_unlinked": "Release retirée d’une campagne",
+    "release.created": "Release ajoutée au Music Brain",
     "track.created": "Morceau ajouté au Music Brain",
     "media.imported": "Média importé dans la bibliothèque",
     "memory.proposed": "Préférence proposée",
@@ -549,6 +553,7 @@ function activityActionLabel(action: string): string {
 function activityEntityLabel(entityType: string): string {
   const labels: Record<string, string> = {
     CAMPAIGN: "CAMPAIGN",
+    RELEASE: "MUSIC",
     TRACK: "MUSIC",
     MEDIA_ASSET: "CONTENT",
     MEMORY: "MEMORY",
@@ -819,6 +824,29 @@ const emptyMusicTrackForm: MusicTrackForm = {
 
 const musicTrackStatuses: Track["status"][] = ["DEMO", "UNRELEASED", "SCHEDULED", "RELEASED", "ARCHIVED"];
 
+type MusicReleaseForm = {
+  title: string;
+  releaseType: string;
+  releaseDate: string;
+  label: string;
+  status: ReleaseStatus;
+  tags: string;
+  description: string;
+};
+
+const emptyMusicReleaseForm: MusicReleaseForm = {
+  title: "",
+  releaseType: "SINGLE",
+  releaseDate: "",
+  label: "",
+  status: "DRAFT",
+  tags: "",
+  description: "",
+};
+
+const musicReleaseTypes = ["SINGLE", "EP", "ALBUM", "COMPILATION", "DJ SET", "OTHER"];
+const musicReleaseStatuses: ReleaseStatus[] = ["DRAFT", "SCHEDULED", "RELEASED", "ARCHIVED"];
+
 function optionalFormValue(value: string): string | undefined {
   const trimmed = value.trim();
 
@@ -834,6 +862,18 @@ function musicTrackFormToInput(form: MusicTrackForm): TrackCreateInput {
     genre: optionalFormValue(form.genre),
     bpm: bpmValue ? Number(bpmValue) : undefined,
     musicalKey: optionalFormValue(form.musicalKey),
+    releaseDate: optionalFormValue(form.releaseDate),
+    label: optionalFormValue(form.label),
+    status: form.status,
+    tags: textToList(form.tags),
+    description: optionalFormValue(form.description),
+  };
+}
+
+function musicReleaseFormToInput(form: MusicReleaseForm): ReleaseCreateInput {
+  return {
+    title: form.title.trim(),
+    releaseType: form.releaseType.trim(),
     releaseDate: optionalFormValue(form.releaseDate),
     label: optionalFormValue(form.label),
     status: form.status,
@@ -1032,7 +1072,230 @@ function MusicView({
           </div>
         </form>
       </section>
+      <ReleaseRegistry />
     </div>
+  );
+}
+
+function releaseRegistryDetail(release: ReleaseRecord): string {
+  const details = [
+    release.releaseType,
+    release.releaseDate ? formatCampaignDate(release.releaseDate) : "Date à définir",
+  ];
+
+  if (release.label) {
+    details.push(release.label);
+  }
+
+  return details.join(" · ");
+}
+
+function ReleaseRegistry() {
+  const [releases, setReleases] = useState<ReleaseRecord[]>([]);
+  const [source, setSource] = useState<"loading" | "api" | "unavailable">(isApiConfigured ? "loading" : "unavailable");
+  const [form, setForm] = useState<MusicReleaseForm>(emptyMusicReleaseForm);
+  const [notice, setNotice] = useState("Chargement des releases du Music Brain…");
+  const [noticeState, setNoticeState] = useState<"default" | "success" | "error">("default");
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    if (!isApiConfigured) {
+      return () => {
+        isCurrent = false;
+      };
+    }
+
+    void fetchReleases()
+      .then((items) => {
+        if (!isCurrent) {
+          return;
+        }
+
+        setReleases(items);
+        setSource("api");
+        setNotice(
+          items.length === 0
+            ? "Aucune release locale n’est encore enregistrée."
+            : `${items.length} release${items.length === 1 ? "" : "s"} locale${items.length === 1 ? "" : "s"} disponible${
+                items.length === 1 ? "" : "s"
+              }.`,
+        );
+      })
+      .catch((error: unknown) => {
+        if (!isCurrent) {
+          return;
+        }
+
+        const reason = error instanceof IdaApiError ? error.message : "IDA API est indisponible.";
+        setSource("unavailable");
+        setNotice(`Les releases ne peuvent pas être chargées : ${reason}`);
+        setNoticeState("error");
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, []);
+
+  function updateField(field: keyof MusicReleaseForm, value: string) {
+    setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!form.title.trim() || !form.releaseType.trim()) {
+      setNotice("Le titre et le type sont nécessaires pour créer une release.");
+      setNoticeState("error");
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      const release = await createRelease(musicReleaseFormToInput(form));
+      setReleases((current) => [release, ...current.filter((item) => item.id !== release.id)]);
+      setSource("api");
+      setForm((current) => ({ ...emptyMusicReleaseForm, label: current.label }));
+      setNotice(`« ${release.title} » a été ajoutée au registre local.`);
+      setNoticeState("success");
+    } catch (error: unknown) {
+      const reason = error instanceof IdaApiError ? error.message : "IDA API est indisponible.";
+      setNotice(`Aucune release n’a été enregistrée : ${reason}`);
+      setNoticeState("error");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  return (
+    <section className="panel release-registry-card" aria-labelledby="release-registry-title">
+      <div className="panel-heading">
+        <div>
+          <p className="eyebrow">RELEASE REGISTRY</p>
+          <h2 id="release-registry-title">Release context, kept local.</h2>
+        </div>
+        <span className="status-tag demo">LOCAL ONLY</span>
+      </div>
+      <p className="music-entry-intro">
+        Une release pose le contexte de ta sortie. Aucun morceau, média, lien externe, calendrier ou action sociale
+        n’est relié automatiquement.
+      </p>
+      <p className={`music-entry-notice ${noticeState}`} role="status" aria-live="polite">
+        <span aria-hidden="true" />
+        {notice}
+      </p>
+      {source === "api" && releases.length > 0 ? (
+        <div className="release-registry-list">
+          {releases.map((release) => (
+            <article className="release-registry-row" key={release.id}>
+              <div>
+                <h3>{release.title}</h3>
+                <p>{releaseRegistryDetail(release)}</p>
+                {release.tags.length > 0 ? (
+                  <div className="release-tag-list">
+                    {release.tags.map((tag) => (
+                      <span key={tag}>{tag}</span>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+              <span className={`status-tag ${release.status.toLocaleLowerCase("en-US")}`}>{release.status}</span>
+            </article>
+          ))}
+        </div>
+      ) : null}
+      <form className="music-entry-form release-entry-form" noValidate onSubmit={handleSubmit}>
+        <div className="music-entry-fields">
+          <label className="music-entry-field music-entry-field-wide">
+            <span>Titre de la release</span>
+            <input
+              value={form.title}
+              onChange={(event) => updateField("title", event.target.value)}
+              placeholder="Nom de la sortie"
+              required
+              disabled={isSaving}
+            />
+          </label>
+          <label className="music-entry-field">
+            <span>Type</span>
+            <select
+              value={form.releaseType}
+              onChange={(event) => updateField("releaseType", event.target.value)}
+              disabled={isSaving}
+            >
+              {musicReleaseTypes.map((releaseType) => (
+                <option key={releaseType} value={releaseType}>
+                  {releaseType}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="music-entry-field">
+            <span>Statut</span>
+            <select
+              value={form.status}
+              onChange={(event) => updateField("status", event.target.value)}
+              disabled={isSaving}
+            >
+              {musicReleaseStatuses.map((status) => (
+                <option key={status} value={status}>
+                  {status}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="music-entry-field">
+            <span>Date de sortie</span>
+            <input
+              type="date"
+              value={form.releaseDate}
+              onChange={(event) => updateField("releaseDate", event.target.value)}
+              disabled={isSaving}
+            />
+          </label>
+          <label className="music-entry-field">
+            <span>Label</span>
+            <input
+              value={form.label}
+              onChange={(event) => updateField("label", event.target.value)}
+              placeholder="Optionnel"
+              disabled={isSaving}
+            />
+          </label>
+          <label className="music-entry-field music-entry-field-wide">
+            <span>Tags</span>
+            <input
+              value={form.tags}
+              onChange={(event) => updateField("tags", event.target.value)}
+              placeholder="teaser, club, release…"
+              disabled={isSaving}
+            />
+          </label>
+          <label className="music-entry-field music-entry-field-wide">
+            <span>Description</span>
+            <textarea
+              value={form.description}
+              onChange={(event) => updateField("description", event.target.value)}
+              placeholder="Contexte artistique de cette sortie…"
+              rows={3}
+              disabled={isSaving}
+            />
+          </label>
+        </div>
+        <div className="music-entry-actions">
+          <p>
+            Les relations avec les tracks, médias, campagnes et plateformes seront ajoutées par des actions séparées.
+          </p>
+          <button className="send-button" type="submit" disabled={isSaving || source === "unavailable"}>
+            {isSaving ? "Ajout…" : "Add release"}
+            <span aria-hidden="true">↗</span>
+          </button>
+        </div>
+      </form>
+    </section>
   );
 }
 

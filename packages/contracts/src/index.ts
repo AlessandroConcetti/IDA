@@ -85,6 +85,7 @@ export const activityLogActionValues = [
   "campaign.created",
   "campaign.release_linked",
   "campaign.release_unlinked",
+  "release.created",
   "track.created",
   "media.imported",
   "memory.proposed",
@@ -102,6 +103,7 @@ export type ActivityLogAction = z.infer<typeof activityLogActionSchema>;
 
 export const activityLogEntityTypeValues = [
   "CAMPAIGN",
+  "RELEASE",
   "TRACK",
   "MEDIA_ASSET",
   "MEMORY",
@@ -225,23 +227,47 @@ export type ArtistProfileUpdate = z.infer<typeof artistProfileUpdateSchema>;
 export const releaseStatusSchema = z.enum(["DRAFT", "SCHEDULED", "RELEASED", "ARCHIVED"]);
 export type ReleaseStatus = z.infer<typeof releaseStatusSchema>;
 
+const releaseTitleSchema = z.string().trim().min(1).max(240);
+const releaseTypeSchema = z.string().trim().min(1).max(80);
+const releaseLabelSchema = z.string().trim().min(1).max(240);
+const releaseTagSchema = z.string().trim().min(1).max(80);
+const releaseTagsSchema = z.array(releaseTagSchema).max(30);
+const releaseDescriptionSchema = z.string().trim().min(1).max(4_000);
+
 export const releaseSchema = z.object({
   id: entityIdSchema,
   workspaceId: entityIdSchema,
   artistProjectId: entityIdSchema,
-  title: z.string().trim().min(1),
-  releaseType: z.string().trim().min(1),
+  title: releaseTitleSchema,
+  releaseType: releaseTypeSchema,
   releaseDate: z.string().date().optional(),
-  label: z.string().trim().min(1).optional(),
+  label: releaseLabelSchema.optional(),
   status: releaseStatusSchema,
-  description: z.string().trim().optional(),
+  description: releaseDescriptionSchema.optional(),
   links: z.array(z.string().url()).default([]),
-  tags: z.array(z.string().trim().min(1)).default([]),
+  tags: releaseTagsSchema.default([]),
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
 });
 
 export type Release = z.infer<typeof releaseSchema>;
+
+// Le projet et le workspace sont résolus par le backend. Cette première
+// création de release n'accepte ni liens externes, ni associations de tracks
+// ou médias : ces relations auront leurs propres transitions contrôlées.
+export const releaseCreateSchema = z
+  .object({
+    title: releaseTitleSchema,
+    releaseType: releaseTypeSchema,
+    releaseDate: z.string().date().optional(),
+    label: releaseLabelSchema.optional(),
+    status: releaseStatusSchema,
+    tags: releaseTagsSchema.default([]),
+    description: releaseDescriptionSchema.optional(),
+  })
+  .strict();
+
+export type ReleaseCreate = z.infer<typeof releaseCreateSchema>;
 
 export const trackStatusSchema = z.enum(["DEMO", "UNRELEASED", "SCHEDULED", "RELEASED", "ARCHIVED"]);
 export type TrackStatus = z.infer<typeof trackStatusSchema>;
