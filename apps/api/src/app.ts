@@ -9,6 +9,7 @@ import {
   activityLogListQuerySchema,
   activityLogListResponseSchema,
   activityLogSchema,
+  agentManifestSchema,
   approvalQueueItemSchema,
   artistProfileSchema,
   artistProfileUpdateSchema,
@@ -54,7 +55,7 @@ import {
   trackCreateSchema,
   trackSchema,
 } from "@ida/contracts";
-import { createModuleRegistry, ToolGateway, ToolPolicyError } from "@ida/domain";
+import { createAgentRegistry, createModuleRegistry, ToolGateway, ToolPolicyError } from "@ida/domain";
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import { toContentRotationCandidateResponse } from "./content-rotation.js";
 import {
@@ -952,6 +953,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   const storageDir = options.storageDir ?? defaultStorageDir;
   const serverNow = options.now ?? (() => new Date());
   const core = new DeterministicIdaCore(database, undefined, serverNow);
+  const agents = createAgentRegistry();
   const modules = createModuleRegistry();
   const toolGateway = new ToolGateway(undefined, [
     { toolKey: "update_artist_profile", moduleKey: "MEMORY", permission: "WRITE" },
@@ -1432,6 +1434,13 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   }));
 
   app.get("/v1/modules", async () => ({ data: modules.list() }));
+
+  // Ce registre rend visibles les contrats d'agents revus, mais n'expose ni
+  // prompt, ni secret, ni activation. Une déclaration d'outil ne crée jamais
+  // une capacité exécutable : le registre bloque tout agent non ACTIVE.
+  app.get("/v1/agents", async () => ({
+    data: agents.list().map((agent) => agentManifestSchema.parse(agent)),
+  }));
 
   app.get("/v1/system/status", async () => ({ data: core.getSystemStatus() }));
 

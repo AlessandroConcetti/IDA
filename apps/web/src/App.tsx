@@ -1,6 +1,7 @@
 import { type DragEvent, type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   type ActivityLogRecord,
+  type AgentManifestRecord,
   type ApprovalQueueItem,
   approvePostVariant,
   type CampaignCreateInput,
@@ -20,6 +21,7 @@ import {
   type EditorialCalendarSnapshot,
   type EditorialCalendarView,
   fetchActivityLogs,
+  fetchAgentManifests,
   fetchApprovalQueue,
   fetchArtistBrain,
   fetchCampaigns,
@@ -655,6 +657,119 @@ function SystemPanel({
           </article>
         ))}
       </div>
+    </section>
+  );
+}
+
+type AgentRegistrySource = "loading" | "api" | "unavailable";
+
+function formatAgentExecutionMode(value: AgentManifestRecord["executionMode"]): string {
+  const labels: Record<AgentManifestRecord["executionMode"], string> = {
+    READ_ONLY: "Lecture seule",
+    PROPOSAL_ONLY: "Propositions seulement",
+    CONTROLLED_EXECUTION: "Exécution contrôlée",
+  };
+
+  return labels[value];
+}
+
+function AgentRegistryPanel() {
+  const [agents, setAgents] = useState<AgentManifestRecord[]>([]);
+  const [source, setSource] = useState<AgentRegistrySource>(isApiConfigured ? "loading" : "unavailable");
+  const [notice, setNotice] = useState("Chargement du registre d’agents…");
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    if (!isApiConfigured) {
+      return () => {
+        isCurrent = false;
+      };
+    }
+
+    void fetchAgentManifests()
+      .then((manifests) => {
+        if (!isCurrent) {
+          return;
+        }
+
+        setAgents(manifests);
+        setSource("api");
+        setNotice(
+          manifests.length === 0
+            ? "Aucun agent n’est déclaré dans ce runtime."
+            : manifests.every((agent) => agent.status === "PLANNED")
+              ? `${manifests.length} spécialiste${manifests.length === 1 ? "" : "s"} planifié${
+                  manifests.length === 1 ? "" : "s"
+                } ; aucun agent n’est actif ni exécutable.`
+              : `${manifests.length} manifeste${manifests.length === 1 ? "" : "s"} chargé${
+                  manifests.length === 1 ? "" : "s"
+                } depuis l’API.`,
+        );
+      })
+      .catch((error: unknown) => {
+        if (!isCurrent) {
+          return;
+        }
+
+        setAgents([]);
+        setSource("unavailable");
+        const reason = error instanceof IdaApiError ? error.message : "IDA API est indisponible.";
+        setNotice(`Registre d’agents indisponible : ${reason}`);
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, []);
+
+  return (
+    <section className="panel agent-registry" aria-labelledby="agent-registry-title">
+      <div className="panel-heading">
+        <div>
+          <p className="eyebrow">AGENT REGISTRY</p>
+          <h2 id="agent-registry-title">Built to grow, kept in bounds.</h2>
+        </div>
+        <span className="quiet-label">{source === "api" ? "DECLARATIVE" : "NO EXECUTION"}</span>
+      </div>
+      <p className="agent-registry-intro">
+        Chaque futur spécialiste arrive avec un contrat, des outils limités, des sources de contexte définies et une
+        évaluation versionnée. Une déclaration ne lui donne jamais un accès réel.
+      </p>
+      {source !== "api" || agents.length === 0 ? (
+        <p className={`agent-registry-notice ${source}`} role="status" aria-live="polite">
+          {notice}
+        </p>
+      ) : (
+        <>
+          <p className="agent-registry-notice" role="status" aria-live="polite">
+            {notice}
+          </p>
+          <div className="agent-registry-list">
+            {agents.map((agent) => (
+              <article className="agent-registry-row" key={agent.key}>
+                <div className="agent-registry-heading">
+                  <div>
+                    <h3>{agent.displayName}</h3>
+                    <p>
+                      {agent.domain} · {formatAgentExecutionMode(agent.executionMode)} · v{agent.version}
+                    </p>
+                  </div>
+                  <span className="status-tag planned">{agent.status}</span>
+                </div>
+                <p className="agent-registry-lock">
+                  {agent.allowedTools.length} outil{agent.allowedTools.length === 1 ? "" : "s"} déclaré
+                  {agent.allowedTools.length === 1 ? "" : "s"} · {agent.contextSources.length} source
+                  {agent.contextSources.length === 1 ? "" : "s"} de contexte.{" "}
+                  {agent.status === "PLANNED"
+                    ? "Aucun outil n’est exécutable à cet état."
+                    : "Les actions restent soumises au contrat et aux permissions serveur."}
+                </p>
+              </article>
+            ))}
+          </div>
+        </>
+      )}
     </section>
   );
 }
@@ -3675,6 +3790,7 @@ function SystemView({ dashboard, source }: { dashboard: DashboardSnapshot; sourc
   return (
     <div className="page-grid system-view">
       <SystemPanel services={dashboard.systemServices} source={source} />
+      <AgentRegistryPanel />
       <ActivityTimeline />
     </div>
   );

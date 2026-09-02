@@ -20,6 +20,7 @@ Le premier runtime est une API Fastify locale sur `http://127.0.0.1:8787`, conso
 | `GET /health` | Livrée | Santé du runtime local et disponibilité de la base locale. |
 | `GET /v1/me` | Livrée | Identité et workspace de démonstration, marqués `LOCAL_DEMO`. |
 | `GET /v1/modules` | Livrée | Registre des modules visibles du Command Center. |
+| `GET /v1/agents` | Livrée | Registre déclaratif des manifestes d’agents revus. Il ne démarre aucun agent et ne rend aucun outil exécutable. |
 | `GET /v1/system/status` | Livrée | États factuels de la tranche locale ; les intégrations absentes sont `WARNING` ou `DISCONNECTED`. |
 | `GET /v1/dashboard/summary` | Livrée | Compteurs factuels et date civile du workspace pour le Command Center ; aucune donnée de livraison, compte social ou contenu libre. |
 | `GET /v1/activity-logs` | Livrée | Timeline d’activité locale en lecture seule : projection bornée de l’audit, filtrée par workspace serveur et sans payload, acteur ni données privées. |
@@ -40,6 +41,12 @@ La commande retourne un objet `data` contenant la commande structurée, les outi
 `GET /v1/social/platforms` retourne uniquement les déclarations de capacité de démonstration : clé de plateforme, version de matrice, booléens OAuth/brouillon/planification/publication/analytics, contraintes d’approbation et de revue, note et date `verifiedAt`. Un booléen à `true` signifie seulement qu’une capacité est documentée pour une future étude d’adaptateur ; il ne prouve ni qu’un compte est connecté, ni qu’un scope est accordé, ni qu’un appel réel est autorisé ou possible.
 
 La route n’accepte aucun paramètre, ne retourne ni `SocialAccount`, identifiant de compte, token, secret, scope accordé, état de connexion ou métrique, et n’appelle aucune plateforme externe. Sa lecture n’écrit ni audit ni état local. Le client doit l’étiqueter comme déclarative et afficher une indisponibilité explicite s’il ne peut pas la lire ; il ne doit jamais en déduire une intégration active.
+
+### Registre d’agents déclaratif
+
+`GET /v1/agents` retourne les manifestes versionnés des spécialistes déjà revus par le code : identité, statut, domaine, mode d’exécution, intentions, contrats d’entrée/sortie, liste blanche déclarative d’outils, catégories de contexte, policy d’approbation, version de prompt et suite d’évaluation. Il ne retourne ni contenu de prompt, ni secret, token, workspace, utilisateur, audit ou état d’exécution.
+
+Le runtime local ne déclare aujourd’hui que `agent_memory_manager` et `agent_music_librarian`, tous deux `PLANNED`, `PROPOSAL_ONLY` et `NO_EXTERNAL_ACTIONS`. Leurs outils déclarés sont seulement `READ`. Cette route est une lecture sans paramètre et sans effet : elle ne crée aucun audit, ne démarre aucun modèle, ne contacte aucun fournisseur et ne confère aucune capacité. Une déclaration d’outil n’est pas une capacité du runtime ; le registre serveur refuse toute invocation d’un agent tant que son statut n’est pas `ACTIVE`, puis vérifie l’outil exact déclaré.
 
 ### Résumé factuel du Command Center
 
@@ -531,10 +538,10 @@ Les namespaces suivants sont réservés, mais aucune route ne doit être créée
 /v1/shopping/*      # listes et articles de courses
 /v1/documents/*     # documents et notes futures
 /v1/modules/*       # état des modules IDA activables
-/v1/agents/*        # lecture administrative du registry, jamais exécution libre
+/v1/agents/*        # activation/configuration future contrôlée, jamais exécution libre
 ```
 
-Pour finance, le principe est lecture seule, consentement séparé et fournisseur agréé. Pour les courses, le module réutilise les conventions d’identité, mémoire consentie, tâches et notifications sans toucher aux données artistiques. Pour le registry, seules des routes administratives de lecture/configuration contrôlée peuvent exister : les modules et agents restent du code déployé et revu, non des scripts exécutables provenant de la base.
+Pour finance, le principe est lecture seule, consentement séparé et fournisseur agréé. Pour les courses, le module réutilise les conventions d’identité, mémoire consentie, tâches et notifications sans toucher aux données artistiques. `GET /v1/agents` est déjà une projection déclarative ; les futures routes de configuration resteront contrôlées. Les modules et agents restent du code déployé et revu, non des scripts exécutables provenant de la base.
 
 ## Versioning et compatibilité
 

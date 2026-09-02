@@ -114,6 +114,37 @@ export interface SocialPlatformCapabilityRecord {
   verifiedAt: string;
 }
 
+export type AgentStatus = "PLANNED" | "EXPERIMENTAL" | "ACTIVE" | "DISABLED";
+
+export type AgentExecutionMode = "READ_ONLY" | "PROPOSAL_ONLY" | "CONTROLLED_EXECUTION";
+
+export type AgentApprovalPolicy = "READ_ONLY" | "NO_EXTERNAL_ACTIONS" | "HUMAN_APPROVAL_FOR_SIDE_EFFECTS";
+
+export type AgentToolPermission = "READ" | "WRITE" | "APPROVAL_REQUIRED" | "PUBLISH" | "SYSTEM";
+
+export interface AgentAllowedToolRecord {
+  key: string;
+  moduleKey: string;
+  permission: AgentToolPermission;
+}
+
+export interface AgentManifestRecord {
+  key: string;
+  version: string;
+  status: AgentStatus;
+  displayName: string;
+  domain: string;
+  executionMode: AgentExecutionMode;
+  supportedIntents: string[];
+  inputContract: string;
+  outputContract: string;
+  allowedTools: AgentAllowedToolRecord[];
+  contextSources: string[];
+  approvalPolicy: AgentApprovalPolicy;
+  promptVersion: string;
+  evaluationSuite: string;
+}
+
 export type MemoryCategory =
   | "ARTIST_MEMORY"
   | "CONTENT_MEMORY"
@@ -1392,6 +1423,109 @@ function toSocialPlatformCapability(record: Record<string, unknown>): SocialPlat
   };
 }
 
+function agentStatus(value: unknown): AgentStatus | undefined {
+  if (value === "PLANNED" || value === "EXPERIMENTAL" || value === "ACTIVE" || value === "DISABLED") {
+    return value;
+  }
+
+  return undefined;
+}
+
+function agentExecutionMode(value: unknown): AgentExecutionMode | undefined {
+  if (value === "READ_ONLY" || value === "PROPOSAL_ONLY" || value === "CONTROLLED_EXECUTION") {
+    return value;
+  }
+
+  return undefined;
+}
+
+function agentApprovalPolicy(value: unknown): AgentApprovalPolicy | undefined {
+  if (value === "READ_ONLY" || value === "NO_EXTERNAL_ACTIONS" || value === "HUMAN_APPROVAL_FOR_SIDE_EFFECTS") {
+    return value;
+  }
+
+  return undefined;
+}
+
+function agentToolPermission(value: unknown): AgentToolPermission | undefined {
+  if (
+    value === "READ" ||
+    value === "WRITE" ||
+    value === "APPROVAL_REQUIRED" ||
+    value === "PUBLISH" ||
+    value === "SYSTEM"
+  ) {
+    return value;
+  }
+
+  return undefined;
+}
+
+function toAgentAllowedTool(record: Record<string, unknown>): AgentAllowedToolRecord {
+  const key = readString(record.key);
+  const moduleKey = readString(record.moduleKey);
+  const permission = agentToolPermission(record.permission);
+
+  if (!key || !moduleKey || !permission) {
+    throw new IdaApiError("Un outil déclaré par le registre d’agents est invalide.");
+  }
+
+  return { key, moduleKey, permission };
+}
+
+function toAgentManifest(record: Record<string, unknown>): AgentManifestRecord {
+  const key = readString(record.key);
+  const version = readString(record.version);
+  const status = agentStatus(record.status);
+  const displayName = readString(record.displayName);
+  const domain = readString(record.domain);
+  const executionMode = agentExecutionMode(record.executionMode);
+  const inputContract = readString(record.inputContract);
+  const outputContract = readString(record.outputContract);
+  const approvalPolicy = agentApprovalPolicy(record.approvalPolicy);
+  const promptVersion = readString(record.promptVersion);
+  const evaluationSuite = readString(record.evaluationSuite);
+
+  if (
+    !key ||
+    !version ||
+    !status ||
+    !displayName ||
+    !domain ||
+    !executionMode ||
+    !inputContract ||
+    !outputContract ||
+    !approvalPolicy ||
+    !promptVersion ||
+    !evaluationSuite ||
+    !Array.isArray(record.supportedIntents) ||
+    !record.supportedIntents.every((intent) => typeof intent === "string" && intent.trim().length > 0) ||
+    !Array.isArray(record.contextSources) ||
+    !record.contextSources.every((source) => typeof source === "string" && source.trim().length > 0) ||
+    !Array.isArray(record.allowedTools) ||
+    !record.allowedTools.every(isRecord)
+  ) {
+    throw new IdaApiError("Un manifeste du registre d’agents est invalide.");
+  }
+
+  return {
+    key,
+    version,
+    status,
+    displayName,
+    domain,
+    executionMode,
+    supportedIntents: record.supportedIntents.map((intent) => intent.trim()),
+    inputContract,
+    outputContract,
+    allowedTools: record.allowedTools.map(toAgentAllowedTool),
+    contextSources: record.contextSources.map((source) => source.trim()),
+    approvalPolicy,
+    promptVersion,
+    evaluationSuite,
+  };
+}
+
 export async function fetchMediaAssets(input: MediaSearchInput = {}): Promise<MediaAsset[]> {
   const query = new URLSearchParams();
 
@@ -1426,6 +1560,10 @@ export async function fetchContentRotationCandidates(
 
 export async function fetchSocialPlatformCapabilities(): Promise<SocialPlatformCapabilityRecord[]> {
   return readDataList(await getApiJson("/v1/social/platforms"), "/v1/social/platforms").map(toSocialPlatformCapability);
+}
+
+export async function fetchAgentManifests(): Promise<AgentManifestRecord[]> {
+  return readDataList(await getApiJson("/v1/agents"), "/v1/agents").map(toAgentManifest);
 }
 
 export async function uploadMediaAsset(input: MediaUploadInput): Promise<MediaAsset> {

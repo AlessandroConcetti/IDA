@@ -85,6 +85,7 @@ describe("IDA API — première tranche Phase 1", () => {
     const endpoints = [
       "/v1/me",
       "/v1/modules",
+      "/v1/agents",
       "/v1/system/status",
       "/v1/dashboard/summary",
       "/v1/activity-logs",
@@ -108,6 +109,48 @@ describe("IDA API — première tranche Phase 1", () => {
       expect(response.statusCode, url).toBe(200);
       expect(response.json()).toHaveProperty("data");
     }
+  });
+
+  it("expose un registre d’agents déclaratif, sans activation ni effet de bord", async () => {
+    const activityBefore = await app.inject({ method: "GET", url: "/v1/activity-logs?limit=30" });
+    expect(activityBefore.statusCode).toBe(200);
+
+    const response = await app.inject({ method: "GET", url: "/v1/agents" });
+    expect(response.statusCode).toBe(200);
+
+    const body = response.json() as { data: Array<Record<string, unknown>> };
+    expect(body.data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "agent_memory_manager",
+          status: "PLANNED",
+          executionMode: "PROPOSAL_ONLY",
+          approvalPolicy: "NO_EXTERNAL_ACTIONS",
+        }),
+        expect.objectContaining({
+          key: "agent_music_librarian",
+          status: "PLANNED",
+          executionMode: "PROPOSAL_ONLY",
+          approvalPolicy: "NO_EXTERNAL_ACTIONS",
+        }),
+      ]),
+    );
+    expect(body.data.every((agent) => agent.status === "PLANNED")).toBe(true);
+    expect(
+      body.data.every(
+        (agent) =>
+          Array.isArray(agent.allowedTools) &&
+          agent.allowedTools.every(
+            (tool) => typeof tool === "object" && tool !== null && "permission" in tool && tool.permission === "READ",
+          ),
+      ),
+    ).toBe(true);
+    expect(JSON.stringify(body)).not.toContain('"prompt":');
+    expect(JSON.stringify(body)).not.toMatch(/secret|token|workspaceId/iu);
+
+    const activityAfter = await app.inject({ method: "GET", url: "/v1/activity-logs?limit=30" });
+    expect(activityAfter.statusCode).toBe(200);
+    expect(activityAfter.json()).toEqual(activityBefore.json());
   });
 
   it("expose un résumé factuel du Command Center, scopé et sans effet de bord", async () => {

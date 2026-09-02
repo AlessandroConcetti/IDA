@@ -851,6 +851,89 @@ export const idaCommandIntentSchema = z.enum([
 
 export type IdaCommandIntent = z.infer<typeof idaCommandIntentSchema>;
 
+// Registre d'agents --------------------------------------------------------
+//
+// Un manifeste décrit une capacité avant toute activation. Il ne contient ni
+// prompt, ni secret, ni accès : seuls des identifiants de contrats et une liste
+// blanche déclarative traversent cette frontière partagée.
+export const agentKeySchema = z
+  .string()
+  .trim()
+  .min(8)
+  .max(80)
+  .regex(/^agent_[a-z0-9_]+$/i);
+export type AgentKey = z.infer<typeof agentKeySchema>;
+
+export const agentStatusSchema = z.enum(["PLANNED", "EXPERIMENTAL", "ACTIVE", "DISABLED"]);
+export type AgentStatus = z.infer<typeof agentStatusSchema>;
+
+export const agentExecutionModeSchema = z.enum(["READ_ONLY", "PROPOSAL_ONLY", "CONTROLLED_EXECUTION"]);
+export type AgentExecutionMode = z.infer<typeof agentExecutionModeSchema>;
+
+export const agentApprovalPolicySchema = z.enum([
+  "READ_ONLY",
+  "NO_EXTERNAL_ACTIONS",
+  "HUMAN_APPROVAL_FOR_SIDE_EFFECTS",
+]);
+export type AgentApprovalPolicy = z.infer<typeof agentApprovalPolicySchema>;
+
+export const agentContextSourceSchema = z.enum([
+  "ARTIST_PROFILE",
+  "MUSIC_CATALOG",
+  "CONTENT_LIBRARY",
+  "CAMPAIGN_CONTEXT",
+  "CALENDAR_CONTEXT",
+  "TASK_CONTEXT",
+  "PREFERENCE_MEMORY",
+  "SYSTEM_STATUS",
+  "SOCIAL_CAPABILITIES",
+]);
+export type AgentContextSource = z.infer<typeof agentContextSourceSchema>;
+
+export const agentAllowedToolSchema = z
+  .object({
+    key: z
+      .string()
+      .trim()
+      .min(1)
+      .max(96)
+      .regex(/^[a-z][a-z0-9_]*$/),
+    moduleKey: moduleKeySchema,
+    permission: permissionLevelSchema,
+  })
+  .strict();
+export type AgentAllowedTool = z.infer<typeof agentAllowedToolSchema>;
+
+const agentManifestTextSchema = z.string().trim().min(1).max(160);
+const agentManifestVersionSchema = z
+  .string()
+  .trim()
+  .regex(/^\d+\.\d+\.\d+$/);
+const agentContractVersionSchema = z
+  .string()
+  .trim()
+  .regex(/^[a-z][a-z0-9._-]{0,79}$/);
+
+export const agentManifestSchema = z
+  .object({
+    key: agentKeySchema,
+    version: agentManifestVersionSchema,
+    status: agentStatusSchema,
+    displayName: agentManifestTextSchema,
+    domain: moduleKeySchema,
+    executionMode: agentExecutionModeSchema,
+    supportedIntents: z.array(idaCommandIntentSchema).min(1).max(12),
+    inputContract: agentContractVersionSchema,
+    outputContract: agentContractVersionSchema,
+    allowedTools: z.array(agentAllowedToolSchema).min(1).max(16),
+    contextSources: z.array(agentContextSourceSchema).min(1).max(12),
+    approvalPolicy: agentApprovalPolicySchema,
+    promptVersion: agentContractVersionSchema,
+    evaluationSuite: agentContractVersionSchema,
+  })
+  .strict();
+export type AgentManifest = z.infer<typeof agentManifestSchema>;
+
 export const idaCommandStateSchema = z.enum([
   "RECEIVED",
   "UNDERSTOOD",

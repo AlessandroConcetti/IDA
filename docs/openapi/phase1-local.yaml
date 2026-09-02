@@ -9,7 +9,8 @@ info:
     strictement contrôlée, un registre de briefs de campagne internes avec lien
     de release contrôlé, un flux
     de mémoire consentie local, un Approval Center interne sans livraison et
-    un Task Center interne contrôlé.
+    un Task Center interne contrôlé, ainsi qu’un registre d’agents strictement
+    déclaratif sans exécution.
 servers:
   - url: http://127.0.0.1:8787
     description: API locale de développement
@@ -51,6 +52,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ModuleListResponse'
+  /v1/agents:
+    get:
+      operationId: listAgentManifests
+      summary: Liste les manifestes déclaratifs d’agents
+      description: >-
+        Lecture sans paramètre et sans effet. Elle expose des contrats revus,
+        jamais un prompt, secret, token, état d’exécution ni capacité d’appel
+        d’outil. Les manifestes locaux restent planifiés.
+      responses:
+        '200':
+          description: Manifestes versionnés, déclaratifs et non exécutables
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentManifestListResponse'
   /v1/system/status:
     get:
       operationId: getSystemStatus
@@ -1251,6 +1267,122 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Module'
+    AgentAllowedTool:
+      type: object
+      additionalProperties: false
+      required: [key, moduleKey, permission]
+      properties:
+        key:
+          type: string
+          minLength: 1
+          maxLength: 96
+          pattern: '^[a-z][a-z0-9_]*$'
+        moduleKey:
+          enum: [HOME, IDA, MUSIC, CONTENT, SOCIAL, CALENDAR, CAMPAIGNS, ANALYTICS, TASKS, MEMORY, SYSTEM]
+        permission:
+          enum: [READ, WRITE, APPROVAL_REQUIRED, PUBLISH, SYSTEM]
+    AgentManifest:
+      type: object
+      additionalProperties: false
+      required:
+        - key
+        - version
+        - status
+        - displayName
+        - domain
+        - executionMode
+        - supportedIntents
+        - inputContract
+        - outputContract
+        - allowedTools
+        - contextSources
+        - approvalPolicy
+        - promptVersion
+        - evaluationSuite
+      properties:
+        key:
+          type: string
+          minLength: 8
+          maxLength: 80
+          pattern: '^agent_[A-Za-z0-9_]+$'
+        version:
+          type: string
+          pattern: '^\\d+\\.\\d+\\.\\d+$'
+        status:
+          enum: [PLANNED, EXPERIMENTAL, ACTIVE, DISABLED]
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 160
+        domain:
+          enum: [HOME, IDA, MUSIC, CONTENT, SOCIAL, CALENDAR, CAMPAIGNS, ANALYTICS, TASKS, MEMORY, SYSTEM]
+        executionMode:
+          enum: [READ_ONLY, PROPOSAL_ONLY, CONTROLLED_EXECUTION]
+        supportedIntents:
+          type: array
+          minItems: 1
+          maxItems: 12
+          items:
+            enum:
+              - UNKNOWN
+              - PREPARE_DAY
+              - SEARCH_MEDIA
+              - SEARCH_TRACK
+              - LIST_UNUSED_CONTENT
+              - CREATE_POST
+              - UPDATE_POST
+              - SCHEDULE_POST
+              - ANALYZE_PERFORMANCE
+              - CREATE_CAMPAIGN
+              - GET_CALENDAR
+              - CONNECT_SOCIAL_ACCOUNT
+              - EXPLAIN_PROPOSAL
+              - SAVE_MEMORY
+        inputContract:
+          type: string
+          pattern: '^[a-z][a-z0-9._-]{0,79}$'
+        outputContract:
+          type: string
+          pattern: '^[a-z][a-z0-9._-]{0,79}$'
+        allowedTools:
+          type: array
+          minItems: 1
+          maxItems: 16
+          items:
+            $ref: '#/components/schemas/AgentAllowedTool'
+        contextSources:
+          type: array
+          minItems: 1
+          maxItems: 12
+          items:
+            enum:
+              - ARTIST_PROFILE
+              - MUSIC_CATALOG
+              - CONTENT_LIBRARY
+              - CAMPAIGN_CONTEXT
+              - CALENDAR_CONTEXT
+              - TASK_CONTEXT
+              - PREFERENCE_MEMORY
+              - SYSTEM_STATUS
+              - SOCIAL_CAPABILITIES
+        approvalPolicy:
+          enum: [READ_ONLY, NO_EXTERNAL_ACTIONS, HUMAN_APPROVAL_FOR_SIDE_EFFECTS]
+        promptVersion:
+          type: string
+          description: Identifiant de version uniquement ; jamais le contenu d’un prompt.
+          pattern: '^[a-z][a-z0-9._-]{0,79}$'
+        evaluationSuite:
+          type: string
+          pattern: '^[a-z][a-z0-9._-]{0,79}$'
+    AgentManifestListResponse:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AgentManifest'
     SystemStatus:
       type: object
       required: [component, state, message, checkedAt]

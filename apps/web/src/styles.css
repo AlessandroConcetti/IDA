@@ -832,6 +832,71 @@ h3 {
   color: #d97985;
 }
 
+.agent-registry {
+  min-width: 0;
+}
+
+.agent-registry-intro {
+  margin: 0;
+  color: #9198a9;
+  font-size: 0.74rem;
+  line-height: 1.5;
+}
+
+.agent-registry-notice {
+  margin: 14px 0 0;
+  color: #9299aa;
+  font-size: 0.69rem;
+  line-height: 1.45;
+}
+
+.agent-registry-notice.loading,
+.agent-registry-notice.unavailable {
+  padding: 14px;
+  border: 1px dashed rgba(255, 255, 255, 0.11);
+  border-radius: 11px;
+  background: rgba(3, 5, 9, 0.24);
+}
+
+.agent-registry-notice.unavailable {
+  color: #d6ab76;
+  border-color: rgba(227, 177, 110, 0.2);
+}
+
+.agent-registry-list {
+  display: flex;
+  flex-direction: column;
+  margin-top: 10px;
+}
+
+.agent-registry-row {
+  padding: 13px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.065);
+}
+
+.agent-registry-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.agent-registry-heading h3 {
+  color: #e8e8ee;
+}
+
+.agent-registry-heading p,
+.agent-registry-lock {
+  margin: 4px 0 0;
+  color: #858b9c;
+  font-size: 0.7rem;
+  line-height: 1.45;
+}
+
+.agent-registry-lock {
+  color: #969cac;
+}
+
 .activity-timeline {
   min-width: 0;
   padding: 22px;
@@ -3810,6 +3875,11 @@ h3 {
 
   .system-state {
     grid-column: 2;
+  }
+
+  .agent-registry-heading {
+    flex-direction: column;
+    gap: 7px;
   }
 
   .track-row {

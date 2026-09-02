@@ -63,6 +63,7 @@ Créer le premier produit réellement utilisable : un Command Center responsive 
 - Command Center React responsive desktop/iPhone avec tous les modules initiaux, dont `SOCIAL`, `CAMPAIGNS`, `ANALYTICS`, `TASKS`, `MEMORY` et `SYSTEM` ;
 - résumé d’accueil factuel du workspace : approbations actionnables, snapshots de planification interne actifs, campagnes actives et releases à venir, avec date calculée côté serveur dans le fuseau du workspace et valeurs indisponibles plutôt que fictives en cas d’API absente ;
 - API Fastify locale, contrats Zod partagés et policy d’outils ;
+- Agent Registry déclaratif : manifestes versionnés pour `Memory Manager` et `Music Librarian`, visibles dans System, strictement `PLANNED`/`PROPOSAL_ONLY`, sans exécution, prompt ni accès implicite ;
 - données musicales, médias, mémoire et tâches de démonstration isolées par workspace côté serveur, ainsi qu’une matrice sociale globale déclarative en lecture seule sans compte, token, connexion ni appel externe ;
 - commandes textuelles déterministes de lecture : journée civile du workspace (aujourd’hui ou demain, tâches et calendrier interne valides), médias réellement disponibles à proposer (formulation naturelle « contenus inutilisés ») et état système ;
 - Artist Brain éditable : identité, ton, genres, influences, audience, objectifs et vocabulaire, avec validation, permission `WRITE` interne et persistance locale ;
@@ -236,7 +237,7 @@ Faire évoluer IDA en assistant personnel plus proactif, multimodal et modulaire
 - analyse multimodale de médias avec résultats révisables ;
 - mémoire enrichie avec sources, confiance et contrôle utilisateur ;
 - planification inter-domaines à partir de règles explicites ;
-- registre d'agents versionné et processus d'onboarding d'un nouvel agent ;
+- activation progressive et processus d’onboarding d’un nouvel agent à partir du registre versionné ;
 - modules personnels opt-in : tâches avancées, calendrier personnel, documents, notes et automatisations ;
 - amélioration progressive des clients natifs si la PWA ne couvre plus les besoins.
 
