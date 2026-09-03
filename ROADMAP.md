@@ -6,7 +6,7 @@ IDA sera construit par petites étapes testables. Une phase ne démarre réellem
 
 La roadmap décrit une séquence de capacité, pas une promesse de date. Elle privilégie un socle fiable plutôt qu'un grand nombre de fonctions incomplètes.
 
-L'évolution Tentacular validée conserve ce séquencement. Windows, macOS, le Web/PWA, iOS, Android et de futurs clients TV partageront un seul Core. Les thèmes personnalisables, gestes et surfaces desktop restent des capacités clientes ultérieures et ne retardent pas les phases prioritaires.
+L'évolution Tentacular validée conserve ce séquencement. Windows, macOS, le Web/PWA, iOS, Android et de futurs clients TV partageront un seul Core. Sur téléphone, le navigateur Web/PWA restera disponible en parallèle de l'application native iOS ou Android ; chaque instance cliente aura une session révocable séparément. Les thèmes personnalisables, gestes et surfaces desktop restent des capacités clientes ultérieures et ne retardent pas les phases prioritaires.
 
 ## Vue d'ensemble
 
@@ -80,13 +80,13 @@ Créer le premier produit réellement utilisable : un Command Center responsive 
 - IDA History : registre privé local des paires demande/réponse de commandes `READ / COMPLETED`, restauré pour le même acteur/workspace par pagination cléset, sans résultat d’outil, paramètres, raisonnement ni mémoire implicite ; l’écriture est auditée sans texte libre et la consultation reste sans effet ;
 - PGlite uniquement pour le développement/test local ; aucun compte social, aucun token, aucune publication et aucune donnée personnelle réelle.
 
-La tranche suivante de Phase 1 doit remplacer le contexte de démonstration par une vraie identité/workspace et des sessions liées aux appareils, puis ajouter les traitements média de production. L'analyse et les décisions préalables sont décrites dans `IDENTITY_DEVICE_LINKING.md` ; aucune modification structurelle Identity ne commence avant leur validation. La suite du calendrier couvrira surcharge, répétitions et fraîcheur avant toute automatisation ; aucune de ces étapes ne débloque encore la publication sociale.
+Les décisions d'Identity/Device Linking décrites dans `IDENTITY_DEVICE_LINKING.md` sont validées. La première tranche livre les contrats stricts, la politique d'accès et les tests d'architecture pour les instances clientes, sessions et grants ; aucun endpoint réel d'authentification n'est encore actif. Les mutations de base, routes et écrans d'association viendront dans des tranches verticales ultérieures avant le remplacement du contexte de démonstration. La suite du calendrier couvrira surcharge, répétitions et fraîcheur avant toute automatisation ; aucune de ces étapes ne débloque encore la publication sociale.
 
 ### Périmètre
 
 1. Initialiser le dépôt, les conventions, les environnements et les tests de base.
 2. Mettre en place l'authentification, l'espace personnel et les permissions initiales.
-3. Créer le dashboard `IDA COMMAND CENTER` responsive desktop/mobile, puis conserver les mêmes contrats pour Windows, macOS, iOS et Android natifs si nécessaires.
+3. Créer le dashboard `IDA COMMAND CENTER` responsive desktop/mobile, maintenir son accès depuis le navigateur Web/PWA sur téléphone en parallèle des applications natives, puis conserver les mêmes contrats pour Windows, macOS, iOS et Android.
 4. Créer la conversation textuelle et le premier endpoint de commande IDA.
 5. Créer `Artist Brain` éditable : identité, ton, influences, objectifs, règles et préférences.
 6. Créer `Music Brain` : projets, releases, tracks et métadonnées musicales.

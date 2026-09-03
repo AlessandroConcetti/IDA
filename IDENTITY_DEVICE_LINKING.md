@@ -2,7 +2,7 @@
 
 ## Statut
 
-Ce document est une **analyse d'architecture à valider**. Aucun endpoint d'authentification, compte réel, session, appareil ou service cloud n'est activé par ce document.
+Cette architecture est **validée**. Sa première tranche de contrats, politique d'accès et tests d'architecture est livrée ; aucun endpoint d'authentification, compte réel, session persistée, association d'instance ou service cloud n'est encore activé.
 
 ## État actuel
 
@@ -13,13 +13,13 @@ Cette base est utile pour les tests de scope, mais ne constitue pas une authenti
 ## Position dans le Kernel
 
 ```text
-Client Windows / macOS / Web / PWA / iOS / Android / TV
+Client Windows / macOS / Web-PWA desktop ou mobile / iOS / Android / TV
                               │
-                     preuve de session appareil
+                  preuve de session d'instance
                               ↓
                     Identity Session Gateway
                               ↓
-       RequestContext(user, workspace, membership, device, session)
+ RequestContext(user, workspace, membership, clientInstance, session)
                               ↓
              API → IDA Core → Tool Gateway → Modules
 ```
@@ -29,10 +29,10 @@ L'Identity Session Gateway authentifie la session et construit un `RequestContex
 L'ordre de contrôle cible est :
 
 1. session valide et non expirée ;
-2. appareil actif et non révoqué ;
+2. instance cliente active et non révoquée ;
 3. utilisateur actif ;
 4. membership actif dans le workspace ;
-5. restrictions propres à l'appareil ;
+5. restrictions propres à l'instance cliente ;
 6. permission de l'outil et scope de la ressource ;
 7. réauthentification renforcée et approbation si requises.
 
@@ -40,16 +40,16 @@ Une authentification réussie n'élève donc jamais automatiquement un appareil 
 
 ## Modèle de données cible minimal
 
-Les noms définitifs seront fixés dans une migration versionnée après validation.
+Les noms définitifs seront fixés seulement lors d'une future tranche de migration versionnée ; la validation actuelle n'autorise encore aucune table.
 
 | Entité | Données minimales | Règles |
 |---|---|---|
 | `UserEmail` | user, adresse normalisée, état de vérification | une adresse seule n'est jamais une preuve d'accès |
 | `AuthIdentity` | user, type de credential, identifiant fournisseur | aucun secret brut ; fournisseur maintenu ou passkey privilégiée |
-| `Device` | user, nom, plateforme, clé publique, état, dernière activité | identité distincte d'une session et d'un workspace |
-| `DeviceLinkChallenge` | initiateur, code/nonce haché, expiration, état | usage unique, court, confirmé depuis un appareil déjà autorisé |
-| `Session` | user, device, token haché, expiration, révocation | rotation, révocation immédiate, portée minimale |
-| `DeviceWorkspaceGrant` | device, workspace, capacités limitées | ne remplace pas la membership ; peut seulement réduire les droits |
+| `ClientInstance` | user, nom, surface, plateforme, clé publique, état, dernière activité | principal d'une installation ou d'un profil client, distinct d'une session, du workspace et du matériel physique éventuel |
+| `ClientLinkChallenge` | initiateur, code/nonce haché, expiration, état | usage unique, court, confirmé depuis une instance déjà autorisée |
+| `Session` | user, client instance, token haché, expiration, révocation | rotation, révocation immédiate, portée minimale |
+| `ClientWorkspaceGrant` | client instance, workspace, capacités limitées | ne remplace pas la membership ; peut seulement réduire les droits |
 | `StepUpChallenge` | session, action sensible, expiration | lié à l'action et non réutilisable |
 | `RecoveryMethod` | user, méthode, état, date | secrets de récupération hachés et affichés une seule fois |
 
@@ -59,10 +59,17 @@ Les jetons sociaux, bancaires et providers restent des credentials d'intégratio
 
 ### Création et connexion
 
-- L'utilisateur crée son compte via une adresse vérifiée et une méthode forte à choisir.
+- L'utilisateur crée son compte via une adresse vérifiée et une passkey privilégiée comme preuve forte.
 - Le serveur crée le compte, le premier workspace et la membership `OWNER` de façon atomique.
-- La session est attachée à un appareil enregistré et à une preuve cryptographique ; aucun token durable ne réside dans `localStorage`.
+- La session est attachée à une instance cliente enregistrée et à une preuve cryptographique ; aucun token durable ne réside dans `localStorage`.
+- Sur le Web/PWA, la session utilise une liaison serveur et des cookies protégés ; l'accès dans le navigateur mobile reste disponible en parallèle de l'application native.
 - Sur client natif, le credential appareil réside dans Keychain/Keystore ou le coffre Windows/macOS.
+
+### Accès parallèle sur téléphone
+
+Le navigateur Web/PWA et l'application native iOS ou Android accèdent au même compte, au même workspace, aux mêmes conversations et au même état fourni par le Core. Ils restent toutefois deux instances clientes distinctes : chaque instance reçoit son propre credential ou mécanisme de liaison et ses propres sessions. Révoquer la session ou l'instance Web/PWA ne révoque pas automatiquement l'application native, et réciproquement.
+
+Le matériel physique peut être regroupé pour l'affichage (« cet iPhone », par exemple), mais ce regroupement n'est jamais l'unique frontière d'autorisation. Les permissions restent évaluées pour l'instance, la session, la membership, le workspace et l'action demandée. Ni le navigateur ni l'application native ne peut transférer silencieusement ses privilèges à l'autre.
 
 ### Association d'un appareil
 
@@ -87,7 +94,9 @@ Finance, publication, changement de sécurité, export complet, connexion social
 
 Le premier profil recommandé reste `LOCAL_OWNER` : un Core autoritaire tourne sur un PC Windows ou un Mac approuvé. Les autres appareils rejoignent ce Core par boucle locale, réseau privé ou tunnel authentifié. Ils ne lisent jamais directement PGlite ou un SSD.
 
-Un service cloud n'est pas nécessaire pour le premier compte local. Les fonctions e-mail, récupération distante et accès hors domicile demanderont cependant un canal minimal ou un futur profil hébergé. Aucune synchronisation multi-writer n'est introduite : un workspace conserve un seul Core autoritaire.
+Un service cloud n'est pas nécessaire pour le premier compte local. Les fonctions e-mail, récupération distante et accès hors domicile demanderont cependant un canal minimal ou un futur profil hébergé. Aucune synchronisation multi-writer n'est introduite : un workspace conserve un seul Core autoritaire. Le navigateur mobile et l'application native ne synchronisent donc pas directement leurs bases ou mémoires ; ils retrouvent le même état en interrogeant ce Core.
+
+L'accès depuis le navigateur d'un téléphone exige une origine HTTPS stable et authentifiée, y compris sur le réseau local ou via un tunnel privé. L'adresse de développement `http://127.0.0.1` reste limitée à la machine hôte : exposer simplement `http://<ip-du-pc>` ne fournit ni la frontière de sécurité, ni le contexte sécurisé nécessaire aux passkeys, à la PWA et aux permissions navigateur. Le déploiement Web/PWA privilégiera une origine commune avec l'API afin de garder cookies et protection CSRF simples et vérifiables.
 
 ## Surface API cible, non active
 
@@ -99,22 +108,22 @@ POST /v1/auth/step-up
 GET  /v1/sessions
 DELETE /v1/sessions/:sessionId
 
-GET  /v1/devices
-POST /v1/device-links
-POST /v1/device-links/:challengeId/complete
-POST /v1/device-links/:challengeId/confirm
-DELETE /v1/devices/:deviceId
-PATCH /v1/devices/:deviceId/grants
+GET  /v1/client-instances
+POST /v1/client-links
+POST /v1/client-links/:challengeId/complete
+POST /v1/client-links/:challengeId/confirm
+DELETE /v1/client-instances/:clientInstanceId
+PATCH /v1/client-instances/:clientInstanceId/grants
 ```
 
-Les noms sont indicatifs. Chaque mutation aura un schéma strict, des limites de débit, une idempotence, une protection anti-rejeu et un audit redacted.
+Les noms sont indicatifs. L'interface pourra regrouper plusieurs instances sous un appareil lisible, mais l'API autorisera toujours chaque instance séparément. Chaque mutation aura un schéma strict, des limites de débit, une idempotence, une protection anti-rejeu et un audit redacted.
 
 ## Fichiers et composants concernés lors de l'implémentation
 
 | Zone | Évolution future |
 |---|---|
-| `packages/contracts/src/identity/*` | DTO session/device/linking, erreurs et RequestContext public minimal |
-| `packages/domain/src/identity/*` | politiques de session, appareil, membership, step-up et grants |
+| `packages/contracts/src/identity.ts` | **Livré :** schémas stricts d'instance, grant, session, step-up et contexte serveur |
+| `packages/domain/src/identity-access-policy.ts` | **Livré :** intersection session, membership, instance, grant, permission et step-up ; le Tool Gateway reste obligatoire |
 | `apps/api/src/plugins/identity-context.ts` | authentification avant les routes et construction du contexte serveur |
 | `apps/api/src/modules/identity/*` | cas d'usage, repositories, routes et audit |
 | `apps/api/src/ida-core.ts` | recevoir un port `RequestContext`, jamais `demoContext` |
@@ -133,20 +142,23 @@ Ce découpage est cible : il ne justifie pas une réécriture massive des fichie
 - session absente, invalide, expirée, révoquée ou rejouée refusée ;
 - appareil inconnu ou révoqué refusé immédiatement ;
 - challenge expiré, déjà consommé, deviné ou confirmé par le mauvais compte refusé ;
-- nouveau device limité aux grants explicitement accordés ;
-- révocation d'un device sans impact automatique sur les autres ;
+- nouvelle instance limitée aux grants explicitement accordés ;
+- navigateur Web/PWA et application native du même téléphone possédant des sessions distinctes et révocables indépendamment ;
+- révocation d'une instance sans impact automatique sur les autres ;
 - membership révoquée après connexion prise en compte à la requête suivante ;
-- device authentifié incapable de contourner Tool Gateway, approbations ou scope ;
-- step-up lié à un autre payload/workspace/device refusé ;
+- instance authentifiée incapable de contourner Tool Gateway, approbations ou scope ;
+- step-up lié à un autre payload/workspace/session/instance refusé ;
 - secrets, codes et tokens absents des logs, erreurs et projections client ;
 - cache ou commande hors ligne revalidé par le Core avant mutation.
 
-## Décisions nécessaires avant toute modification structurelle
+## Décisions validées pour la première tranche
 
-1. Première méthode de connexion : passkey recommandée, ou mot de passe maintenu par un fournisseur d'identité avec MFA.
-2. Le premier compte doit-il fonctionner entièrement hors ligne, sans vérification e-mail immédiate ?
-3. L'accès iPhone/Android hors du réseau local est-il requis dans la première bêta ?
-4. Quel niveau de récupération est accepté si le PC principal et les appareils autorisés sont perdus ?
-5. Les grants d'appareil seront-ils prédéfinis (`TRUSTED`, `LIMITED`, `VIEW_ONLY`) ou configurables capacité par capacité ?
+1. Le compte utilise une adresse e-mail vérifiée et privilégie une passkey comme preuve forte ; une adresse seule n'autorise jamais l'accès.
+2. L'association initiale d'une nouvelle instance utilise un QR code ou code temporaire, puis une confirmation explicite depuis une instance déjà autorisée.
+3. Le premier accès multi-appareil passe par un réseau privé ou tunnel authentifié, sans imposer une synchronisation cloud complexe.
+4. La récupération cible combine des codes hors ligne et une autre instance autorisée, sans porte dérobée fondée sur la seule adresse e-mail.
+5. Les grants initiaux sont les profils bornés `TRUSTED`, `LIMITED` et `VIEW_ONLY` ; ils peuvent uniquement réduire les permissions de la membership.
+6. Windows est le premier hôte `LOCAL_OWNER`; le même profil doit être déployable sur macOS sans dupliquer le Core.
+7. Sur téléphone, le Web/PWA et l'application native iOS ou Android restent disponibles en parallèle avec des sessions révocables séparément.
 
-Tant que ces décisions ne sont pas validées, `demoContext` reste limité à la démo locale et aucune table ou route Identity supplémentaire ne doit être créée.
+Cette validation a autorisé les contrats, politiques et tests d'architecture désormais livrés. Elle n'active ni migration, endpoint, compte, session, liaison d'instance ou service cloud réel ; `demoContext` reste limité à la démo locale jusqu'à leur livraison par tranches vérifiées.

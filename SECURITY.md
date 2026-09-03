@@ -6,7 +6,7 @@
 
 ## 1. Objectif
 
-IDA centralisera des actifs sensibles : morceaux non publiés, stems, stratégie artistique, mémoire, calendrier, comptes sociaux et, plus tard, éventuellement des données personnelles générales. La sécurité doit donc être une propriété du noyau et de l’API partagée par le Web/PWA et les futurs clients Windows, macOS, iOS, Android ou TV, pas une fonction ajoutée dans les interfaces.
+IDA centralisera des actifs sensibles : morceaux non publiés, stems, stratégie artistique, mémoire, calendrier, comptes sociaux et, plus tard, éventuellement des données personnelles générales. La sécurité doit donc être une propriété du noyau et de l’API partagée par le Web/PWA sur ordinateur ou navigateur mobile et les futurs clients Windows, macOS, iOS, Android ou TV, pas une fonction ajoutée dans les interfaces.
 
 Le choix initial recommandé est un **monolithe modulaire avec des workers isolés**, et non des microservices prématurés. Les frontières de domaine, les permissions et les secrets doivent cependant être réels dès la Phase 1 afin de permettre une évolution sûre.
 
@@ -62,7 +62,11 @@ L’IA n’obtient ni accès direct à la base de données, ni clé de productio
 - Exiger une authentification multifacteur du propriétaire avant la connexion d’un réseau social ou toute élévation de privilège.
 - Appliquer des limites de tentative de connexion, la vérification d’e-mail et une notification de nouvel appareil.
 
-L'adresse e-mail ne constitue jamais une preuve d'accès. Chaque appareil possède sa propre identité cryptographique, sa session révocable et des grants qui peuvent uniquement réduire les droits de la membership. Un appareil nouveau doit être confirmé explicitement depuis un appareil déjà autorisé au moyen d'un challenge court, à usage unique et protégé contre le rejeu. La révocation d'un appareil invalide toutes ses sessions sans supprimer le compte ni accorder de privilèges aux autres appareils. L'analyse complète et les décisions encore requises figurent dans `IDENTITY_DEVICE_LINKING.md`.
+L'accès depuis le navigateur Web/PWA d'un téléphone reste disponible en parallèle de l'application native iOS ou Android. Ces deux installations sont des instances clientes distinctes : elles ne partagent ni credential durable ni session, et chacune peut être révoquée sans invalider automatiquement l'autre.
+
+L'adresse e-mail ne constitue jamais une preuve d'accès. Chaque instance cliente autorisée possède sa propre identité cryptographique ou liaison serveur, sa session révocable et des grants qui peuvent uniquement réduire les droits de la membership. Une instance nouvelle doit être confirmée explicitement depuis une instance déjà autorisée au moyen d'un challenge court, à usage unique et protégé contre le rejeu. Sa révocation invalide toutes ses sessions sans supprimer le compte ni accorder de privilèges aux autres appareils ou instances. L'architecture et les décisions validées figurent dans `IDENTITY_DEVICE_LINKING.md` ; la première tranche de contrats, politique et tests est livrée, sans endpoint réel actif.
+
+Le navigateur mobile accède au Core uniquement via une origine HTTPS stable et authentifiée, idéalement same-origin avec l'API. Une adresse `http://<ip-locale>` ne convient pas : elle dégrade les garanties de cookies et ne fournit pas le contexte sécurisé attendu par passkeys, PWA ou permissions navigateur. Aucun fingerprint, IP ou user-agent ne sert de preuve d'identité. Les motifs détaillés de refus Identity restent dans l'audit serveur ; une future API renverra des erreurs publiques génériques afin de ne pas devenir un oracle de comptes, sessions ou instances.
 
 Les jetons de session, JWT et refresh tokens ne doivent jamais être stockés dans `localStorage` ou `sessionStorage` : une vulnérabilité XSS suffirait à les exfiltrer.
 

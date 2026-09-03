@@ -6,7 +6,7 @@
 
 ## Contexte
 
-IDA doit évoluer d'un hub musical local vers un assistant personnel extensible, utilisable depuis Windows, macOS, le Web, une PWA, iOS, Android et, plus tard, des clients TV. Cette extension ne doit créer ni deuxième cerveau, ni logique métier divergente dans les clients, ni accès implicite d'un modèle aux données ou aux actions.
+IDA doit évoluer d'un hub musical local vers un assistant personnel extensible, utilisable depuis Windows, macOS, le Web, une PWA, iOS, Android et, plus tard, des clients TV. Sur téléphone, le navigateur Web/PWA doit rester disponible en parallèle de l'application native. Cette extension ne doit créer ni deuxième cerveau, ni logique métier divergente dans les clients, ni accès implicite d'un modèle aux données ou aux actions.
 
 L'utilisateur doit pouvoir conserver un déploiement local-first, y compris un espace de travail transportable sur SSD, tout en gardant la possibilité d'utiliser plus tard un hébergement central. Les fournisseurs IA, stockage, identité, notifications et intégrations externes doivent pouvoir évoluer sans contaminer les modules métier.
 
@@ -19,6 +19,7 @@ L'architecture cible prend le nom **Tentacular** : un petit IDA Core stable four
 - Un workspace possède un seul Core logique et un seul writer autoritaire à un instant donné.
 - Tous les clients consomment la même API versionnée et les mêmes contrats.
 - Windows et macOS peuvent héberger le profil local du Core. Le Web, la PWA, iOS et Android restent des clients ; ils ne réimplémentent ni orchestration, mémoire, permissions ou règles métier.
+- Le navigateur Web/PWA et l'application native installés sur un même téléphone sont des instances clientes distinctes du même compte et du même Core ; leurs credentials et sessions sont révocables séparément.
 - Un futur profil hébergé exécute le même Core et les mêmes modules. Une migration entre profils transfère explicitement l'autorité ; elle ne crée pas deux sources de vérité actives.
 - Les caches clients sont bornés et révocables. Une commande préparée hors ligne est revalidée par le Core avant toute mutation.
 
@@ -37,13 +38,13 @@ Un workspace n'utilise jamais simultanément les deux profils comme writers. La 
 |---|---|---|
 | Windows | interface desktop ; peut lancer ou rejoindre un Core local | secrets dans le coffre OS ; aucune règle métier propre |
 | macOS | interface desktop ; peut lancer ou rejoindre un Core local | mêmes contrats et mêmes garanties que Windows |
-| Web | interface navigateur vers le Core configuré | aucun secret provider ni accès direct au volume de données |
-| PWA | client Web installable avec cache borné | cache non autoritaire ; aucune action différée sans revalidation serveur |
+| Web | interface navigateur desktop ou mobile vers le Core configuré | aucun secret provider ni accès direct au volume de données |
+| PWA | client Web installable sur ordinateur ou téléphone avec cache borné | cache non autoritaire ; aucune action différée sans revalidation serveur |
 | iOS | client natif fin | credential appareil dans le Keychain ; pas de token provider |
 | Android | client natif fin | credential appareil dans le Keystore ; pas de token provider |
 | TV / autre terminal | client fin futur et limité | capacités déclarées ; aucune autorité ni règle métier locale |
 
-Les différences de plateforme restent limitées aux capacités d'interface : notifications, partage de fichier, biométrie, microphone et intégration au système. Elles passent par des contrats de capacité et ne changent pas le métier.
+Les différences de plateforme restent limitées aux capacités d'interface : notifications, partage de fichier, biométrie, microphone et intégration au système. Elles passent par des contrats de capacité et ne changent pas le métier. Une instance Web/PWA ne partage jamais silencieusement son credential ou sa session avec l'application native ; leur éventuel regroupement sous un même appareil physique est seulement une présentation.
 
 Les thèmes visuels, l'introduction cinématique, le futur mode d'ambiance desktop et les gestes optionnels sont eux aussi des capacités clientes. Ils ne changent ni le Core, ni les données, ni les permissions. La caméra reste fermée tant qu'une action explicite de l'utilisateur n'a pas demandé son usage dans le parcours courant.
 
@@ -98,12 +99,13 @@ Chaque domaine obtient son propre modèle de données, ses outils, permissions, 
 - Les modules évoluent dans le monolithe avant toute extraction réseau.
 - La portabilité concerne le workspace et ses données, pas l'exécution de code non vérifié.
 - Les clients natifs peuvent progresser indépendamment sans créer de logique métier parallèle.
+- L'accès Web/PWA mobile peut être livré et maintenu indépendamment des applications natives, tout en utilisant le même Core et des sessions séparées.
 - La sélection des providers devient explicable, contrôlable et testable.
 - Les futurs domaines sensibles ne sont pas « débloqués » par cette décision ; chacun exige une décision et une tranche verticale propres.
 
 ## Non-objectifs immédiats
 
-Cette ADR n'autorise ni application native, synchronisation cloud, provider IA réel, exécution depuis SSD, contrôle gestuel, caméra au démarrage, mode fond d'écran, module Finance/Courses/Santé/Maison/Legal, action domotique, acte juridique ou migration de la base locale. Elle fixe les frontières à respecter lorsque ces travaux seront explicitement planifiés.
+Cette ADR n'autorise ni application native, synchronisation cloud, endpoint Identity réel, provider IA réel, exécution depuis SSD, contrôle gestuel, caméra au démarrage, mode fond d'écran, module Finance/Courses/Santé/Maison/Legal, action domotique, acte juridique ou migration de la base locale. La validation Identity a autorisé uniquement la première tranche, désormais livrée, de contrats, politique d'accès et tests d'architecture. Cette ADR fixe les frontières à respecter lorsque les autres travaux seront explicitement planifiés.
 
 ## Documents associés
 

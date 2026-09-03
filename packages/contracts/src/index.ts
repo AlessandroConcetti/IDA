@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export * from "./identity.js";
+
 export const entityIdSchema = z.string().trim().min(1);
 export const timestampSchema = z.string().datetime({ offset: true });
 

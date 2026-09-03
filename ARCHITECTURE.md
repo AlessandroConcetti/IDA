@@ -57,17 +57,17 @@ flowchart TB
 
 ### 4.1 Web et PWA au MVP
 
-Le premier client est une application web responsive servant à la fois de hub desktop et mobile : même compte, même session, même conversation et même état système. La couche installable PWA viendra lorsqu’elle apportera un bénéfice concret (offline, notifications ou accès mobile) sans créer de logique métier parallèle.
+Le premier client est une application web responsive servant à la fois de hub desktop et mobile : même compte, mêmes conversations et même état système issus du Core. Chaque instance cliente conserve toutefois sa propre session révocable. La couche installable PWA viendra lorsqu’elle apportera un bénéfice concret (offline, notifications ou accès mobile) sans créer de logique métier parallèle.
 
 - Sur desktop : navigation complète `HOME`, `IDA`, `MUSIC`, `CONTENT`, `SOCIAL`, `CALENDAR`, `CAMPAIGNS`, `ANALYTICS`, `TASKS`, `MEMORY`, `SYSTEM`.
-- Sur mobile : parcours resserré `HOME`, `IDA`, `CONTENT`, `CALENDAR`, `MORE`.
+- Sur mobile : parcours resserré `HOME`, `IDA`, `CONTENT`, `CALENDAR`, `MORE`, disponible dans le navigateur Web/PWA même lorsqu'une application native iOS ou Android est installée.
 - Les écrans peuvent présenter différemment une même ressource, mais n'en créent jamais une version métier parallèle.
 
 ### 4.2 Applications natives futures
 
-Les futures applications Windows, macOS, iOS et Android consommeront l'API versionnée et les contrats partagés. Un client TV pourra ensuite exposer un sous-ensemble déclaré des mêmes capacités. Aucun client ne créera de base autoritaire, mémoire ou « cerveau mobile » séparé. Un cache local, si nécessaire, sera borné, révocable et revalidé avec le backend central avant toute mutation.
+Les futures applications Windows, macOS, iOS et Android consommeront l'API versionnée et les contrats partagés. Un client TV pourra ensuite exposer un sous-ensemble déclaré des mêmes capacités. Aucun client ne créera de base autoritaire, mémoire ou « cerveau mobile » séparé. Un cache local, si nécessaire, sera borné, révocable et revalidé avec le backend central avant toute mutation. Sur un même téléphone, le navigateur Web/PWA et l'application native sont deux instances clientes du même compte et du même Core, avec credentials et sessions distincts pouvant être révoqués séparément.
 
-Windows et macOS pourront héberger le même profil local du Core. iOS, Android, le Web, la PWA et la TV restent des clients fins. Le profil d'identité et d'association des appareils est analysé dans `IDENTITY_DEVICE_LINKING.md`; il n'est pas encore implémenté.
+Windows et macOS pourront héberger le même profil local du Core. iOS, Android, le Web, la PWA et la TV restent des clients fins. L'architecture d'identité et d'association des instances décrite dans `IDENTITY_DEVICE_LINKING.md` est validée ; sa première tranche de contrats, politique d'accès et tests est livrée, mais aucun endpoint réel d'authentification ou d'association n'est encore implémenté.
 
 ### 4.3 Voix
 
@@ -150,7 +150,7 @@ Cette structure est une cible de création progressive. Aucun dossier ni package
 
 La première tranche conserve volontairement un périmètre réduit et vérifiable :
 
-- `apps/web` est un Command Center React/Vite responsive. Il affiche les onze modules initiaux sur desktop et le parcours `HOME`, `IDA`, `CONTENT`, `CALENDAR`, `MORE` sur mobile ; tous restent des vues du même backend.
+- `apps/web` est un Command Center React/Vite responsive. Il affiche les onze modules initiaux sur desktop et le parcours `HOME`, `IDA`, `CONTENT`, `CALENDAR`, `MORE` dans un navigateur mobile ; tous restent des vues du même backend. Cette interface prépare l'accès Web/PWA parallèle à une future application native, mais le runtime local actuel ne fournit pas encore l'identité ni le canal sécurisé nécessaires à un déploiement mobile réel.
 - L’accueil lit un résumé factuel calculé par le backend dans le fuseau du workspace : approbations encore actionnables, snapshots de planification **interne** actifs, briefs de campagne actifs et releases à venir. Il n’emploie pas de compteurs de démonstration et ne déduit jamais une publication, une livraison ou une connexion sociale.
 - `apps/api` est un monolithe Fastify/TypeScript. Il fournit une identité de démonstration fixée côté serveur, les ressources musicales/de contenu de démonstration et une commande IDA déterministe en lecture seule. La commande naturelle sur les contenus inutilisés passe par l’outil `list_content_rotation_candidates` (`CONTENT / READ`) et le même critère de disponibilité factuel que la Content Rotation ; les formulations « jamais publié/utilisé » attendent un historique canonique futur. Une question de diagnostic ciblant Instagram, TikTok, YouTube ou Facebook reste sur `get_system_status` (`SYSTEM / READ`) et explique seulement l’absence factuelle de compte connecté, sans inventer OAuth, token ou publication.
 - La commande de journée réutilise la même fenêtre civile/fuseau que le calendrier. Elle combine les tâches à échéance, les variantes approuvées et les snapshots internes valides du jour demandé (`aujourd’hui` ou `demain`), tout en excluant la projection historique `scheduled_posts`. Les réponses restent des faits de lecture ; un snapshot interne ne devient jamais une promesse de livraison sociale.
@@ -352,7 +352,7 @@ Les détails sont documentés dans `SECURITY.md`. Les invariants architecturaux 
 
 | Décision | Motivation |
 |---|---|
-| Web responsive puis PWA au MVP | Répond au desktop et au mobile avec un backend unique et un coût maîtrisé |
+| Web responsive puis PWA au MVP | Répond au desktop et au navigateur mobile, y compris en parallèle des applications natives, avec un backend unique et un coût maîtrisé |
 | Clients Windows, macOS, iOS et Android fins | Préserve un seul Core tout en permettant des intégrations natives futures |
 | Monolithe modulaire | Accélère l'itération tout en protégeant les frontières métier |
 | API versionnée | Prépare les clients natifs et les nouveaux modules |

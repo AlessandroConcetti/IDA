@@ -10,7 +10,7 @@ Cette tranche ne contient volontairement ni authentification réelle, ni donnée
 
 ## Principes directeurs
 
-- Un Core central et une API versionnée pour le Web/PWA et les futurs clients Windows, macOS, iOS, Android et TV.
+- Un Core central et une API versionnée pour le Web/PWA sur ordinateur ou navigateur mobile et les futurs clients Windows, macOS, iOS, Android et TV. Sur téléphone, l'accès Web/PWA restera disponible en parallèle de l'application native, sans créer un second Core.
 - Un monolithe modulaire avant toute extraction de service.
 - L'IA propose des plans structurés ; le serveur contrôle les permissions, validations et effets externes.
 - Toute publication publique exige une validation humaine explicite dans le MVP.
@@ -48,4 +48,4 @@ Le web est alors disponible sur `http://127.0.0.1:5173` et l’API locale sur `h
 
 ## Prochain jalon
 
-Valider les décisions d'Identity/Device Linking, puis terminer Phase 1 avec l’authentification, les vraies données par workspace et les traitements média sécurisés. Les connexions sociales restent une Phase 3 contrôlée par les capacités documentées dans `SOCIAL_APIS.md`; les thèmes cinématiques et gestes restent optionnels et ne retardent pas ce jalon.
+Les décisions d'Identity/Device Linking sont validées et la première tranche de contrats, politique d'accès et tests d'architecture est livrée. Aucun endpoint d'authentification, compte ou session réel n'est encore actif. La prochaine tranche structurelle sera la persistance locale versionnée des instances, sessions et grants, avant le remplacement progressif de `demoContext`. Les connexions sociales restent une Phase 3 contrôlée par les capacités documentées dans `SOCIAL_APIS.md`; les thèmes cinématiques et gestes restent optionnels et ne retardent pas ce jalon.
