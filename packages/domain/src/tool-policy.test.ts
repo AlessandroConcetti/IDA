@@ -3,15 +3,27 @@ import { describe, expect, it } from "vitest";
 import { ToolGateway, ToolPolicyError } from "./index.js";
 
 describe("ToolGateway", () => {
-  it("autorise les outils READ et WRITE", () => {
+  it("refuse tous les outils quand aucune allowlist n'est fournie", () => {
     const gateway = new ToolGateway();
 
-    expect(gateway.authorize({ toolKey: "search_media", moduleKey: "CONTENT", permission: "READ" }).allowed).toBe(true);
-    expect(gateway.authorize({ toolKey: "create_post", moduleKey: "CONTENT", permission: "WRITE" }).allowed).toBe(true);
+    expect(gateway.authorize({ toolKey: "search_media", moduleKey: "CONTENT", permission: "READ" })).toMatchObject({
+      allowed: false,
+      code: "TOOL_NOT_ALLOWED",
+    });
+    expect(gateway.authorize({ toolKey: "create_post", moduleKey: "CONTENT", permission: "WRITE" })).toMatchObject({
+      allowed: false,
+      code: "TOOL_NOT_ALLOWED",
+    });
+    expect(gateway.authorize({ toolKey: "publish_post", moduleKey: "SOCIAL", permission: "PUBLISH" })).toMatchObject({
+      allowed: false,
+      code: "TOOL_NOT_ALLOWED",
+    });
   });
 
   it("interdit un outil PUBLISH sans validation humaine explicite", () => {
-    const gateway = new ToolGateway();
+    const gateway = new ToolGateway(undefined, [
+      { toolKey: "publish_post", moduleKey: "SOCIAL", permission: "PUBLISH" },
+    ]);
 
     expect(() =>
       gateway.assertAuthorized({ toolKey: "publish_post", moduleKey: "SOCIAL", permission: "PUBLISH" }),

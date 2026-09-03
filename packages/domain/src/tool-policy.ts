@@ -72,15 +72,11 @@ export class ToolPolicy {
 export class ToolGateway {
   constructor(
     private readonly policy: ToolPolicy = new ToolPolicy(),
-    private readonly allowedTools?: readonly AllowedTool[],
+    private readonly allowedTools: readonly AllowedTool[] = [],
   ) {}
 
   authorize(request: ToolAuthorizationRequest): ToolPolicyDecision {
     const policyDecision = this.policy.evaluate(request);
-
-    if (!policyDecision.allowed || !this.allowedTools) {
-      return policyDecision;
-    }
 
     const isAllowed = this.allowedTools.some(
       (tool) =>
