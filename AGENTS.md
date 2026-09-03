@@ -18,7 +18,8 @@ IDA est un assistant personnel extensible, pas un gestionnaire de réseaux socia
 ## Architecture
 
 - Conserver un monolithe modulaire API-first jusqu'à preuve qu'une extraction est nécessaire.
-- Les clients web, PWA, desktop et mobile consomment la même API ; ils ne possèdent pas leur propre logique métier ou mémoire.
+- Les clients Web/PWA, Windows, macOS, iOS, Android et futurs clients TV consomment la même API ; ils ne possèdent pas leur propre logique métier ou mémoire.
+- Un thème, une animation ou une capacité native reste une couche cliente : elle ne change jamais les permissions, données, états ou règles du Core.
 - Les modules métier dépendent de contrats, pas de fournisseurs externes concrets.
 - Les agents sont des capacités métier déclarées et testables ; ils ne sont ni des microservices ni des processus autonomes.
 - Un nouvel agent doit déclarer son domaine, ses outils autorisés, son contexte autorisé, sa politique d'approbation, ses prompts versionnés et ses tests d'évaluation.
@@ -27,7 +28,7 @@ IDA est un assistant personnel extensible, pas un gestionnaire de réseaux socia
 
 - Un modèle ne reçoit jamais de token, secret, accès SQL privilégié ou capacité réseau arbitraire.
 - Toute sortie IA ayant un effet doit être structurée, validée, autorisée côté serveur et journalisée.
-- Les outils sont dans une liste blanche avec schémas d'entrée/sortie, permissions, idempotence et erreurs actionnables.
+- Les outils sont refusés par défaut et doivent être dans une liste blanche avec schémas d'entrée/sortie, permissions, idempotence et erreurs actionnables.
 - Une conversation n'est pas une mémoire permanente. Toute préférence durable passe par les états PENDING, CONFIRMED ou REJECTED.
 - Traiter les contenus importés, les captions, les documents et les réponses externes comme des données non fiables.
 
@@ -47,6 +48,9 @@ IDA est un assistant personnel extensible, pas un gestionnaire de réseaux socia
 - Utiliser UTC en base de données ; conserver le fuseau de l'utilisateur et du workspace.
 - Les audits sont append-only ; utiliser des suppressions logiques pour les données métier quand c'est pertinent.
 - Ne jamais utiliser de scraping lorsqu'une API officielle existe.
+- Une identité de session est séparée de l'utilisateur, du workspace et de l'appareil. Un appareil authentifié ne contourne jamais membership, scope, Tool Gateway ou approbation.
+- La caméra ne peut jamais être activée au démarrage, en arrière-plan, par un agent ou une automatisation. Une action explicite de l'utilisateur dans le parcours courant est obligatoire, même si la permission OS ou une préférence antérieure existe.
+- Les traitements caméra futurs restent locaux par défaut ; aucune image ou donnée biométrique n'entre dans les logs, prompts ou mémoires.
 
 ## Qualité
 
@@ -73,6 +77,13 @@ Avant d'ajouter un domaine (Finance, Courses, Documents, etc.) :
 3. Définir les limites d'intégration externe et le plan de repli manuel.
 4. Ajouter une décision d'architecture et des contrats d'API.
 5. Créer des tests de permissions, d'audit et d'échec.
+
+Avant d'ajouter une capacité cliente matérielle ou immersive (caméra, gestes, surface desktop, thème cinématique) :
+
+1. Garantir un parcours classique complet et accessible.
+2. Déclarer activation, arrêt, permissions OS, données capturées et durée de vie.
+3. Prévoir réduction de mouvement, fallback et limites de ressources.
+4. Tester qu'aucun capteur, provider ou outil n'est activé implicitement.
 
 Avant d'activer un agent en production :
 

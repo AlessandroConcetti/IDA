@@ -10,7 +10,7 @@ Cette architecture prépare l'ajout progressif de domaines personnels supplémen
 
 ## 2. Principes directeurs
 
-1. **Un cerveau central, plusieurs interfaces.** Le web desktop, la PWA mobile et les futures applications natives utilisent la même API, les mêmes données, les mêmes conversations et la même mémoire.
+1. **Un cerveau central, plusieurs interfaces.** Le web, la PWA et les futurs clients Windows, macOS, iOS, Android ou TV utilisent la même API, les mêmes données, les mêmes conversations et la même mémoire.
 2. **Monolithe modulaire avant microservices.** Une seule application serveur déployable contient des modules métier clairement séparés. Les frontières de module permettent une extraction ultérieure si une charge ou une intégration le justifie.
 3. **API-first.** L'API est le contrat stable entre tous les clients et services internes. Aucune règle métier importante ne vit seulement dans une interface.
 4. **L'IA est un orchestrateur, pas une autorité.** Un modèle produit une intention et un plan structurés ; l'application applique les permissions, validations, contraintes métier et appels externes.
@@ -23,7 +23,7 @@ Cette architecture prépare l'ajout progressif de domaines personnels supplémen
 ```mermaid
 flowchart TB
   User[Utilisateur] --> Web[IDA Command Center Web / PWA]
-  User --> Native[Applications desktop et mobile futures]
+  User --> Native[Clients Windows / macOS / iOS / Android / TV futurs]
 
   Web --> API[API IDA centrale]
   Native --> API
@@ -65,7 +65,9 @@ Le premier client est une application web responsive servant à la fois de hub d
 
 ### 4.2 Applications natives futures
 
-Une future application desktop native ou iPhone native consommera l'API versionnée et les contrats partagés. Elle ne créera ni base locale autoritaire ni « cerveau mobile » séparé. Un cache local, si nécessaire, sera explicitement synchronisé et réconcilié avec le backend central.
+Les futures applications Windows, macOS, iOS et Android consommeront l'API versionnée et les contrats partagés. Un client TV pourra ensuite exposer un sous-ensemble déclaré des mêmes capacités. Aucun client ne créera de base autoritaire, mémoire ou « cerveau mobile » séparé. Un cache local, si nécessaire, sera borné, révocable et revalidé avec le backend central avant toute mutation.
+
+Windows et macOS pourront héberger le même profil local du Core. iOS, Android, le Web, la PWA et la TV restent des clients fins. Le profil d'identité et d'association des appareils est analysé dans `IDENTITY_DEVICE_LINKING.md`; il n'est pas encore implémenté.
 
 ### 4.3 Voix
 
@@ -77,6 +79,14 @@ Microphone → speech-to-text → /ida/commands → IDA Core
 ```
 
 Le MVP prévoit un déclenchement volontaire par bouton. L'écoute permanente, le mot d'activation et les permissions micro avancées sont des sujets ultérieurs ; ils ne modifient pas le modèle de commande ni les contrôles d'autorisation.
+
+### 4.4 Thèmes, gestes et surface desktop
+
+Le design repose sur des tokens et composants communs afin d'autoriser plus tard plusieurs thèmes sans dupliquer les écrans. `IDA_AURORA` conserve la direction lumineuse premium ; `IDA_COSMOS` pourra ajouter une expérience spatiale et une introduction cinématique optionnelle, désactivable et compatible avec la réduction de mouvement. Les détails figurent dans `DESIGN_SYSTEM.md`.
+
+Un futur `GestureInputProvider` pourra convertir localement des gestes simples en événements d'interface. Il ne contrôlera d'abord que le défilement du carousel d'agents et ne pourra appeler ni Core ni outil. **Sans demande explicite de l'utilisateur, aucun client n'accède à la caméra**, même si la fonction est configurée. Voir `INPUT_PROVIDERS.md`.
+
+Une future surface d'ambiance est réservée aux clients desktop. Elle ne maintient ni caméra, microphone, modèle IA ou donnée privée en arrière-plan et ne remplace jamais l'interface classique.
 
 ## 5. Monolithe modulaire API-first
 
@@ -150,7 +160,7 @@ La première tranche conserve volontairement un périmètre réduit et vérifiab
 - Le Music Brain permet désormais l’ajout local borné de releases et de morceaux : le serveur résout workspace, projet et acteur, génère les identifiants, valide les métadonnées, appelle `create_release` ou `create_track` (`MUSIC` / `WRITE`) et ajoute un audit redacted `release.created` ou `track.created`. Créer une release ne relie rien automatiquement ; lors de la création d’un morceau, une `releaseId` existante peut être choisie explicitement, mais seulement si elle appartient au même workspace et projet artistique. Cette règle est vérifiée par le serveur puis par une garde de base de données, qui répare aussi les liens historiques incompatibles au démarrage. Aucune association média, lien externe ou service externe n’est créée.
 - La Content Library accepte désormais l’import local privé d’un fichier, sa recherche filtrée par métadonnées ou contexte Music Brain et l’aperçu autorisé d’une image, vidéo ou audio importé. L’import peut explicitement rattacher le média à une release et/ou un morceau du même workspace et projet : le serveur résout ces références, la migration détache les anciens liens incompatibles et une garde SQL protège aussi les writes futurs. Les filtres `releaseId` / `trackId` restent de simples lectures des assets déjà scoppés ; une référence inconnue ou étrangère ne révèle rien et retourne une liste vide. La route d’aperçu résout le workspace côté serveur, relit seulement une clé générée, vérifie son confinement, hash, type/MIME/extension et taille, puis sert un buffer borné avec cache privé et support HTTP Range ; elle ne rend ni chemin, clé ou URL de stockage et n’écrit aucun audit. Les médias déjà existants ne sont pas modifiés dans cette tranche ; les PDFs, assets historiques sans fichier local, scans de signature, quarantaine, dérivés et transcodages restent des prérequis de production.
 - Sa projection de rotation est volontairement plus modeste qu’un moteur de fraîcheur : elle ne présente que les médias `UNUSED` sans aucun lien éditorial, dans un ordre stable. Elle ne calcule pas de score, ne se fie pas encore aux caches d’usage et n’exécute aucune action ; un lien anormal reste excluant par prudence.
-- Le Campaign Brief Registry liste et crée des briefs internes `DRAFT`. Le nom est normalisé et unique par workspace ; le serveur résout projet et acteur, passe par `create_campaign` (`CAMPAIGNS` / `WRITE`) et écrit `campaign.created` sans recopier le nom ni l’objectif dans l’audit. Une route distincte `link_campaign_release` (`CAMPAIGNS` / `WRITE`) peut seulement attacher ou retirer une release du même workspace et projet avec contrôle de version et audit redacted; elle ne crée ni date, pilier, contenu, tâche, calendrier, IA, notification, OAuth ou publication.
+- Le Campaign Brief Registry liste et crée des briefs internes `DRAFT`. Le nom est normalisé et unique par workspace ; le serveur résout projet et acteur, passe par `create_campaign` (`CAMPAIGNS` / `WRITE`) et écrit `campaign.created` sans recopier le nom ni l’objectif dans l’audit. Les routes distinctes `link_campaign_release` et `link_campaign_track` (`CAMPAIGNS` / `WRITE`) peuvent seulement attacher ou retirer une release ou un morceau du même workspace et projet avec une version commune et des audits redacted ; elles ne créent ni date, pilier, contenu, tâche, calendrier, IA, notification, OAuth ou publication.
 - Le Memory Consent Center crée des préférences uniquement sous forme de propositions `PENDING`. Seule une décision humaine explicite peut les confirmer ou les refuser ; la transition est atomique, finale et auditée sans recopier le contenu libre de la préférence.
 - Le Task Center crée des tâches internes `TODO` avec échéance facultative et permet une clôture explicite `TODO|IN_PROGRESS → DONE`. Les actions passent par `TASKS` / `WRITE`, sont auditables, isolées par workspace et idempotentes lorsqu’une clôture est rejouée.
 - L’Approval Center affiche uniquement les propositions `REQUESTED` du workspace et décide une version éditoriale liée à un hash SHA-256. La route résout la précondition et l’acteur côté serveur, passe par `CONTENT` / `APPROVAL_REQUIRED` et audite la décision sans recopier caption, hashtags ni métadonnées privées. Cette décision conserve `delivery_state = NOT_CONFIGURED` : elle ne touche ni `scheduled_posts`, ni les médias, ni un connecteur social.
@@ -287,13 +297,15 @@ Les modules peuvent publier des événements internes, par exemple : `media.uplo
 
 ## 11. Intégrations externes
 
-Chaque fournisseur est caché derrière un adaptateur :
+Chaque fournisseur est caché derrière un adaptateur enregistré par capacité dans le futur Provider Registry :
 
 - `AIProvider` pour la génération, transcription ou synthèse vocale futures ;
 - `StorageProvider` pour les médias ;
 - `SocialPlatformAdapter` par plateforme ;
 - `CalendarProvider` lorsque le calendrier personnel est intégré ;
 - `NotificationProvider` lorsque les notifications sont activées.
+
+Le mode `NORMAL` interdit tout appel de modèle. Le mode `AI` rend seulement éligibles les providers configurés et autorisés ; il n'élève aucune permission et n'autorise aucun fallback cloud silencieux. Voir `AI_PROVIDERS.md`.
 
 Un `SocialPlatformAdapter` déclare ses capacités réelles : OAuth, brouillon, publication, planification native, analytics, webhooks, limites, révision d'application et confirmation humaine requise. Le produit n'invente jamais une capacité que l'API officielle ne garantit pas.
 
@@ -340,7 +352,8 @@ Les détails sont documentés dans `SECURITY.md`. Les invariants architecturaux 
 
 | Décision | Motivation |
 |---|---|
-| PWA unique au MVP | Répond au desktop et iPhone avec un backend unique et un coût maîtrisé |
+| Web responsive puis PWA au MVP | Répond au desktop et au mobile avec un backend unique et un coût maîtrisé |
+| Clients Windows, macOS, iOS et Android fins | Préserve un seul Core tout en permettant des intégrations natives futures |
 | Monolithe modulaire | Accélère l'itération tout en protégeant les frontières métier |
 | API versionnée | Prépare les clients natifs et les nouveaux modules |
 | Base relationnelle + stockage objet | Convient aux relations musicales et à la gestion de médias |
@@ -348,9 +361,12 @@ Les détails sont documentés dans `SECURITY.md`. Les invariants architecturaux 
 | Tool Gateway obligatoire | Empêche une sortie IA de devenir une action non contrôlée |
 | Mémoire confirmable | Préserve le contrôle de l'utilisateur sur les préférences durables |
 | Finance et courses différées | Prépare le hub complet sans étendre inutilement le MVP ni augmenter le risque |
+| Thèmes et entrées comme capacités clientes | Autorise personnalisation et gestes sans dupliquer le métier ni contourner les permissions |
 
 ## 15. Frontières du MVP
 
 Le MVP initial construit le socle musical et éditorial : authentification, Artist Brain, Music Brain, bibliothèque de contenus, commande textuelle, propositions, validation humaine et dashboard responsive.
 
-Sont explicitement hors MVP : publication autonome, écoute vocale permanente, applications natives distinctes, connexions bancaires, paiements, achats, automatisations à haut risque, microservices, agents autonomes généraux et tout scraping d'une plateforme disposant d'une API officielle.
+Sont explicitement hors MVP : publication autonome, écoute vocale permanente, clients natifs, contrôle gestuel, caméra automatique, fond d'écran interactif, connexions bancaires, paiements, achats, automatisations à haut risque, microservices, agents autonomes généraux et tout scraping d'une plateforme disposant d'une API officielle.
+
+Les extensions Tentacular, les clients multiplateformes et le workspace portable sont cadrés par `docs/adr/0003-tentacular-core-and-cross-platform-clients.md`, `MODULES.md`, `AI_PROVIDERS.md`, `PRIVACY.md`, `IDENTITY_DEVICE_LINKING.md`, `DESIGN_SYSTEM.md` et `INPUT_PROVIDERS.md`.

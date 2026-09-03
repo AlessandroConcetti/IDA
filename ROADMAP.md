@@ -6,6 +6,8 @@ IDA sera construit par petites étapes testables. Une phase ne démarre réellem
 
 La roadmap décrit une séquence de capacité, pas une promesse de date. Elle privilégie un socle fiable plutôt qu'un grand nombre de fonctions incomplètes.
 
+L'évolution Tentacular validée conserve ce séquencement. Windows, macOS, le Web/PWA, iOS, Android et de futurs clients TV partageront un seul Core. Les thèmes personnalisables, gestes et surfaces desktop restent des capacités clientes ultérieures et ne retardent pas les phases prioritaires.
+
 ## Vue d'ensemble
 
 | Phase | Objectif | Résultat principal |
@@ -60,7 +62,7 @@ Créer le premier produit réellement utilisable : un Command Center responsive 
 ### Tranche 1 livrée
 
 - dépôt TypeScript en workspace, tests, lint et vérification de types ;
-- Command Center React responsive desktop/iPhone avec tous les modules initiaux, dont `SOCIAL`, `CAMPAIGNS`, `ANALYTICS`, `TASKS`, `MEMORY` et `SYSTEM` ;
+- Command Center React responsive desktop/mobile avec tous les modules initiaux, dont `SOCIAL`, `CAMPAIGNS`, `ANALYTICS`, `TASKS`, `MEMORY` et `SYSTEM` ;
 - résumé d’accueil factuel du workspace : approbations actionnables, snapshots de planification interne actifs, campagnes actives et releases à venir, avec date calculée côté serveur dans le fuseau du workspace et valeurs indisponibles plutôt que fictives en cas d’API absente ;
 - API Fastify locale, contrats Zod partagés et policy d’outils ;
 - Agent Registry déclaratif : manifestes versionnés pour `Memory Manager` et `Music Librarian`, visibles dans System, strictement `PLANNED`/`PROPOSAL_ONLY`, sans exécution, prompt ni accès implicite ;
@@ -69,7 +71,7 @@ Créer le premier produit réellement utilisable : un Command Center responsive 
 - Artist Brain éditable : identité, ton, genres, influences, audience, objectifs et vocabulaire, avec validation, permission `WRITE` interne et persistance locale ;
 - Music Brain : Release Registry et création locale contrôlée de morceaux avec métadonnées, validation stricte, scope résolu par le serveur, outils `WRITE` allowlistés et audits append-only redacted ; une release ne crée aucune association automatique, mais un morceau peut choisir explicitement une release du même workspace et projet, protégée par serveur, migration et garde SQL ; média, lien externe et publication restent absents ;
 - Content Library : import local privé, recherche filtrée de métadonnées et de contexte release/morceau, aperçu autorisé d’images, audios et vidéos importés, avec limites, hash SHA-256, détection de doublon, tags normalisés, stockage à clé générée, lecture bornée isolée au workspace, cache privé, support HTTP Range, rattachement explicite optionnel à une release et/ou un morceau du même scope, audit append-only redacted pour l’import et projection de rotation factuelle des médias `UNUSED` sans lien éditorial ; les médias existants restent inchangés ;
-- Campaign Brief Registry : liste et création locale de briefs internes `DRAFT`, nom normalisé unique par workspace, lien optionnel vers une release du même workspace/projet protégé par version, outil `CAMPAIGNS` / `WRITE` et audit redacted, sans date, pilier, contenu, calendrier ni effet externe ;
+- Campaign Brief Registry : liste et création locale de briefs internes `DRAFT`, nom normalisé unique par workspace, liens optionnels vers une release et un morceau du même workspace/projet protégés par une version commune, outils `CAMPAIGNS` / `WRITE` et audits redacted, sans date, pilier, contenu, calendrier ni effet externe ;
 - Memory Consent Center : proposition de préférence en `PENDING`, décision humaine explicite et finale, scope serveur, timestamps persistés et audit sans contenu libre ;
 - Task Center : création locale contrôlée, échéance facultative, finalisation explicite idempotente, scope serveur et audit append-only sans contenu libre ;
 - Approval Center : file locale de propositions `REQUESTED`, hash de payload exact, décision humaine contrôlée via `CONTENT` / `APPROVAL_REQUIRED`, audit redacted et aucun effet de programmation ou publication ;
@@ -78,13 +80,13 @@ Créer le premier produit réellement utilisable : un Command Center responsive 
 - IDA History : registre privé local des paires demande/réponse de commandes `READ / COMPLETED`, restauré pour le même acteur/workspace par pagination cléset, sans résultat d’outil, paramètres, raisonnement ni mémoire implicite ; l’écriture est auditée sans texte libre et la consultation reste sans effet ;
 - PGlite uniquement pour le développement/test local ; aucun compte social, aucun token, aucune publication et aucune donnée personnelle réelle.
 
-La tranche suivante de Phase 1 remplace le contexte de démonstration par une vraie identité/workspace, puis ajoute les traitements média de production et les liens contrôlés restants entre campagnes et ressources artistiques. La suite du calendrier couvrira surcharge, répétitions et fraîcheur avant toute automatisation ; aucune de ces étapes ne débloque encore la publication sociale.
+La tranche suivante de Phase 1 doit remplacer le contexte de démonstration par une vraie identité/workspace et des sessions liées aux appareils, puis ajouter les traitements média de production. L'analyse et les décisions préalables sont décrites dans `IDENTITY_DEVICE_LINKING.md` ; aucune modification structurelle Identity ne commence avant leur validation. La suite du calendrier couvrira surcharge, répétitions et fraîcheur avant toute automatisation ; aucune de ces étapes ne débloque encore la publication sociale.
 
 ### Périmètre
 
 1. Initialiser le dépôt, les conventions, les environnements et les tests de base.
 2. Mettre en place l'authentification, l'espace personnel et les permissions initiales.
-3. Créer le dashboard `IDA COMMAND CENTER` responsive desktop/iPhone.
+3. Créer le dashboard `IDA COMMAND CENTER` responsive desktop/mobile, puis conserver les mêmes contrats pour Windows, macOS, iOS et Android natifs si nécessaires.
 4. Créer la conversation textuelle et le premier endpoint de commande IDA.
 5. Créer `Artist Brain` éditable : identité, ton, influences, objectifs, règles et préférences.
 6. Créer `Music Brain` : projets, releases, tracks et métadonnées musicales.
@@ -118,7 +120,7 @@ Faire d'IDA un assistant éditorial qui propose, organise et soumet du contenu �
 
 ### Périmètre
 
-1. Étendre le `Campaign Brief Registry`, déjà rattachable de façon contrôlée à une release, vers les entités `Campaign`, `Post`, `PostVariant`, `ContentPlan` et `Approval` avec leurs états et associations contrôlés.
+1. Étendre le `Campaign Brief Registry`, déjà rattachable de façon contrôlée à une release et un morceau, vers les entités `Campaign`, `Post`, `PostVariant`, `ContentPlan` et `Approval` avec leurs états et associations contrôlés.
 2. Créer les agents `Content Manager`, `Content Curator`, `Copywriter` et `Calendar Manager`.
 3. Générer des propositions de contenu liées à des médias, tracks, objectifs et règles artistiques.
 4. Créer le calendrier éditorial en vues jour, semaine et mois.
@@ -239,7 +241,11 @@ Faire évoluer IDA en assistant personnel plus proactif, multimodal et modulaire
 - planification inter-domaines à partir de règles explicites ;
 - activation progressive et processus d’onboarding d’un nouvel agent à partir du registre versionné ;
 - modules personnels opt-in : tâches avancées, calendrier personnel, documents, notes et automatisations ;
-- amélioration progressive des clients natifs si la PWA ne couvre plus les besoins.
+- amélioration progressive des clients natifs si la PWA ne couvre plus les besoins ;
+- personnalisation par design tokens et thèmes `IDA_AURORA` / `IDA_COSMOS`, sans logique métier propre au thème ;
+- introduction cinématique optionnelle, interrompable et compatible avec la réduction de mouvement ;
+- `GestureInputProvider` local et volontaire pour des gestes UI simples, sans activation automatique de caméra ;
+- étude d'une surface d'ambiance limitée aux clients desktop, sans IA, microphone ou caméra en arrière-plan.
 
 ### Critères de sortie
 
@@ -247,7 +253,8 @@ Faire évoluer IDA en assistant personnel plus proactif, multimodal et modulaire
 - les suggestions proactives peuvent être désactivées, expliquées et auditées ;
 - le registre d'agents empêche un agent d'accéder à des outils ou données non déclarés ;
 - aucune automatisation sensible ne contourne le contrôle humain ;
-- les limites de coût, latence et fiabilité sont mesurées pour chaque agent ajouté.
+- les limites de coût, latence et fiabilité sont mesurées pour chaque agent ajouté ;
+- l'interface classique reste complète avec thème par défaut, mouvement coupé, caméra refusée et aucun geste disponible.
 
 ## Après la phase 6 — Domaines personnels différés
 

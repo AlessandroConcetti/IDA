@@ -1,12 +1,12 @@
 # SECURITY — principes de sécurité et d’exploitation
 
 > **Statut :** architecture complétée et première tranche locale implémentée ; aucune donnée réelle ni intégration externe n’est active.
-> **Dernière revue :** 30 août 2026.
+> **Dernière revue :** 3 septembre 2026.
 > **Règle MVP :** aucune publication publique, aucun paiement et aucun transfert ne peuvent être déclenchés sans une validation humaine explicite — et les paiements/transferts ne font pas partie du périmètre MVP.
 
 ## 1. Objectif
 
-IDA centralisera des actifs sensibles : morceaux non publiés, stems, stratégie artistique, mémoire, calendrier, comptes sociaux et, plus tard, éventuellement des données personnelles générales. La sécurité doit donc être une propriété du noyau et de l’API partagée par le desktop et le mobile, pas une fonction ajoutée dans les interfaces.
+IDA centralisera des actifs sensibles : morceaux non publiés, stems, stratégie artistique, mémoire, calendrier, comptes sociaux et, plus tard, éventuellement des données personnelles générales. La sécurité doit donc être une propriété du noyau et de l’API partagée par le Web/PWA et les futurs clients Windows, macOS, iOS, Android ou TV, pas une fonction ajoutée dans les interfaces.
 
 Le choix initial recommandé est un **monolithe modulaire avec des workers isolés**, et non des microservices prématurés. Les frontières de domaine, les permissions et les secrets doivent cependant être réels dès la Phase 1 afin de permettre une évolution sûre.
 
@@ -62,7 +62,13 @@ L’IA n’obtient ni accès direct à la base de données, ni clé de productio
 - Exiger une authentification multifacteur du propriétaire avant la connexion d’un réseau social ou toute élévation de privilège.
 - Appliquer des limites de tentative de connexion, la vérification d’e-mail et une notification de nouvel appareil.
 
+L'adresse e-mail ne constitue jamais une preuve d'accès. Chaque appareil possède sa propre identité cryptographique, sa session révocable et des grants qui peuvent uniquement réduire les droits de la membership. Un appareil nouveau doit être confirmé explicitement depuis un appareil déjà autorisé au moyen d'un challenge court, à usage unique et protégé contre le rejeu. La révocation d'un appareil invalide toutes ses sessions sans supprimer le compte ni accorder de privilèges aux autres appareils. L'analyse complète et les décisions encore requises figurent dans `IDENTITY_DEVICE_LINKING.md`.
+
 Les jetons de session, JWT et refresh tokens ne doivent jamais être stockés dans `localStorage` ou `sessionStorage` : une vulnérabilité XSS suffirait à les exfiltrer.
+
+### Caméra, microphone et gestes
+
+La permission OS ne suffit jamais à activer un capteur. **Sans demande explicite de l'utilisateur dans le parcours courant, aucun accès caméra n'est autorisé.** Le démarrage, l'ouverture de Home, un agent, une automatisation, une préférence enregistrée ou une commande distante ne peuvent pas créer cette demande. Toute capture future utilise une session courte, un indicateur visible et un arrêt immédiat ; aucune image n'entre dans les prompts, logs, mémoire ou backend. Le contrôle gestuel futur reste limité à des événements UI et ne constitue ni une commande Core ni une approbation. Voir `INPUT_PROVIDERS.md`.
 
 ### Isolation des données et RBAC
 
@@ -179,7 +185,7 @@ La mémoire permanente reste opt-in : IDA demande confirmation avant de stocker 
 
 Le Task Center local applique les mêmes bornes : création strictement `TODO`, scope et acteur résolus côté serveur, et finalisation sans corps uniquement via `TODO|IN_PROGRESS → DONE`. Un retry de finalisation sur `DONE` est idempotent et ne réécrit ni données ni audit ; les autres états finaux sont non actionnables. Les outils `TASKS` / `WRITE` sont allowlistés, une tâche hors workspace répond comme absente, et les audits `task.created` / `task.completed` n’embarquent ni titre ni description.
 
-Le Campaign Brief Registry local accepte seulement `name` et `objective` sous `CAMPAIGNS` / `WRITE`. Le serveur impose workspace, projet, acteur, identifiant et état `DRAFT`, normalise le nom pour empêcher les doublons équivalents, et ne renvoie jamais le brief d’un autre workspace. Une route distincte reçoit seulement `releaseId` (ou `null`) et `expectedVersion` : elle ne rattache une release que si elle partage le workspace et le projet artistique de la campagne. Une cible étrangère ou incompatible répond par un `404` générique ; une version dépassée répond `409 CAMPAIGN_STALE` sans écriture. Les retries demandant le lien déjà présent sont idempotents. Les audits `campaign.created`, `campaign.release_linked` et `campaign.release_unlinked` sont append-only et redacted : ils ne contiennent que les identifiants, l’état ou la version, jamais le nom, l’objectif ni le titre de release. Ces écritures ne créent ni date, contenu, post, calendrier, tâche, média, compte social, OAuth, notification, scheduler, appel IA ou réseau ; l’ajout futur de ces relations devra obtenir ses propres contrats, tests de permissions et autorisations.
+Le Campaign Brief Registry local accepte seulement `name` et `objective` sous `CAMPAIGNS` / `WRITE`. Le serveur impose workspace, projet, acteur, identifiant et état `DRAFT`, normalise le nom pour empêcher les doublons équivalents, et ne renvoie jamais le brief d’un autre workspace. Deux routes distinctes reçoivent seulement `releaseId` ou `trackId` (ou `null`) et `expectedVersion` : elles ne rattachent une référence que si elle partage le workspace et le projet artistique de la campagne. Une cible étrangère ou incompatible répond par un `404` générique ; une version commune dépassée répond `409 CAMPAIGN_STALE` sans écriture. Les retries demandant le lien déjà présent sont idempotents. Les audits `campaign.created`, `campaign.release_linked`, `campaign.release_unlinked`, `campaign.track_linked` et `campaign.track_unlinked` sont append-only et redacted : ils ne contiennent que les identifiants, l’état ou la version, jamais le nom, l’objectif ou les titres Music Brain. Ces écritures ne créent ni date, contenu, post, calendrier, tâche, média, compte social, OAuth, notification, scheduler, appel IA ou réseau ; l’ajout futur de ces relations devra obtenir ses propres contrats, tests de permissions et autorisations.
 
 L’Approval Center local ajoute seulement `post_variant.approved` et `post_variant.rejected` au journal append-only. Leurs payloads redacted contiennent les IDs, les états et le hash, jamais caption, hashtags, rationale, clé de stockage, chemin ou média privé. Une variante ou une approbation hors workspace répond comme absente ; une précondition erronée n’inscrit aucun audit.
 
@@ -226,7 +232,9 @@ Avant une bêta avec données réelles :
 5. scan de secrets et dépendances dans la CI ;
 6. sauvegarde automatisée et restauration testée ;
 7. runbooks d’incident disponibles ;
-8. inventaire des fournisseurs externes, de leurs données reçues et des règles de rétention.
+8. inventaire des fournisseurs externes, de leurs données reçues et des règles de rétention ;
+9. authentification réelle, expiration des sessions, association et révocation des appareils vérifiées ;
+10. tests prouvant qu'aucun capteur n'est ouvert sans demande explicite et que les thèmes ne changent aucune permission.
 
 ## Références de conception
 
