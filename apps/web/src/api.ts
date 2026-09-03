@@ -77,6 +77,7 @@ export interface TrackCreateInput {
 
 export interface TrackReference {
   id: string;
+  artistProjectId: string;
   title: string;
   releaseTitle?: string;
 }
@@ -226,6 +227,8 @@ export interface CampaignRecord {
   status: CampaignStatus;
   releaseId?: string;
   releaseTitle?: string;
+  trackId?: string;
+  trackTitle?: string;
   version: number;
   createdAt: string;
   updatedAt: string;
@@ -238,6 +241,11 @@ export interface CampaignCreateInput {
 
 export interface CampaignReleaseUpdateInput {
   releaseId: string | null;
+  expectedVersion: number;
+}
+
+export interface CampaignTrackUpdateInput {
+  trackId: string | null;
   expectedVersion: number;
 }
 
@@ -916,6 +924,8 @@ function toCampaign(record: Record<string, unknown>): CampaignRecord {
   const objective = readString(record.objective);
   const releaseId = readString(record.releaseId);
   const releaseTitle = readString(record.releaseTitle);
+  const trackId = readString(record.trackId);
+  const trackTitle = readString(record.trackTitle);
   const version = readNumber(record.version);
   const createdAt = readString(record.createdAt);
   const updatedAt = readString(record.updatedAt);
@@ -930,7 +940,8 @@ function toCampaign(record: Record<string, unknown>): CampaignRecord {
     version < 1 ||
     !createdAt ||
     !updatedAt ||
-    (releaseTitle !== undefined && releaseId === undefined)
+    (releaseTitle !== undefined && releaseId === undefined) ||
+    (trackTitle !== undefined && trackId === undefined)
   ) {
     throw new IdaApiError("La réponse campagne d’IDA API n’a pas le format attendu.");
   }
@@ -943,6 +954,8 @@ function toCampaign(record: Record<string, unknown>): CampaignRecord {
     status: campaignStatus(record.status),
     ...(releaseId === undefined ? {} : { releaseId }),
     ...(releaseTitle === undefined ? {} : { releaseTitle }),
+    ...(trackId === undefined ? {} : { trackId }),
+    ...(trackTitle === undefined ? {} : { trackTitle }),
     version,
     createdAt,
     updatedAt,
@@ -1027,6 +1040,15 @@ export async function updateCampaignRelease(
   const payload = await patchApiJson(`/v1/campaigns/${encodeURIComponent(campaignId)}/release`, input);
 
   return toCampaign(readDataObjectOrDirect(payload, "/v1/campaigns/:campaignId/release"));
+}
+
+export async function updateCampaignTrack(
+  campaignId: string,
+  input: CampaignTrackUpdateInput,
+): Promise<CampaignRecord> {
+  const payload = await patchApiJson(`/v1/campaigns/${encodeURIComponent(campaignId)}/track`, input);
+
+  return toCampaign(readDataObjectOrDirect(payload, "/v1/campaigns/:campaignId/track"));
 }
 
 export async function completeTask(taskId: string): Promise<TaskRecord> {
@@ -1288,9 +1310,10 @@ function toTrack(record: Record<string, unknown>): Track {
 
 function toTrackReference(record: Record<string, unknown>): TrackReference {
   const id = readString(record.id);
+  const artistProjectId = readString(record.artistProjectId);
   const title = readString(record.title);
 
-  if (!id || !title) {
+  if (!id || !artistProjectId || !title) {
     throw new IdaApiError("Un morceau proposé pour association média est invalide.");
   }
 
@@ -1298,6 +1321,7 @@ function toTrackReference(record: Record<string, unknown>): TrackReference {
 
   return {
     id,
+    artistProjectId,
     title,
     ...(releaseTitle === undefined ? {} : { releaseTitle }),
   };

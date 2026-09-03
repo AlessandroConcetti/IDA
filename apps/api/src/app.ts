@@ -22,6 +22,8 @@ import {
   campaignReleaseLinkParamsSchema,
   campaignReleaseLinkSchema,
   campaignSchema,
+  campaignTrackLinkParamsSchema,
+  campaignTrackLinkSchema,
   contentRotationQuerySchema,
   contentRotationResponseSchema,
   dashboardSummaryQuerySchema,
@@ -286,6 +288,15 @@ class CampaignReleaseLinkInputError extends Error {
 
   constructor() {
     super("Le rattachement de la campagne à la release est invalide.");
+  }
+}
+
+class CampaignTrackLinkInputError extends Error {
+  readonly statusCode = 400;
+  readonly code = "INVALID_CAMPAIGN_TRACK";
+
+  constructor() {
+    super("Le rattachement de la campagne au morceau est invalide.");
   }
 }
 
@@ -799,6 +810,8 @@ function toCampaignResponse(campaign: Campaign) {
     status: campaign.status,
     releaseId: optionalString(campaign.releaseId),
     releaseTitle: optionalString(campaign.releaseTitle),
+    trackId: optionalString(campaign.trackId),
+    trackTitle: optionalString(campaign.trackTitle),
     version: campaign.version,
     createdAt: campaign.createdAt,
     updatedAt: campaign.updatedAt,
@@ -982,6 +995,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     { toolKey: "create_track", moduleKey: "MUSIC", permission: "WRITE" },
     { toolKey: "create_campaign", moduleKey: "CAMPAIGNS", permission: "WRITE" },
     { toolKey: "link_campaign_release", moduleKey: "CAMPAIGNS", permission: "WRITE" },
+    { toolKey: "link_campaign_track", moduleKey: "CAMPAIGNS", permission: "WRITE" },
     { toolKey: "import_media", moduleKey: "CONTENT", permission: "WRITE" },
     { toolKey: "decide_post_variant", moduleKey: "CONTENT", permission: "APPROVAL_REQUIRED" },
     { toolKey: "schedule_approved_post_variant", moduleKey: "CALENDAR", permission: "APPROVAL_REQUIRED" },
@@ -1025,7 +1039,8 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
       error instanceof TaskInputError ||
       error instanceof TaskCompletionInputError ||
       error instanceof CampaignInputError ||
-      error instanceof CampaignReleaseLinkInputError
+      error instanceof CampaignReleaseLinkInputError ||
+      error instanceof CampaignTrackLinkInputError
     ) {
       return reply.status(error.statusCode).send({
         error: { code: error.code, message: error.message },
@@ -1658,6 +1673,54 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     if (result.kind === "release-not-found") {
       return reply.status(404).send({
         error: { code: "RELEASE_NOT_FOUND", message: "Release introuvable pour cette campagne." },
+      });
+    }
+
+    if (result.kind === "stale") {
+      return reply.status(409).send({
+        error: {
+          code: "CAMPAIGN_STALE",
+          message: "La campagne a été modifiée depuis sa dernière lecture. Recharge-la avant de modifier son lien.",
+        },
+      });
+    }
+
+    return { data: toCampaignResponse(result.campaign) };
+  });
+
+  app.patch("/v1/campaigns/:campaignId/track", async (request, reply) => {
+    const params = campaignTrackLinkParamsSchema.safeParse(request.params);
+    const input = campaignTrackLinkSchema.safeParse(request.body);
+
+    if (!params.success || !input.success) {
+      throw new CampaignTrackLinkInputError();
+    }
+
+    toolGateway.assertAuthorized({
+      toolKey: "link_campaign_track",
+      moduleKey: "CAMPAIGNS",
+      permission: "WRITE",
+    });
+
+    // Comme le lien release, ce rattachement reste strictement interne : le
+    // morceau est résolu dans le même workspace et projet de la campagne. Il
+    // ne crée ni contenu, ni planification, ni action sociale ou externe.
+    const result = await database.linkCampaignTrack(
+      demoContext.workspaceId,
+      demoContext.userId,
+      params.data.campaignId,
+      input.data,
+    );
+
+    if (result.kind === "campaign-not-found") {
+      return reply.status(404).send({
+        error: { code: "CAMPAIGN_NOT_FOUND", message: "Campagne introuvable dans ce workspace." },
+      });
+    }
+
+    if (result.kind === "track-not-found") {
+      return reply.status(404).send({
+        error: { code: "TRACK_NOT_FOUND", message: "Morceau introuvable pour cette campagne." },
       });
     }
 

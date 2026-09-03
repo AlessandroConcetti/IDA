@@ -218,8 +218,8 @@ paths:
       summary: Liste les briefs de campagne internes du workspace local
       description: >-
         Lecture isolée au workspace résolu côté serveur. Les briefs ne portent
-        que leur lien optionnel de release; ils ne portent encore ni date, ni
-        pilier, ni contenu ou effet externe.
+        que leurs liens optionnels de release et morceau; ils ne portent encore
+        ni date, ni pilier, ni contenu ou effet externe.
       responses:
         '200':
           description: Briefs de campagne internes dans un ordre stable
@@ -288,6 +288,39 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/CampaignOrReleaseNotFound'
+        '409':
+          $ref: '#/components/responses/CampaignStale'
+  /v1/campaigns/{campaignId}/track:
+    patch:
+      operationId: linkCampaignBriefTrack
+      summary: Rattache ou retire le morceau d’un Campaign Brief
+      description: >-
+        Reçoit un morceau existant ou null et une version attendue. Le serveur
+        vérifie que la campagne et le morceau partagent le workspace et le projet
+        artistique, applique une écriture conditionnelle versionnée et appelle
+        uniquement link_campaign_track avec CAMPAIGNS/WRITE. Aucun contenu,
+        date, planification, IA ou effet social n’est créé.
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CampaignTrackLinkRequest'
+      responses:
+        '200':
+          description: Lien déjà présent ou campagne mise à jour
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CampaignResponse'
+        '400':
+          $ref: '#/components/responses/InvalidCampaignTrackLink'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/CampaignOrTrackNotFound'
         '409':
           $ref: '#/components/responses/CampaignStale'
   /v1/tracks:
@@ -1048,8 +1081,20 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
+    InvalidCampaignTrackLink:
+      description: Corps de liaison morceau invalide ou tentative d’injecter un champ de campagne, scope ou acteur
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
     CampaignOrReleaseNotFound:
       description: Campagne ou release compatible introuvable dans le scope autorisé
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    CampaignOrTrackNotFound:
+      description: Campagne ou morceau compatible introuvable dans le scope autorisé
       content:
         application/json:
           schema:
@@ -1708,6 +1753,13 @@ components:
           type: string
           minLength: 1
           maxLength: 240
+        trackId:
+          type: string
+          minLength: 1
+        trackTitle:
+          type: string
+          minLength: 1
+          maxLength: 240
         version:
           type: integer
           minimum: 1
@@ -1726,6 +1778,19 @@ components:
       required: [releaseId, expectedVersion]
       properties:
         releaseId:
+          oneOf:
+            - type: string
+              minLength: 1
+            - type: 'null'
+        expectedVersion:
+          type: integer
+          minimum: 1
+    CampaignTrackLinkRequest:
+      type: object
+      additionalProperties: false
+      required: [trackId, expectedVersion]
+      properties:
+        trackId:
           oneOf:
             - type: string
               minLength: 1

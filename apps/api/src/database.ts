@@ -10,6 +10,7 @@ import type {
   ArtistProfileUpdate,
   CampaignCreate,
   CampaignReleaseLink,
+  CampaignTrackLink,
   ContentRotationCandidate as ContentRotationCandidateContract,
   IdaCommandRun,
   IdaCommandRunCursor,
@@ -187,8 +188,9 @@ export type TaskCompletionResult =
   | { kind: "not-actionable"; status: string };
 
 // Un brief de campagne ne porte volontairement ni dates, ni piliers, ni
-// contenus. Son éventuel lien vers une release passe par une mutation dédiée,
-// protégée par le scope du workspace, le projet artistique et une version.
+// contenus. Ses éventuels liens vers une release et un morceau passent par des
+// mutations dédiées, protégées par le scope du workspace, le projet artistique
+// et une version partagée.
 export type Campaign = {
   id: string;
   projectId: string;
@@ -197,6 +199,8 @@ export type Campaign = {
   status: string;
   releaseId: string | null;
   releaseTitle: string | null;
+  trackId: string | null;
+  trackTitle: string | null;
   version: number;
   createdAt: string;
   updatedAt: string;
@@ -212,6 +216,13 @@ export type CampaignReleaseLinkResult =
   | { kind: "unchanged"; campaign: Campaign }
   | { kind: "campaign-not-found" }
   | { kind: "release-not-found" }
+  | { kind: "stale" };
+
+export type CampaignTrackLinkResult =
+  | { kind: "updated"; campaign: Campaign }
+  | { kind: "unchanged"; campaign: Campaign }
+  | { kind: "campaign-not-found" }
+  | { kind: "track-not-found" }
   | { kind: "stale" };
 
 export type CreateTrackResult =
@@ -613,6 +624,8 @@ function toCampaign(row: ScalarRow): Campaign {
     status: asString(row.status),
     releaseId: asNullableString(row.releaseId),
     releaseTitle: asNullableString(row.releaseTitle),
+    trackId: asNullableString(row.trackId),
+    trackTitle: asNullableString(row.trackTitle),
     version: asNumber(row.version),
     createdAt: asTimestamp(row.createdAt) ?? "1970-01-01T00:00:00.000Z",
     updatedAt: asTimestamp(row.updatedAt) ?? "1970-01-01T00:00:00.000Z",
@@ -1299,6 +1312,8 @@ export class DemoDatabase {
           campaign.status,
           campaign.release_id AS "releaseId",
           release.title AS "releaseTitle",
+          campaign.track_id AS "trackId",
+          track.title AS "trackTitle",
           campaign.row_version AS version,
           campaign.created_at AS "createdAt",
           campaign.updated_at AS "updatedAt"
@@ -1306,6 +1321,9 @@ export class DemoDatabase {
         LEFT JOIN releases release ON release.id = campaign.release_id
           AND release.workspace_id = campaign.workspace_id
           AND release.artist_project_id = campaign.artist_project_id
+        LEFT JOIN tracks track ON track.id = campaign.track_id
+          AND track.workspace_id = campaign.workspace_id
+          AND track.artist_project_id = campaign.artist_project_id
         WHERE campaign.workspace_id = $1
         ORDER BY campaign.created_at DESC, campaign.id DESC
       `,
@@ -1355,6 +1373,8 @@ export class DemoDatabase {
               status,
               release_id AS "releaseId",
               NULL::TEXT AS "releaseTitle",
+              track_id AS "trackId",
+              NULL::TEXT AS "trackTitle",
               row_version AS version,
               created_at AS "createdAt",
               updated_at AS "updatedAt"
@@ -1422,6 +1442,8 @@ export class DemoDatabase {
             campaign.status,
             campaign.release_id AS "releaseId",
             release.title AS "releaseTitle",
+            campaign.track_id AS "trackId",
+            track.title AS "trackTitle",
             campaign.row_version AS version,
             campaign.created_at AS "createdAt",
             campaign.updated_at AS "updatedAt"
@@ -1429,6 +1451,9 @@ export class DemoDatabase {
           LEFT JOIN releases release ON release.id = campaign.release_id
             AND release.workspace_id = campaign.workspace_id
             AND release.artist_project_id = campaign.artist_project_id
+          LEFT JOIN tracks track ON track.id = campaign.track_id
+            AND track.workspace_id = campaign.workspace_id
+            AND track.artist_project_id = campaign.artist_project_id
           WHERE campaign.id = $1
             AND campaign.workspace_id = $2
           LIMIT 1
@@ -1491,6 +1516,7 @@ export class DemoDatabase {
             objective,
             status,
             release_id AS "releaseId",
+            track_id AS "trackId",
             row_version AS version,
             created_at AS "createdAt",
             updated_at AS "updatedAt"
@@ -1513,6 +1539,8 @@ export class DemoDatabase {
               campaign.status,
               campaign.release_id AS "releaseId",
               release.title AS "releaseTitle",
+              campaign.track_id AS "trackId",
+              track.title AS "trackTitle",
               campaign.row_version AS version,
               campaign.created_at AS "createdAt",
               campaign.updated_at AS "updatedAt"
@@ -1520,6 +1548,9 @@ export class DemoDatabase {
             LEFT JOIN releases release ON release.id = campaign.release_id
               AND release.workspace_id = campaign.workspace_id
               AND release.artist_project_id = campaign.artist_project_id
+            LEFT JOIN tracks track ON track.id = campaign.track_id
+              AND track.workspace_id = campaign.workspace_id
+              AND track.artist_project_id = campaign.artist_project_id
             WHERE campaign.id = $1
               AND campaign.workspace_id = $2
             LIMIT 1
@@ -1536,7 +1567,7 @@ export class DemoDatabase {
         return latest.releaseId === input.releaseId ? { kind: "unchanged", campaign: latest } : { kind: "stale" };
       }
 
-      const campaign = toCampaign({ ...updatedRow, releaseTitle });
+      const campaign = toCampaign({ ...updatedRow, releaseTitle, trackTitle: current.trackTitle });
       await transaction.query(
         `
           INSERT INTO activity_logs (id, workspace_id, actor_user_id, action, entity_type, entity_id, payload)
@@ -1549,6 +1580,167 @@ export class DemoDatabase {
           input.releaseId === null ? "campaign.release_unlinked" : "campaign.release_linked",
           campaign.id,
           JSON.stringify({ releaseId: campaign.releaseId, version: campaign.version }),
+        ],
+      );
+
+      return { kind: "updated", campaign };
+    });
+  }
+
+  async linkCampaignTrack(
+    workspaceId: string,
+    actorUserId: string,
+    campaignId: string,
+    input: CampaignTrackLink,
+  ): Promise<CampaignTrackLinkResult> {
+    return this.pglite.transaction(async (transaction) => {
+      // Une campagne ne peut révéler ni projet ni morceau d'un autre
+      // workspace : la campagne est toujours lue depuis le scope serveur.
+      const currentResult = await transaction.query<ScalarRow>(
+        `
+          SELECT
+            campaign.id,
+            campaign.artist_project_id AS "projectId",
+            campaign.name,
+            campaign.objective,
+            campaign.status,
+            campaign.release_id AS "releaseId",
+            release.title AS "releaseTitle",
+            campaign.track_id AS "trackId",
+            track.title AS "trackTitle",
+            campaign.row_version AS version,
+            campaign.created_at AS "createdAt",
+            campaign.updated_at AS "updatedAt"
+          FROM campaigns campaign
+          LEFT JOIN releases release ON release.id = campaign.release_id
+            AND release.workspace_id = campaign.workspace_id
+            AND release.artist_project_id = campaign.artist_project_id
+          LEFT JOIN tracks track ON track.id = campaign.track_id
+            AND track.workspace_id = campaign.workspace_id
+            AND track.artist_project_id = campaign.artist_project_id
+          WHERE campaign.id = $1
+            AND campaign.workspace_id = $2
+          LIMIT 1
+        `,
+        [campaignId, workspaceId],
+      );
+      const currentRow = currentResult.rows[0];
+
+      if (!currentRow) {
+        return { kind: "campaign-not-found" };
+      }
+
+      const current = toCampaign(currentRow);
+      let trackTitle: string | null = null;
+
+      if (input.trackId !== null) {
+        // La FK garantit seulement l'existence. La résolution composée garde
+        // le morceau dans le même workspace et projet artistique avant tout
+        // write ; tout autre cas répond comme absent.
+        const trackResult = await transaction.query<ScalarRow>(
+          `
+            SELECT title
+            FROM tracks
+            WHERE id = $1
+              AND workspace_id = $2
+              AND artist_project_id = $3
+            LIMIT 1
+          `,
+          [input.trackId, workspaceId, current.projectId],
+        );
+        const track = trackResult.rows[0];
+
+        if (!track) {
+          return { kind: "track-not-found" };
+        }
+
+        trackTitle = asString(track.title);
+      }
+
+      // Le retry exact reste idempotent même si sa version date d'avant une
+      // autre requête : aucun timestamp ni audit n'est alors réécrit.
+      if (current.trackId === input.trackId) {
+        return { kind: "unchanged", campaign: current };
+      }
+
+      const updateResult = await transaction.query<ScalarRow>(
+        `
+          UPDATE campaigns
+          SET
+            track_id = $3,
+            row_version = row_version + 1,
+            updated_at = CURRENT_TIMESTAMP
+          WHERE id = $1
+            AND workspace_id = $2
+            AND row_version = $4
+          RETURNING
+            id,
+            artist_project_id AS "projectId",
+            name,
+            objective,
+            status,
+            release_id AS "releaseId",
+            track_id AS "trackId",
+            row_version AS version,
+            created_at AS "createdAt",
+            updated_at AS "updatedAt"
+        `,
+        [campaignId, workspaceId, input.trackId, input.expectedVersion],
+      );
+      const updatedRow = updateResult.rows[0];
+
+      if (!updatedRow) {
+        const latestResult = await transaction.query<ScalarRow>(
+          `
+            SELECT
+              campaign.id,
+              campaign.artist_project_id AS "projectId",
+              campaign.name,
+              campaign.objective,
+              campaign.status,
+              campaign.release_id AS "releaseId",
+              release.title AS "releaseTitle",
+              campaign.track_id AS "trackId",
+              track.title AS "trackTitle",
+              campaign.row_version AS version,
+              campaign.created_at AS "createdAt",
+              campaign.updated_at AS "updatedAt"
+            FROM campaigns campaign
+            LEFT JOIN releases release ON release.id = campaign.release_id
+              AND release.workspace_id = campaign.workspace_id
+              AND release.artist_project_id = campaign.artist_project_id
+            LEFT JOIN tracks track ON track.id = campaign.track_id
+              AND track.workspace_id = campaign.workspace_id
+              AND track.artist_project_id = campaign.artist_project_id
+            WHERE campaign.id = $1
+              AND campaign.workspace_id = $2
+            LIMIT 1
+          `,
+          [campaignId, workspaceId],
+        );
+        const latestRow = latestResult.rows[0];
+
+        if (!latestRow) {
+          return { kind: "campaign-not-found" };
+        }
+
+        const latest = toCampaign(latestRow);
+        return latest.trackId === input.trackId ? { kind: "unchanged", campaign: latest } : { kind: "stale" };
+      }
+
+      const campaign = toCampaign({ ...updatedRow, releaseTitle: current.releaseTitle, trackTitle });
+      await transaction.query(
+        `
+          INSERT INTO activity_logs (id, workspace_id, actor_user_id, action, entity_type, entity_id, payload)
+          VALUES ($1, $2, $3, $4, 'CAMPAIGN', $5, $6::json)
+        `,
+        [
+          `act_${randomUUID().replaceAll("-", "")}`,
+          workspaceId,
+          actorUserId,
+          input.trackId === null ? "campaign.track_unlinked" : "campaign.track_linked",
+          campaign.id,
+          JSON.stringify({ trackId: campaign.trackId, version: campaign.version }),
         ],
       );
 
@@ -3665,9 +3857,9 @@ export class DemoDatabase {
         updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
 
-      -- Campaign Brief Registry : le brief reste interne. Son unique lien
-      -- facultatif vers une release est gardé ici ; les contenus, calendrier
-      -- et piliers auront leurs propres tables et autorisations.
+      -- Campaign Brief Registry : le brief reste interne. Ses liens facultatifs
+      -- vers une release et un morceau sont gardés ici ; les contenus,
+      -- calendrier et piliers auront leurs propres tables et autorisations.
       CREATE TABLE IF NOT EXISTS campaigns (
         id TEXT PRIMARY KEY,
         workspace_id TEXT NOT NULL REFERENCES workspaces(id),
@@ -4052,6 +4244,8 @@ export class DemoDatabase {
       ALTER TABLE campaigns
         ADD COLUMN IF NOT EXISTS release_id TEXT REFERENCES releases(id);
       ALTER TABLE campaigns
+        ADD COLUMN IF NOT EXISTS track_id TEXT REFERENCES tracks(id);
+      ALTER TABLE campaigns
         ADD COLUMN IF NOT EXISTS row_version INTEGER NOT NULL DEFAULT 1;
       UPDATE campaigns
         SET row_version = 1
@@ -4092,10 +4286,10 @@ export class DemoDatabase {
         END IF;
       END;
       $$;
-      -- Une FK sur release_id établit l'existence, mais ne peut pas exprimer
-      -- l'appartenance au même workspace et projet. Réparer d'abord les liens
-      -- historiques éventuellement incompatibles, puis installer la garde
-      -- côté base ci-dessous.
+      -- Les FKs sur les références Music Brain établissent l'existence,
+      -- mais ne peuvent pas exprimer l'appartenance au même workspace et
+      -- projet. Réparer d'abord les liens historiques éventuellement
+      -- incompatibles, puis installer la garde côté base ci-dessous.
       UPDATE campaigns AS campaign
         SET release_id = NULL
         WHERE release_id IS NOT NULL
@@ -4105,6 +4299,16 @@ export class DemoDatabase {
             WHERE release.id = campaign.release_id
               AND release.workspace_id = campaign.workspace_id
               AND release.artist_project_id = campaign.artist_project_id
+          );
+      UPDATE campaigns AS campaign
+        SET track_id = NULL
+        WHERE track_id IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1
+            FROM tracks AS track
+            WHERE track.id = campaign.track_id
+              AND track.workspace_id = campaign.workspace_id
+              AND track.artist_project_id = campaign.artist_project_id
           );
       -- La même réparation précède la garde de scope des tracks. Un lien
       -- historique ou écrit par un ancien chemin SQL ne doit jamais faire
@@ -4186,9 +4390,9 @@ export class DemoDatabase {
         ALTER COLUMN updated_at SET NOT NULL;
     `);
 
-    // Cette garde complète la FK simple avec le scope composé. Elle protège
+    // Cette garde complète les FKs simples avec le scope composé. Elle protège
     // aussi un futur write path SQL mal câblé : aucune campagne ne peut porter
-    // une release d'un autre workspace ou d'un autre projet artistique.
+    // une référence Music Brain d'un autre workspace ou projet artistique.
     await this.pglite.exec(`
       CREATE OR REPLACE FUNCTION enforce_campaign_release_scope()
       RETURNS TRIGGER AS $$
@@ -4204,13 +4408,24 @@ export class DemoDatabase {
           RAISE EXCEPTION 'La release liée doit appartenir au même workspace et projet artistique que la campagne.';
         END IF;
 
+        IF NEW.track_id IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1
+            FROM tracks AS track
+            WHERE track.id = NEW.track_id
+              AND track.workspace_id = NEW.workspace_id
+              AND track.artist_project_id = NEW.artist_project_id
+          ) THEN
+          RAISE EXCEPTION 'Le morceau lié doit appartenir au même workspace et projet artistique que la campagne.';
+        END IF;
+
         RETURN NEW;
       END;
       $$ LANGUAGE plpgsql;
 
       DROP TRIGGER IF EXISTS campaigns_release_scope_guard ON campaigns;
       CREATE TRIGGER campaigns_release_scope_guard
-      BEFORE INSERT OR UPDATE OF release_id, workspace_id, artist_project_id ON campaigns
+      BEFORE INSERT OR UPDATE OF release_id, track_id, workspace_id, artist_project_id ON campaigns
       FOR EACH ROW EXECUTE FUNCTION enforce_campaign_release_scope();
 
       CREATE OR REPLACE FUNCTION enforce_track_release_scope()

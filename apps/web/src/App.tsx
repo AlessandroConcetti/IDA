@@ -57,6 +57,7 @@ import {
   type TrackReference,
   updateArtistBrain,
   updateCampaignRelease,
+  updateCampaignTrack,
   uploadMediaAsset,
 } from "./api";
 import {
@@ -783,6 +784,8 @@ function activityActionLabel(action: string): string {
     "campaign.created": "Campaign Brief créé",
     "campaign.release_linked": "Release rattachée à une campagne",
     "campaign.release_unlinked": "Release retirée d’une campagne",
+    "campaign.track_linked": "Morceau rattaché à une campagne",
+    "campaign.track_unlinked": "Morceau retiré d’une campagne",
     "release.created": "Release ajoutée au Music Brain",
     "track.created": "Morceau ajouté au Music Brain",
     "media.imported": "Média importé dans la bibliothèque",
@@ -2737,6 +2740,10 @@ function releaseOptionLabel(release: ReleaseRecord): string {
   return release.releaseDate ? `${release.title} · ${formatCampaignDate(release.releaseDate)}` : release.title;
 }
 
+function trackOptionLabel(track: TrackReference): string {
+  return track.releaseTitle ? `${track.title} · ${track.releaseTitle}` : track.title;
+}
+
 function CampaignsView() {
   const [campaigns, setCampaigns] = useState<CampaignRecord[]>([]);
   const [source, setSource] = useState<"loading" | "api" | "unavailable">("loading");
@@ -2744,11 +2751,16 @@ function CampaignsView() {
   const [releaseSource, setReleaseSource] = useState<"loading" | "api" | "unavailable">("loading");
   const [releaseNotice, setReleaseNotice] = useState("Chargement des releases disponibles…");
   const [selectedReleaseIds, setSelectedReleaseIds] = useState<Record<string, string>>({});
+  const [tracks, setTracks] = useState<TrackReference[]>([]);
+  const [trackSource, setTrackSource] = useState<"loading" | "api" | "unavailable">("loading");
+  const [trackNotice, setTrackNotice] = useState("Chargement des morceaux disponibles…");
+  const [selectedTrackIds, setSelectedTrackIds] = useState<Record<string, string>>({});
   const [form, setForm] = useState<CampaignForm>(emptyCampaignForm);
   const [notice, setNotice] = useState("Chargement des briefs de campagne IDA…");
   const [noticeState, setNoticeState] = useState<"default" | "success" | "error">("default");
   const [isSaving, setIsSaving] = useState(false);
   const [activeReleaseCampaignId, setActiveReleaseCampaignId] = useState<string | null>(null);
+  const [activeTrackCampaignId, setActiveTrackCampaignId] = useState<string | null>(null);
 
   useEffect(() => {
     let isCurrent = true;
@@ -2803,6 +2815,30 @@ function CampaignsView() {
         setReleaseNotice(`Les releases ne peuvent pas être chargées : ${reason}`);
       });
 
+    void fetchTrackReferences()
+      .then((items) => {
+        if (!isCurrent) {
+          return;
+        }
+
+        setTracks(items);
+        setTrackSource("api");
+        setTrackNotice(
+          items.length
+            ? `${items.length} morceau${items.length > 1 ? "x" : ""} disponible${items.length > 1 ? "s" : ""} pour association.`
+            : "Aucun morceau n’est disponible pour le moment.",
+        );
+      })
+      .catch((error: unknown) => {
+        if (!isCurrent) {
+          return;
+        }
+
+        const reason = error instanceof IdaApiError ? error.message : "IDA API est indisponible.";
+        setTrackSource("unavailable");
+        setTrackNotice(`Les morceaux ne peuvent pas être chargés : ${reason}`);
+      });
+
     return () => {
       isCurrent = false;
     };
@@ -2816,6 +2852,10 @@ function CampaignsView() {
     setSelectedReleaseIds((current) => ({ ...current, [campaignId]: releaseId }));
   }
 
+  function updateSelectedTrack(campaignId: string, trackId: string) {
+    setSelectedTrackIds((current) => ({ ...current, [campaignId]: trackId }));
+  }
+
   async function refreshCampaignAfterConflict(campaignId: string): Promise<void> {
     const currentCampaigns = await fetchCampaigns();
 
@@ -2826,10 +2866,15 @@ function CampaignsView() {
       delete next[campaignId];
       return next;
     });
+    setSelectedTrackIds((current) => {
+      const next = { ...current };
+      delete next[campaignId];
+      return next;
+    });
   }
 
   async function handleReleaseAssociation(campaign: CampaignRecord, releaseId: string | null) {
-    if (activeReleaseCampaignId || source !== "api") {
+    if (activeReleaseCampaignId || activeTrackCampaignId || source !== "api") {
       return;
     }
 
@@ -2886,6 +2931,64 @@ function CampaignsView() {
     }
   }
 
+  async function handleTrackAssociation(campaign: CampaignRecord, trackId: string | null) {
+    if (activeReleaseCampaignId || activeTrackCampaignId || source !== "api") {
+      return;
+    }
+
+    if (trackId !== null && trackSource !== "api") {
+      return;
+    }
+
+    if (trackId === campaign.trackId) {
+      return;
+    }
+
+    setActiveTrackCampaignId(campaign.id);
+
+    try {
+      const updatedCampaign = await updateCampaignTrack(campaign.id, {
+        trackId,
+        expectedVersion: campaign.version,
+      });
+      setCampaigns((current) =>
+        current.map((currentCampaign) =>
+          currentCampaign.id === updatedCampaign.id ? updatedCampaign : currentCampaign,
+        ),
+      );
+      setSelectedTrackIds((current) => {
+        const next = { ...current };
+        delete next[campaign.id];
+        return next;
+      });
+      setNotice(
+        updatedCampaign.trackId
+          ? `« ${updatedCampaign.name} » est liée au morceau « ${updatedCampaign.trackTitle ?? "sélectionné"} ».`
+          : `« ${updatedCampaign.name} » n’est plus liée à un morceau.`,
+      );
+      setNoticeState("success");
+    } catch (error: unknown) {
+      const reason = error instanceof IdaApiError ? error.message : "IDA API est indisponible.";
+
+      if (error instanceof IdaApiError && error.status === 409) {
+        try {
+          await refreshCampaignAfterConflict(campaign.id);
+          setNotice("Cette campagne a changé entre-temps. Son état a été actualisé avant toute nouvelle action.");
+        } catch (refreshError: unknown) {
+          const refreshReason =
+            refreshError instanceof IdaApiError ? refreshError.message : "IDA API est indisponible.";
+          setNotice(`Le lien a changé, mais le brief ne peut pas être actualisé : ${refreshReason}`);
+        }
+      } else {
+        setNotice(`Le lien de morceau n’a pas été enregistré : ${reason}`);
+      }
+
+      setNoticeState("error");
+    } finally {
+      setActiveTrackCampaignId(null);
+    }
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const name = form.name.trim();
@@ -2937,6 +3040,9 @@ function CampaignsView() {
         <p className={`campaign-release-source ${releaseSource === "unavailable" ? "error" : ""}`} role="status">
           {releaseNotice}
         </p>
+        <p className={`campaign-release-source ${trackSource === "unavailable" ? "error" : ""}`} role="status">
+          {trackNotice}
+        </p>
 
         {source === "loading" ? <p className="campaign-registry-empty">Chargement des briefs de campagne…</p> : null}
         {source === "unavailable" ? (
@@ -2949,21 +3055,41 @@ function CampaignsView() {
         <div className="campaign-registry-list" aria-live="polite">
           {campaigns.map((campaign) => {
             const selectedReleaseId = selectedReleaseIds[campaign.id] ?? "";
+            const selectedTrackId = selectedTrackIds[campaign.id] ?? "";
             const compatibleReleases = releases.filter(
               (release) => release.artistProjectId === campaign.artistProjectId,
             );
+            const compatibleTracks = tracks.filter((track) => track.artistProjectId === campaign.artistProjectId);
             const isReleaseActionActive = activeReleaseCampaignId === campaign.id;
+            const isTrackActionActive = activeTrackCampaignId === campaign.id;
+            const isLinkActionActive = isReleaseActionActive || isTrackActionActive;
             const canLinkRelease =
               source === "api" &&
               releaseSource === "api" &&
               selectedReleaseId.length > 0 &&
               selectedReleaseId !== campaign.releaseId &&
-              activeReleaseCampaignId === null;
+              activeReleaseCampaignId === null &&
+              activeTrackCampaignId === null;
             const canRemoveRelease =
-              source === "api" && Boolean(campaign.releaseId) && activeReleaseCampaignId === null;
+              source === "api" &&
+              Boolean(campaign.releaseId) &&
+              activeReleaseCampaignId === null &&
+              activeTrackCampaignId === null;
+            const canLinkTrack =
+              source === "api" &&
+              trackSource === "api" &&
+              selectedTrackId.length > 0 &&
+              selectedTrackId !== campaign.trackId &&
+              activeReleaseCampaignId === null &&
+              activeTrackCampaignId === null;
+            const canRemoveTrack =
+              source === "api" &&
+              Boolean(campaign.trackId) &&
+              activeReleaseCampaignId === null &&
+              activeTrackCampaignId === null;
 
             return (
-              <article className="campaign-brief" key={campaign.id} aria-busy={isReleaseActionActive}>
+              <article className="campaign-brief" key={campaign.id} aria-busy={isLinkActionActive}>
                 <div className="campaign-brief-heading">
                   <div>
                     <p>BRIEF INTERNE · {formatCampaignDate(campaign.createdAt)}</p>
@@ -3016,6 +3142,50 @@ function CampaignsView() {
                     </div>
                   </div>
                 </section>
+                <section className="campaign-release-link" aria-label={`Morceau associé à ${campaign.name}`}>
+                  <div className="campaign-release-current">
+                    <span>MORCEAU ACTUEL</span>
+                    <strong>{campaign.trackTitle ?? "Aucun morceau lié."}</strong>
+                  </div>
+                  <label className="campaign-release-select">
+                    <span>CHOISIR UN MORCEAU</span>
+                    <select
+                      value={selectedTrackId}
+                      onChange={(event) => updateSelectedTrack(campaign.id, event.target.value)}
+                      disabled={
+                        trackSource !== "api" || activeReleaseCampaignId !== null || activeTrackCampaignId !== null
+                      }
+                    >
+                      <option value="">Sélection locale uniquement</option>
+                      {compatibleTracks.map((track) => (
+                        <option key={track.id} value={track.id}>
+                          {trackOptionLabel(track)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="campaign-release-actions">
+                    <p>Le lien n’est enregistré qu’après une action explicite.</p>
+                    <div>
+                      <button
+                        className="campaign-release-button link"
+                        type="button"
+                        disabled={!canLinkTrack}
+                        onClick={() => void handleTrackAssociation(campaign, selectedTrackId)}
+                      >
+                        {isTrackActionActive ? "MISE À JOUR…" : "LIER"}
+                      </button>
+                      <button
+                        className="campaign-release-button remove"
+                        type="button"
+                        disabled={!canRemoveTrack}
+                        onClick={() => void handleTrackAssociation(campaign, null)}
+                      >
+                        {isTrackActionActive ? "MISE À JOUR…" : "RETIRER"}
+                      </button>
+                    </div>
+                  </div>
+                </section>
               </article>
             );
           })}
@@ -3031,8 +3201,8 @@ function CampaignsView() {
           <span className="quiet-label">DRAFT ONLY</span>
         </div>
         <p className="campaign-create-intro">
-          IDA crée uniquement un brouillon local. Une release existante peut ensuite être liée séparément ; les dates,
-          piliers et contenus restent hors de cette tranche.
+          IDA crée uniquement un brouillon local. Une release et un morceau existants peuvent ensuite être liés
+          séparément ; les dates, piliers et contenus restent hors de cette tranche.
         </p>
         <form className="campaign-create-form" noValidate onSubmit={handleSubmit}>
           <label className="campaign-create-field">

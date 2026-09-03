@@ -2030,7 +2030,105 @@ describe("IDA API — première tranche Phase 1", () => {
     expect(unknownCampaign.json()).toMatchObject({ error: { code: "CAMPAIGN_NOT_FOUND" } });
   });
 
-  it("empêche deux écrans de remplacer silencieusement le lien de release d'une même campagne", async () => {
+  it("rattache et retire explicitement le morceau d'une Campaign Brief sans accepter de scope client", async () => {
+    const listing = await app.inject({ method: "GET", url: "/v1/campaigns" });
+    const initial = (
+      listing.json() as {
+        data: Array<{ id: string; version: number; trackId?: string; trackTitle?: string }>;
+      }
+    ).data.find((campaign) => campaign.id === "cmp_lumiere_noire");
+
+    expect(initial).toMatchObject({ id: "cmp_lumiere_noire", version: 1 });
+    expect(initial?.trackId).toBeUndefined();
+
+    const injected = await app.inject({
+      method: "PATCH",
+      url: "/v1/campaigns/cmp_lumiere_noire/track",
+      payload: {
+        trackId: "trk_lumiere_noire",
+        expectedVersion: initial?.version,
+        workspaceId: "wsp_other",
+      },
+    });
+    expect(injected.statusCode).toBe(400);
+    expect(injected.json()).toMatchObject({ error: { code: "INVALID_CAMPAIGN_TRACK" } });
+
+    const invalidVersion = await app.inject({
+      method: "PATCH",
+      url: "/v1/campaigns/cmp_lumiere_noire/track",
+      payload: { trackId: "trk_lumiere_noire", expectedVersion: 0 },
+    });
+    expect(invalidVersion.statusCode).toBe(400);
+    expect(invalidVersion.json()).toMatchObject({ error: { code: "INVALID_CAMPAIGN_TRACK" } });
+
+    const foreignTrack = await app.inject({
+      method: "PATCH",
+      url: "/v1/campaigns/cmp_lumiere_noire/track",
+      payload: { trackId: "trk_other_workspace", expectedVersion: initial?.version },
+    });
+    expect(foreignTrack.statusCode).toBe(404);
+    expect(foreignTrack.json()).toMatchObject({ error: { code: "TRACK_NOT_FOUND" } });
+
+    const linked = await app.inject({
+      method: "PATCH",
+      url: "/v1/campaigns/cmp_lumiere_noire/track",
+      payload: { trackId: "trk_lumiere_noire", expectedVersion: initial?.version },
+    });
+    expect(linked.statusCode).toBe(200);
+    expect(linked.json()).toMatchObject({
+      data: {
+        id: "cmp_lumiere_noire",
+        trackId: "trk_lumiere_noire",
+        trackTitle: "Lumière Noire",
+        version: 2,
+      },
+    });
+
+    const exactRetry = await app.inject({
+      method: "PATCH",
+      url: "/v1/campaigns/cmp_lumiere_noire/track",
+      payload: { trackId: "trk_lumiere_noire", expectedVersion: initial?.version },
+    });
+    expect(exactRetry.statusCode).toBe(200);
+    expect(exactRetry.json()).toMatchObject({ data: { trackId: "trk_lumiere_noire", version: 2 } });
+
+    const stale = await app.inject({
+      method: "PATCH",
+      url: "/v1/campaigns/cmp_lumiere_noire/track",
+      payload: { trackId: null, expectedVersion: initial?.version },
+    });
+    expect(stale.statusCode).toBe(409);
+    expect(stale.json()).toMatchObject({ error: { code: "CAMPAIGN_STALE" } });
+
+    const detached = await app.inject({
+      method: "PATCH",
+      url: "/v1/campaigns/cmp_lumiere_noire/track",
+      payload: { trackId: null, expectedVersion: 2 },
+    });
+    expect(detached.statusCode).toBe(200);
+    const detachedCampaign = (detached.json() as { data: Record<string, unknown> }).data;
+    expect(detachedCampaign).toMatchObject({ id: "cmp_lumiere_noire", version: 3 });
+    expect(detachedCampaign.trackId).toBeUndefined();
+    expect(detachedCampaign.trackTitle).toBeUndefined();
+
+    const detachedRetry = await app.inject({
+      method: "PATCH",
+      url: "/v1/campaigns/cmp_lumiere_noire/track",
+      payload: { trackId: null, expectedVersion: 2 },
+    });
+    expect(detachedRetry.statusCode).toBe(200);
+    expect(detachedRetry.json()).toMatchObject({ data: { version: 3 } });
+
+    const unknownCampaign = await app.inject({
+      method: "PATCH",
+      url: "/v1/campaigns/cmp_other_workspace/track",
+      payload: { trackId: "trk_lumiere_noire", expectedVersion: 1 },
+    });
+    expect(unknownCampaign.statusCode).toBe(404);
+    expect(unknownCampaign.json()).toMatchObject({ error: { code: "CAMPAIGN_NOT_FOUND" } });
+  });
+
+  it("empêche deux écrans de modifier simultanément les liens Music Brain d'une même campagne", async () => {
     const listing = await app.inject({ method: "GET", url: "/v1/campaigns" });
     const campaign = (
       listing.json() as {
@@ -2047,8 +2145,8 @@ describe("IDA API — première tranche Phase 1", () => {
       }),
       app.inject({
         method: "PATCH",
-        url: "/v1/campaigns/cmp_lumiere_noire/release",
-        payload: { releaseId: "rel_afterimage", expectedVersion: campaign?.version },
+        url: "/v1/campaigns/cmp_lumiere_noire/track",
+        payload: { trackId: "trk_lumiere_noire", expectedVersion: campaign?.version },
       }),
     ]);
 
@@ -2060,14 +2158,14 @@ describe("IDA API — première tranche Phase 1", () => {
     const current = await app.inject({ method: "GET", url: "/v1/campaigns" });
     const updated = (
       current.json() as {
-        data: Array<{ id: string; releaseId?: string; version: number }>;
+        data: Array<{ id: string; releaseId?: string; trackId?: string; version: number }>;
       }
     ).data.find((item) => item.id === "cmp_lumiere_noire");
     expect(updated).toMatchObject({ id: "cmp_lumiere_noire", version: 2 });
-    expect(["rel_lumiere_noire", "rel_afterimage"]).toContain(updated?.releaseId);
+    expect([Boolean(updated?.releaseId), Boolean(updated?.trackId)].filter(Boolean)).toHaveLength(1);
   });
 
-  it("refuse une release d'un autre projet et conserve des audits de lien redacted sans effet externe", async () => {
+  it("refuse des références Music Brain d'un autre projet et conserve des audits redacted sans effet externe", async () => {
     const dataDir = await mkdtemp(join(tmpdir(), "ida-campaign-release-boundary-"));
     const isolatedStorageDir = await mkdtemp(join(tmpdir(), "ida-campaign-release-storage-"));
     let setupDatabase: DemoDatabase | undefined;
@@ -2107,6 +2205,15 @@ describe("IDA API — première tranche Phase 1", () => {
           )
         `,
       );
+      await setupDatabase.pglite.query(
+        `
+          INSERT INTO tracks (id, workspace_id, artist_project_id, title, artist_credit, status)
+          VALUES (
+            'trk_same_workspace_other_project', 'wsp_demo_aless', 'prj_same_workspace_other',
+            'Morceau autre projet', 'Aless', 'UNRELEASED'
+          )
+        `,
+      );
       await expect(
         setupDatabase.pglite.exec(`
           INSERT INTO campaigns (
@@ -2126,6 +2233,13 @@ describe("IDA API — première tranche Phase 1", () => {
           WHERE id = 'cmp_lumiere_noire';
         `),
       ).rejects.toThrow(/même workspace et projet artistique/u);
+      await expect(
+        setupDatabase.pglite.exec(`
+          UPDATE campaigns
+          SET track_id = 'trk_same_workspace_other_project'
+          WHERE id = 'cmp_lumiere_noire';
+        `),
+      ).rejects.toThrow(/même workspace et projet artistique/u);
       await setupDatabase.close();
       setupDatabase = undefined;
 
@@ -2137,6 +2251,14 @@ describe("IDA API — première tranche Phase 1", () => {
       });
       expect(projectMismatch.statusCode).toBe(404);
       expect(projectMismatch.json()).toMatchObject({ error: { code: "RELEASE_NOT_FOUND" } });
+
+      const trackProjectMismatch = await isolatedApp.inject({
+        method: "PATCH",
+        url: "/v1/campaigns/cmp_lumiere_noire/track",
+        payload: { trackId: "trk_same_workspace_other_project", expectedVersion: 1 },
+      });
+      expect(trackProjectMismatch.statusCode).toBe(404);
+      expect(trackProjectMismatch.json()).toMatchObject({ error: { code: "TRACK_NOT_FOUND" } });
 
       const linked = await isolatedApp.inject({
         method: "PATCH",
@@ -2152,6 +2274,21 @@ describe("IDA API — première tranche Phase 1", () => {
         payload: { releaseId: "rel_lumiere_noire", expectedVersion: 1 },
       });
       expect(retry.statusCode).toBe(200);
+
+      const trackLinked = await isolatedApp.inject({
+        method: "PATCH",
+        url: "/v1/campaigns/cmp_lumiere_noire/track",
+        payload: { trackId: "trk_lumiere_noire", expectedVersion: 2 },
+      });
+      expect(trackLinked.statusCode).toBe(200);
+      expect(trackLinked.json()).toMatchObject({ data: { trackId: "trk_lumiere_noire", version: 3 } });
+
+      const trackRetry = await isolatedApp.inject({
+        method: "PATCH",
+        url: "/v1/campaigns/cmp_lumiere_noire/track",
+        payload: { trackId: "trk_lumiere_noire", expectedVersion: 2 },
+      });
+      expect(trackRetry.statusCode).toBe(200);
       await isolatedApp.close();
       isolatedApp = undefined;
 
@@ -2182,7 +2319,10 @@ describe("IDA API — première tranche Phase 1", () => {
           FROM activity_logs
           WHERE workspace_id = 'wsp_demo_aless'
             AND entity_id = 'cmp_lumiere_noire'
-            AND action IN ('campaign.release_linked', 'campaign.release_unlinked')
+            AND action IN (
+              'campaign.release_linked', 'campaign.release_unlinked',
+              'campaign.track_linked', 'campaign.track_unlinked'
+            )
           ORDER BY created_at ASC
         `,
       );
@@ -2192,9 +2332,14 @@ describe("IDA API — première tranche Phase 1", () => {
           entityId: "cmp_lumiere_noire",
           payload: '{"releaseId":"rel_lumiere_noire","version":2}',
         }),
+        expect.objectContaining({
+          action: "campaign.track_linked",
+          entityId: "cmp_lumiere_noire",
+          payload: '{"trackId":"trk_lumiere_noire","version":3}',
+        }),
       ]);
-      expect(audit.rows[0]?.payload).not.toContain("Lumière Noire");
-      expect(audit.rows[0]?.payload).not.toContain("Préparer un brief");
+      expect(audit.rows.every((row) => !row.payload.includes("Lumière Noire"))).toBe(true);
+      expect(audit.rows.every((row) => !row.payload.includes("Préparer un brief"))).toBe(true);
     } finally {
       await setupDatabase?.close();
       await isolatedApp?.close();
@@ -2204,8 +2349,8 @@ describe("IDA API — première tranche Phase 1", () => {
     }
   });
 
-  it("migre un registre de campagnes local antérieur vers le lien de release versionné et répare les liens hors scope", async () => {
-    const dataDir = await mkdtemp(join(tmpdir(), "ida-campaign-release-migration-"));
+  it("migre un registre de campagnes antérieur vers les liens Music Brain versionnés et répare leur scope", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "ida-campaign-music-migration-"));
     let legacyDatabase: DemoDatabase | undefined;
     let upgradedDatabase: DemoDatabase | undefined;
 
@@ -2214,6 +2359,7 @@ describe("IDA API — première tranche Phase 1", () => {
       await legacyDatabase.pglite.exec(`
         DROP TRIGGER IF EXISTS campaigns_release_scope_guard ON campaigns;
         ALTER TABLE campaigns DROP COLUMN release_id;
+        ALTER TABLE campaigns DROP COLUMN track_id;
         ALTER TABLE campaigns DROP CONSTRAINT IF EXISTS campaigns_row_version_check;
         ALTER TABLE campaigns DROP COLUMN row_version;
       `);
@@ -2223,13 +2369,14 @@ describe("IDA API — première tranche Phase 1", () => {
       upgradedDatabase = await DemoDatabase.open({ dataDir, seed: false });
       const migrated = await upgradedDatabase.pglite.query<{
         releaseId: string | null;
+        trackId: string | null;
         version: number;
       }>(`
-        SELECT release_id AS "releaseId", row_version AS version
+        SELECT release_id AS "releaseId", track_id AS "trackId", row_version AS version
         FROM campaigns
         WHERE id = 'cmp_lumiere_noire'
       `);
-      expect(migrated.rows[0]).toMatchObject({ releaseId: null, version: 1 });
+      expect(migrated.rows[0]).toMatchObject({ releaseId: null, trackId: null, version: 1 });
       await expect(
         upgradedDatabase.pglite.exec(`
           UPDATE campaigns
@@ -2240,14 +2387,14 @@ describe("IDA API — première tranche Phase 1", () => {
       await upgradedDatabase.close();
       upgradedDatabase = undefined;
 
-      // Simule un lien écrit par un ancien chemin SQL qui n'avait pas encore
-      // la garde de scope. Le redémarrage doit le détacher avant de réinstaller
-      // cette garde, sans révéler ni déplacer la release étrangère.
+      // Simule des liens écrits par un ancien chemin SQL qui n'avait pas encore
+      // la garde de scope. Le redémarrage doit les détacher avant de réinstaller
+      // cette garde, sans révéler ni déplacer les références étrangères.
       upgradedDatabase = await DemoDatabase.open({ dataDir, seed: false });
       await upgradedDatabase.pglite.exec(`
         DROP TRIGGER IF EXISTS campaigns_release_scope_guard ON campaigns;
         UPDATE campaigns
-        SET release_id = 'rel_other_workspace'
+        SET release_id = 'rel_other_workspace', track_id = 'trk_other_workspace'
         WHERE id = 'cmp_lumiere_noire';
       `);
       await upgradedDatabase.close();
@@ -2256,13 +2403,14 @@ describe("IDA API — première tranche Phase 1", () => {
       upgradedDatabase = await DemoDatabase.open({ dataDir, seed: false });
       const repaired = await upgradedDatabase.pglite.query<{
         releaseId: string | null;
+        trackId: string | null;
         version: number;
       }>(`
-        SELECT release_id AS "releaseId", row_version AS version
+        SELECT release_id AS "releaseId", track_id AS "trackId", row_version AS version
         FROM campaigns
         WHERE id = 'cmp_lumiere_noire'
       `);
-      expect(repaired.rows[0]).toMatchObject({ releaseId: null, version: 1 });
+      expect(repaired.rows[0]).toMatchObject({ releaseId: null, trackId: null, version: 1 });
       await upgradedDatabase.close();
       upgradedDatabase = undefined;
 

@@ -26,7 +26,7 @@ Le premier runtime est une API Fastify locale sur `http://127.0.0.1:8787`, conso
 | `GET /v1/activity-logs` | Livrée | Timeline d’activité locale en lecture seule : projection bornée de l’audit, filtrée par workspace serveur et sans payload, acteur ni données privées. |
 | `GET/PATCH /v1/artist-profile`, `GET/POST /v1/releases`, `GET/POST /v1/tracks`, `GET/POST /v1/media`, `GET /v1/media/:mediaId/preview`, `GET /v1/memories` | Livrées | Données de démonstration isolées par workspace côté serveur. L’Artist Brain, la création bornée de releases et morceaux Music Brain — avec une liaison de release explicitement demandée et contrôlée à la création d’un morceau — et l’import local privé d’un média, éventuellement rattaché à une release ou un morceau compatible, passent par des outils `WRITE` allowlistés ; `GET /v1/media` filtre les métadonnées, y compris par contexte release/morceau, et l’aperçu lit uniquement un fichier privé autorisé. |
 | `GET /v1/content/rotation` | Livrée | Projection factuelle de médias `AVAILABLE` : seulement les assets `UNUSED` sans aucun lien éditorial, bornée et isolée au workspace. Elle ne calcule aucun score et n’écrit rien. |
-| `GET/POST /v1/campaigns`, `PATCH /v1/campaigns/:campaignId/release` | Livrées | Registre local de briefs de campagne internes. La création force `DRAFT`; un lien optionnel vers une release du même workspace et projet est contrôlé par version via `CAMPAIGNS` / `WRITE`, sans créer de planification ni effet externe. |
+| `GET/POST /v1/campaigns`, `PATCH /v1/campaigns/:campaignId/release`, `PATCH /v1/campaigns/:campaignId/track` | Livrées | Registre local de briefs de campagne internes. La création force `DRAFT`; les liens optionnels vers une release et un morceau du même workspace et projet sont contrôlés par une version partagée via `CAMPAIGNS` / `WRITE`, sans créer de planification ni effet externe. |
 | `POST /v1/memories/proposals`, `POST /v1/memories/:memoryId/confirm`, `POST /v1/memories/:memoryId/reject` | Livrées | Flux de mémoire consentie : une préférence commence forcément à `PENDING` et seule une décision humaine explicite peut la faire passer à `CONFIRMED` ou `REJECTED`. |
 | `GET /v1/approvals/queue`, `POST /v1/post-variants/:variantId/approve`, `POST /v1/post-variants/:variantId/reject` | Livrées | Approval Center local : propositions seedées en `REQUESTED`, préconditionnées par un hash de payload et décidées humainement ; aucune programmation ni publication n’en découle seule. |
 | `GET /v1/calendar`, `POST /v1/post-variants/:variantId/internal-schedules`, `POST /v1/internal-post-schedules/:scheduleId/cancel` | Livrées | Calendrier éditorial, planification interne d’une variante approuvée et retrait idempotent de cette planification ; aucun job, compte social, adaptateur ou appel réseau n’est créé. |
@@ -108,7 +108,7 @@ Ce registre n’est pas encore un historique conversationnel général : il ne s
 - L’identifiant `trk_…` est généré côté serveur, la clé primaire le protège contre les collisions et une activité append-only `track.created` est ajoutée dans le journal local avec le seul état et l’indicateur booléen de liaison, jamais le titre, les tags, la description ou le titre de release.
 - Les valeurs sont bornées (BPM strictement positif et au plus 400, 30 tags maximum, description au plus 4 000 caractères). Une création réussie retourne `201 Created` et le morceau est visible uniquement dans `GET /v1/tracks` du workspace imposé par le serveur.
 
-### Campaign Brief Registry : création et lien de release contrôlés
+### Campaign Brief Registry : création et liens Music Brain contrôlés
 
 `GET /v1/campaigns` liste les briefs internes du workspace imposé par le serveur, dans l’ordre stable de création décroissante. `POST /v1/campaigns` accepte strictement :
 
@@ -119,7 +119,7 @@ Ce registre n’est pas encore un historique conversationnel général : il ne s
 }
 ```
 
-- `name` est borné à 240 caractères et `objective` à 2 000. Le corps refuse `id`, `workspaceId`, `artistProjectId`, acteur, statut, release, date, pilier ou toute propriété inconnue avec `400 INVALID_CAMPAIGN`.
+- `name` est borné à 240 caractères et `objective` à 2 000. Le corps refuse `id`, `workspaceId`, `artistProjectId`, acteur, statut, release, morceau, date, pilier ou toute propriété inconnue avec `400 INVALID_CAMPAIGN`.
 - Le serveur résout workspace, projet et acteur, génère l’identifiant `cmp_…` et force toujours l’état initial `DRAFT`. Les noms sont normalisés NFKC, trimés et comparés sans casse dans un même workspace ; un doublon répond `409 CAMPAIGN_ALREADY_EXISTS`.
 - L’écriture passe uniquement par `create_campaign` (`CAMPAIGNS` / `WRITE`). L’audit append-only `campaign.created` ne contient que l’état et l’identifiant porté par l’événement, jamais le nom ou l’objectif libres.
 
@@ -138,6 +138,17 @@ Ce registre n’est pas encore un historique conversationnel général : il ne s
 - La réponse `Campaign` expose toujours `version` et expose `releaseId` / `releaseTitle` uniquement lorsqu’un lien valide existe. Une modification effective incrémente la version et `updatedAt`; une version dépassée répond `409 CAMPAIGN_STALE` sans écriture.
 - Un retry demandant exactement le lien déjà présent — y compris `releaseId: null` lorsqu’il est déjà absent — retourne `200` sans modifier la version ni ajouter d’audit. Une liaison ou suppression effective passe exclusivement par `link_campaign_release` (`CAMPAIGNS` / `WRITE`) et écrit `campaign.release_linked` ou `campaign.release_unlinked` avec des identifiants et la version, jamais le nom, l’objectif ou le titre de release.
 - Cette relation est purement interne : elle ne crée ni date, ni pilier, ni plan de contenu, ni post, ni tâche, ni calendrier, ni notification, ni appel IA, OAuth, job, compte social ou publication. Les transitions de statut et autres associations restent des routes futures séparées.
+
+`PATCH /v1/campaigns/:campaignId/track` applique le même protocole au morceau optionnel :
+
+```json
+{
+  "trackId": "trk_…",
+  "expectedVersion": 2
+}
+```
+
+`trackId` peut valoir `null`. Le morceau doit appartenir au workspace serveur et au même projet artistique que la campagne. Une référence incompatible répond `404 TRACK_NOT_FOUND`; une version dépassée répond `409 CAMPAIGN_STALE`. La réponse expose `trackId` et `trackTitle` uniquement lorsque le lien est valide. Un changement effectif passe par `link_campaign_track` (`CAMPAIGNS` / `WRITE`) et journalise `campaign.track_linked` ou `campaign.track_unlinked` sans texte libre. La version étant commune aux liens release et morceau, deux écrans ne peuvent pas écraser silencieusement leurs modifications respectives.
 
 ### Content Library : recherche et import local privé
 
@@ -434,6 +445,7 @@ Exemple de capacité cible asynchrone (non livrée) :
 GET    /v1/campaigns
 POST   /v1/campaigns
 PATCH  /v1/campaigns/:campaignId/release
+PATCH  /v1/campaigns/:campaignId/track
 GET    /v1/campaigns/:campaignId
 PATCH  /v1/campaigns/:campaignId
 
@@ -464,7 +476,7 @@ POST   /v1/tasks
 POST   /v1/tasks/:taskId/complete
 ```
 
-Dans le runtime local, `GET/POST /v1/releases`, `GET/POST /v1/tracks`, `GET/POST /v1/media`, `GET /v1/campaigns`, `POST /v1/campaigns` et `PATCH /v1/campaigns/:campaignId/release` sont livrés. Le **Release Registry** garde les métadonnées locales d’une sortie; une création de morceau peut ensuite choisir explicitement une release compatible du même scope, sans modification ultérieure de cette liaison dans cette tranche. À l’import, un média peut choisir explicitement une release et/ou un morceau compatible ; aucun média déjà existant n’est modifié. Le **Campaign Brief Registry** reste interne en `DRAFT`. `GET/PATCH /v1/campaigns/:campaignId`, `GET/PATCH /v1/releases/:releaseId`, les associations track/média supplémentaires, dates de campagne, piliers, plans de contenu, posts, tâches et calendrier restent des cibles ultérieures ; ils ne doivent pas être déduits de cette surface minimale.
+Dans le runtime local, `GET/POST /v1/releases`, `GET/POST /v1/tracks`, `GET/POST /v1/media`, `GET /v1/campaigns`, `POST /v1/campaigns`, `PATCH /v1/campaigns/:campaignId/release` et `PATCH /v1/campaigns/:campaignId/track` sont livrés. Le **Release Registry** garde les métadonnées locales d’une sortie; une création de morceau peut ensuite choisir explicitement une release compatible du même scope, sans modification ultérieure de cette liaison dans cette tranche. À l’import, un média peut choisir explicitement une release et/ou un morceau compatible ; aucun média déjà existant n’est modifié. Le **Campaign Brief Registry** reste interne en `DRAFT` et peut référencer explicitement une release et un morceau existants. `GET/PATCH /v1/campaigns/:campaignId`, `GET/PATCH /v1/releases/:releaseId`, les modifications de liens sur les médias existants, dates de campagne, piliers, plans de contenu, posts et autres transitions restent des cibles ultérieures ; elles ne doivent pas être déduites de cette surface minimale.
 
 `approve` est une action humaine authentifiée. Elle enregistre le payload final, l’auteur et l’instant de décision. `schedule` ne peut pas transformer une proposition non approuvée en action publique. Tant qu’aucun adapter social n’est livré, une publication programmée reste un élément de planning interne.
 

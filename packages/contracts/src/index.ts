@@ -85,6 +85,8 @@ export const activityLogActionValues = [
   "campaign.created",
   "campaign.release_linked",
   "campaign.release_unlinked",
+  "campaign.track_linked",
+  "campaign.track_unlinked",
   "release.created",
   "track.created",
   "media.imported",
@@ -540,10 +542,10 @@ export const taskCompleteParamsSchema = z
 
 // Campaign Brief Registry --------------------------------------------------
 //
-// Le brief créatif et son lien facultatif vers une release restent deux
-// contrats distincts. Les dates, piliers, contenus et transitions de campagne
-// arriveront eux aussi par des sous-ressources dédiées, plutôt que comme champs
-// libres dans la création.
+// Le brief créatif et ses liens facultatifs vers une release et un morceau
+// restent des contrats distincts. Les dates, piliers, contenus et transitions
+// de campagne arriveront eux aussi par des sous-ressources dédiées, plutôt que
+// comme champs libres dans la création.
 export const campaignStatusSchema = z.enum(["DRAFT", "ACTIVE", "PAUSED", "COMPLETED", "ARCHIVED"]);
 export type CampaignStatus = z.infer<typeof campaignStatusSchema>;
 
@@ -560,6 +562,8 @@ export const campaignSchema = z.object({
   status: campaignStatusSchema,
   releaseId: entityIdSchema.optional(),
   releaseTitle: z.string().trim().min(1).max(240).optional(),
+  trackId: entityIdSchema.optional(),
+  trackTitle: trackTitleSchema.optional(),
   version: campaignVersionSchema,
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
@@ -596,6 +600,21 @@ export const campaignReleaseLinkSchema = z
   .strict();
 
 export type CampaignReleaseLink = z.infer<typeof campaignReleaseLinkSchema>;
+
+export const campaignTrackLinkParamsSchema = z
+  .object({
+    campaignId: entityIdSchema,
+  })
+  .strict();
+
+export const campaignTrackLinkSchema = z
+  .object({
+    trackId: entityIdSchema.nullable(),
+    expectedVersion: campaignVersionSchema,
+  })
+  .strict();
+
+export type CampaignTrackLink = z.infer<typeof campaignTrackLinkSchema>;
 
 export const socialPlatformSchema = z.enum(["INSTAGRAM", "TIKTOK", "YOUTUBE", "FACEBOOK"]);
 export type SocialPlatform = z.infer<typeof socialPlatformSchema>;
