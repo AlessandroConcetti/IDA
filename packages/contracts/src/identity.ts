@@ -7,6 +7,10 @@ export const membershipRoleValues = ["OWNER", "EDITOR", "VIEWER"] as const;
 export const membershipRoleSchema = z.enum(membershipRoleValues);
 export type MembershipRole = z.infer<typeof membershipRoleSchema>;
 
+export const identityUserStatusValues = ["ACTIVE", "SUSPENDED", "REVOKED"] as const;
+export const identityUserStatusSchema = z.enum(identityUserStatusValues);
+export type IdentityUserStatus = z.infer<typeof identityUserStatusSchema>;
+
 export const membershipStatusValues = ["ACTIVE", "SUSPENDED", "REVOKED"] as const;
 export const membershipStatusSchema = z.enum(membershipStatusValues);
 export type MembershipStatus = z.infer<typeof membershipStatusSchema>;
@@ -135,6 +139,7 @@ export type IdentitySession = z.infer<typeof identitySessionSchema>;
 export const requestIdentityContextSchema = z
   .object({
     userId: identityIdSchema,
+    userStatus: identityUserStatusSchema,
     workspaceId: identityIdSchema,
     membership: z
       .object({

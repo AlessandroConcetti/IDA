@@ -36,6 +36,7 @@ export type IdentityPolicyDenialCode =
   | "SESSION_NOT_YET_VALID"
   | "SESSION_EXPIRED"
   | "CLIENT_INSTANCE_NOT_ACTIVE"
+  | "USER_NOT_ACTIVE"
   | "CLIENT_GRANT_NOT_ACTIVE"
   | "MEMBERSHIP_NOT_ACTIVE"
   | "MEMBERSHIP_PERMISSION_DENIED"
@@ -102,6 +103,14 @@ export class IdentityAccessPolicy {
         allowed: false,
         code: "CLIENT_INSTANCE_NOT_ACTIVE",
         reason: "Cette instance cliente n'est pas autorisée.",
+      };
+    }
+
+    if (context.userStatus !== "ACTIVE") {
+      return {
+        allowed: false,
+        code: "USER_NOT_ACTIVE",
+        reason: "Le compte utilisateur n'est pas actif.",
       };
     }
 

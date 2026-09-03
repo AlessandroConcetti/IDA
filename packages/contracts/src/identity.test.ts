@@ -4,6 +4,7 @@ import { requestIdentityContextSchema } from "./index.js";
 
 const baseContext = {
   userId: "usr_aless",
+  userStatus: "ACTIVE",
   workspaceId: "wsp_aless",
   membership: { userId: "usr_aless", workspaceId: "wsp_aless", role: "OWNER", status: "ACTIVE" },
   clientInstance: {

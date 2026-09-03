@@ -13,12 +13,12 @@ Ce document définit les conventions et la surface API d’IDA. L’API est le p
 
 ## Tranche locale Phase 1 livrée
 
-Le premier runtime est une API Fastify locale sur `http://127.0.0.1:8787`, consommée par le Command Center web. Il emploie un contexte de démonstration fixé côté serveur, sans session, token, OAuth ni données réelles. Ce contexte est uniquement un mécanisme de développement : il ne remplace pas l’authentification ni l’autorisation de production.
+Le premier runtime est une API Fastify locale sur `http://127.0.0.1:8787`, consommée par le Command Center web. Il emploie un contexte de démonstration fixé côté serveur et une session technique persistée sans token ni credential. Avant chaque route `/v1`, le serveur rejoint compte, membership, instance, grant et session puis échoue fermé si une couche est suspendue, révoquée, expirée ou hors scope. Aucun identifiant de session n'est lu depuis la requête. Ce mécanisme de migration ne remplace pas l’authentification ni l’autorisation de production.
 
 | Route | État actuel | Contrat actif |
 |---|---|---|
 | `GET /health` | Livrée | Santé du runtime local et disponibilité de la base locale. |
-| `GET /v1/me` | Livrée | Identité et workspace de démonstration, marqués `LOCAL_DEMO`. |
+| `GET /v1/me` | Livrée | Identité et workspace de démonstration, marqués `LOCAL_DEMO`; la route est précédée de la résolution Identity locale sans exposer session, instance ou grant. |
 | `GET /v1/modules` | Livrée | Registre des modules visibles du Command Center. |
 | `GET /v1/agents` | Livrée | Registre déclaratif des manifestes d’agents revus. Il ne démarre aucun agent et ne rend aucun outil exécutable. |
 | `GET /v1/system/status` | Livrée | États factuels de la tranche locale ; les intégrations absentes sont `WARNING` ou `DISCONNECTED`. |
@@ -307,6 +307,7 @@ Les clients envoient `X-Request-Id` lorsqu’ils en possèdent un. Toute mutatio
 
 ### Authentification et workspace
 
+- Dans le runtime livré, toutes les routes `/v1` exigent le contexte technique `LOCAL_DEMO` relu en base ; `/health` reste volontairement indépendant pour le diagnostic. Une absence ou invalidation répond seulement `401 AUTHENTICATION_REQUIRED`, sans préciser quelle couche a échoué.
 - L’authentification repose sur un fournisseur OIDC choisi ultérieurement.
 - Le web peut utiliser une session sécurisée `HttpOnly`; les clients natifs utilisent des access tokens courts et renouvelables. Les deux sont validés par l’API.
 - Le workspace actif provient de la session ou d’un en-tête validé par le serveur. Un client ne choisit jamais librement un `workspaceId` auquel il n’appartient pas.

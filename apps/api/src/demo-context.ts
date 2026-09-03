@@ -19,3 +19,18 @@ export const demoWorkspace = Object.freeze({
   timezone: "Europe/Paris",
   locale: "fr-FR",
 });
+
+// Identité technique locale uniquement. Ce sélecteur est fixé côté serveur :
+// aucun header, cookie ou paramètre client ne peut choisir cette session.
+// Sa longue échéance évite de simuler un flux de renouvellement qui n'existe
+// pas encore ; les vraies sessions resteront courtes et rotatives.
+export const demoIdentity = Object.freeze({
+  clientInstanceId: "cli_demo_windows_web",
+  sessionId: "ses_demo_windows_web",
+  displayName: "IDA Web local — Windows",
+  kind: "WEB_BROWSER" as const,
+  platform: "WINDOWS" as const,
+  accessLevel: "TRUSTED" as const,
+  issuedAt: "2026-01-01T00:00:00.000Z",
+  expiresAt: "2099-12-31T23:59:59.999Z",
+});

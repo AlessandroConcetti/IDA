@@ -43,7 +43,7 @@ L’IA n’obtient ni accès direct à la base de données, ni clé de productio
 
 ### 3.1 Frontières temporaires du runtime local
 
-- L’identité et le workspace de démonstration sont fixés uniquement côté serveur ; un header, un query string ou le corps d’une requête ne peut pas choisir un autre workspace.
+- L’identité et le workspace de démonstration sont fixés uniquement côté serveur ; un header, un query string ou le corps d’une requête ne peut pas choisir un autre workspace. Les métadonnées de l'instance, de la session et du grant locaux sont désormais persistées, jointes par clés composées et relues avant chaque requête `/v1`. Cette session technique ne possède encore aucun credential et ne constitue pas un login réel.
 - PGlite est conservé dans un dossier local ignoré par Git. Il ne contient que des métadonnées de démonstration, aucun secret, token ou identifiant bancaire. Les fichiers importés localement résident séparément dans un stockage privé ignoré par Git ; cette solution de développement ne remplace pas le stockage objet, le scan et la quarantaine de production.
 - L’API locale n’accepte que l’origine du Command Center de développement et n’utilise pas de cookies de session tant que l’authentification réelle n’est pas livrée.
 - Les outils réellement exposés sont les lectures contrôlées et des écritures internes allowlistées : `update_artist_profile`, `create_release`, `create_track`, `import_media`, les transitions de mémoire consentie, les opérations Task Center et `decide_post_variant`. Toutes sont validées par schéma, limitées au workspace serveur, journalisées et sans effet externe. `create_release` accepte uniquement des métadonnées bornées : l’identifiant, le scope, les liens, tracks et médias sont refusés, et son audit ne garde ni titre, ni tags, ni description. `create_track` peut recevoir la seule relation `releaseId`, mais la résout toujours contre le workspace et projet serveur ; une garde SQL protège à nouveau cette invariance, y compris contre une écriture SQL future mal câblée, et l’audit ne garde que l’état et la présence de cette liaison. `import_media` peut recevoir les seules références `releaseId` et `trackId`, chacune résolue dans le même workspace et projet que le média ; une migration répare les anciens liens incompatibles et une garde SQL impose à nouveau cette invariance contre les writes directs. Son audit ne garde que le type et les booléens de référence, jamais nom, hash, tags, description ou titres liés. Il limite toujours un fichier à 25 MiB et valide actuellement son couple MIME/extension, mais ne remplace pas le contrôle de signature binaire et la quarantaine requis avant toute donnée personnelle réelle. `decide_post_variant` est le seul outil local en `CONTENT` / `APPROVAL_REQUIRED` : la route résout d’abord une approbation et son hash dans le workspace, puis construit la preuve `explicitApproval` côté serveur ; elle n’accepte jamais une preuve, un acteur ou un état fourni par le client. `PUBLISH` et `SYSTEM` restent inaccessibles depuis le runtime local.
@@ -51,6 +51,31 @@ L’IA n’obtient ni accès direct à la base de données, ni clé de productio
 - `GET /v1/agents` est une projection déclarative des manifestes revus. Elle ne contient ni contenu de prompt, secret, token, workspace, utilisateur ni capacité exécutable ; les deux manifestes locaux sont `PLANNED` et `PROPOSAL_ONLY`. Le registre refuse toute invocation tant que l’agent n’est pas `ACTIVE`, puis contrôle l’outil, le module et la permission exacts déclarés. Sa lecture ne démarre aucun modèle, ne contacte aucun fournisseur et ne crée pas d’audit.
 - `GET /v1/dashboard/summary` est une projection lecture seule à paramètres stricts : le scope et le jour civil sont résolus côté serveur, les compteurs ne contiennent ni payload, média, hash, acteur, compte ni token et la consultation n’écrit aucun audit. Les planifications comptées sont uniquement des snapshots internes ; elles ne peuvent pas être interprétées comme des livraisons ou publications sociales.
 - Ce runtime n’est pas éligible à une bêta avec données personnelles. Avant cela, les exigences de la section 12 restent obligatoires.
+
+### 3.2 Défense en profondeur contre les intrusions
+
+Aucune architecture ne peut garantir l'absence totale de compromission. IDA cherche à réduire simultanément la probabilité d'une attaque, son rayon d'impact et le temps nécessaire pour la détecter et la contenir. Les contrôles seront suivis dans une matrice versionnée dérivée d'OWASP ASVS, des recommandations NIST sur l'identité et le Zero Trust, puis de MASVS/TCASVS pour les clients natifs.
+
+1. **Surface minimale :** boucle locale tant que le jalon réseau n'est pas satisfait, aucun port ou service inutile, aucune route de debug en production et aucun secret dans le client.
+2. **Zero Trust applicatif :** réseau local, propriétaire du matériel, navigateur connu, agent et modèle ne confèrent aucune confiance implicite. Utilisateur, session, instance, workspace, ressource, outil et action sont contrôlés côté serveur.
+3. **Identité résistante au phishing :** passkeys privilégiées, sessions courtes et rotatives, révocation immédiate, step-up lié au hash exact de l'action et récupération sans dépendre de la seule adresse e-mail.
+4. **Web et API :** HTTPS avec origine stable, cookies `HttpOnly`/`Secure`/`SameSite`, CSRF, CSP restrictive, schémas stricts, autorisation objet par objet, limites de débit et quotas de coût/taille/temps.
+5. **IA à pouvoir minimal :** aucune clé, SQL, shell ou sortie réseau générale remise à un modèle ; contexte minimal, contenu externe non fiable, outils granulaires refusés par défaut et approbation indépendante pour tout effet sensible.
+6. **Secrets et données :** coffres OS ou gestionnaire de secrets, chiffrement par enveloppe lorsque nécessaire, séparation dev/prod, rotation, redaction et sauvegardes chiffrées dont la restauration est testée.
+7. **Chaîne logicielle :** versions et lockfile contrôlés, inventaire/SBOM, scan de secrets et dépendances, analyse statique, mises à jour signées et reproductibles, provenance des artefacts et délai défini pour corriger une vulnérabilité critique.
+8. **Confinement :** services et workers sous identités séparées à moindre privilège, stockage privé, traitements média isolés, allowlist d'egress et protections SSRF/rejeu/idempotence.
+9. **Détection et réponse :** événements sécurité append-only, alertes sur anomalies, intégrité et coûts, horloge fiable, procédures de révocation/rotation/restauration et exercices d'incident.
+10. **Validation indépendante :** tests négatifs continus, revue de configuration, scan dynamique puis test d'intrusion externe avant exposition Internet, connecteurs sociaux sensibles, données bancaires ou actions physiques.
+
+Le futur `Security Guardian` consolidera uniquement des événements et résultats de scanners redacted pour expliquer les alertes et proposer une remédiation. Les blocages urgents, quotas, révocations automatiques autorisées et coupe-circuits restent des règles déterministes testées ; l'agent n'obtient ni secrets, ni shell, ni pouvoir général de modifier le système.
+
+| Jalon | Barrières minimales avant activation |
+|---|---|
+| Accès navigateur mobile/réseau privé | identité réelle, HTTPS stable, cookies/CSRF/CSP, rate limiting, révocation, journaux et configuration fail-closed |
+| Bêta avec données personnelles | sauvegarde/restauration, scan fichiers, inventaire des données, alertes, mises à jour sûres et runbooks d'incident |
+| OAuth social avec écriture | PKCE/state/nonce, scopes minimaux, coffre de secrets, anti-rejeu, idempotence et approbation humaine finale |
+| Client natif public | contrôles OWASP MASVS ou TCASVS applicables, Keychain/Keystore/coffre OS, signature, mise à jour vérifiée et tests de stockage/réseau |
+| Finance, banque, santé, legal ou contrôle physique | threat model distinct, steward du domaine, validation professionnelle/réglementaire, test d'intrusion indépendant et aucun effet critique autonome |
 
 ## 4. Identité, appareils et autorisation
 
@@ -111,6 +136,8 @@ DRAFT → PROPOSED → APPROVED → SCHEDULED → DISPATCHING → PUBLISHED | FA
 - L’« AI reasoning » affiché à l’utilisateur est une justification courte et vérifiable, pas une chaîne de raisonnement interne ni un secret de système.
 
 Les contenus importés, les commentaires sociaux et les pages web sont des **données non fiables**. Ils ne peuvent pas modifier les instructions système ni élargir les permissions d’un outil. Chaque appel d’outil doit passer par une liste blanche, un schéma de paramètres, une politique d’autorisation et un journal d’audit.
+
+Chaque domaine réglementé ou assimilable à une responsabilité professionnelle ajoutera ultérieurement son propre `Domain Steward Agent`. Pour le RGPD, un `Privacy Steward` séparé par domaine observera les résultats déterministes de consentement, finalité, rétention, export, suppression et transfert. Une policy est évaluée à chaque action et des audits sont planifiés ; aucun LLM ne lit continuellement toutes les données ni ne peut déclarer seul IDA conforme. Les constats nécessitant une décision sont escaladés vers l'utilisateur et, selon le contexte, un DPO, juriste ou autre professionnel compétent.
 
 ### Limite explicite de l’Approval Center local
 
@@ -239,6 +266,8 @@ Avant une bêta avec données réelles :
 8. inventaire des fournisseurs externes, de leurs données reçues et des règles de rétention ;
 9. authentification réelle, expiration des sessions, association et révocation des appareils vérifiées ;
 10. tests prouvant qu'aucun capteur n'est ouvert sans demande explicite et que les thèmes ne changent aucune permission.
+11. matrice de contrôles OWASP ASVS versionnée, revue des risques API/IA et test dynamique de la configuration destinée à la bêta ;
+12. aucune exposition réseau tant que les contrôles du jalon correspondant à la section 3.2 ne sont pas vérifiés.
 
 ## Références de conception
 
@@ -246,3 +275,11 @@ Avant une bêta avec données réelles :
 - [OWASP File Upload Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html)
 - [OWASP Logging Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html)
 - [OWASP Denial of Service Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Denial_of_Service_Cheat_Sheet.html)
+- [OWASP Application Security Verification Standard 5.0](https://owasp.org/www-project-application-security-verification-standard/)
+- [OWASP API Security Top 10](https://owasp.org/www-project-api-security/)
+- [OWASP GenAI Security — Top 10 for LLM and GenAI](https://genai.owasp.org/initiatives/top-10-for-llm-and-genai/)
+- [OWASP Mobile Application Security Verification Standard](https://mas.owasp.org/MASVS/)
+- [OWASP Thick Client Application Security Verification Standard](https://owasp.org/TCASVS/)
+- [NIST SP 800-63-4 — Digital Identity Guidelines](https://pages.nist.gov/800-63-4/)
+- [NIST SP 800-207 — Zero Trust Architecture](https://csrc.nist.gov/pubs/sp/800/207/final)
+- [ANSSI — Architectures sécurisées](https://messervices.cyber.gouv.fr/documents-guides/anssi_essentiels_architecture_securisee_v1.0.pdf)

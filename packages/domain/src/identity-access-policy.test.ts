@@ -16,6 +16,7 @@ const now = new Date("2026-09-03T13:00:00.000Z");
 
 interface ContextOptions {
   role?: MembershipRole;
+  userStatus?: RequestIdentityContext["userStatus"];
   membershipStatus?: MembershipStatus;
   clientStatus?: ClientInstanceStatus;
   clientGrantStatus?: ClientGrantStatus;
@@ -35,6 +36,7 @@ function createContext(options: ContextOptions = {}): RequestIdentityContext {
 
   return {
     userId: "usr_aless",
+    userStatus: options.userStatus ?? "ACTIVE",
     workspaceId: "wsp_aless",
     membership: {
       userId: "usr_aless",
@@ -140,6 +142,12 @@ describe("IdentityAccessPolicy", () => {
       allowed: false,
       code: "CLIENT_GRANT_NOT_ACTIVE",
     });
+  });
+
+  it("refuse un compte utilisateur suspendu ou révoqué", () => {
+    for (const userStatus of ["SUSPENDED", "REVOKED"] as const) {
+      expect(evaluate("READ", { userStatus })).toMatchObject({ allowed: false, code: "USER_NOT_ACTIVE" });
+    }
   });
 
   it("révoque le navigateur mobile sans révoquer l'application native du même téléphone", () => {

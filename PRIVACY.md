@@ -74,3 +74,9 @@ Les audits peuvent nécessiter une rétention distincte, mais ne doivent pas con
 ## Domaines sensibles futurs
 
 Finance/Banque reste en lecture seule ; Santé n'effectue aucune décision clinique ; Maison ne commande aucun équipement critique sans conception dédiée ; Legal ne garantit aucun conseil professionnel. Chaque domaine reçoit un consentement, une clé, une rétention, une projection d'audit et des tests négatifs propres avant activation.
+
+## Privacy Stewards par domaine — futur
+
+Après consolidation de la démo, chaque domaine traitant des données personnelles devra déclarer son propre `Privacy Steward Agent` logique. Une implémentation et des règles communes pourront être réutilisées, mais chaque manifeste conservera un scope, des finalités, une rétention, des destinataires, des exports et une escalade séparés. Le steward Music ne peut donc pas inspecter Finance, et réciproquement.
+
+La « vérification constante » repose sur deux mécanismes complémentaires : des policies déterministes contrôlent chaque collecte, lecture, export, transmission, conservation et suppression ; des audits planifiés recherchent ensuite les écarts. L'agent reçoit seulement les constats minimaux et redacted pour les expliquer, proposer une correction ou alerter l'utilisateur. Il ne surveille pas librement toutes les données, ne décide pas seul de la conformité RGPD et ne remplace ni le responsable de traitement ni, lorsqu'il est requis, un DPO ou un conseil juridique.

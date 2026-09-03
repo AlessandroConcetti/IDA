@@ -30,7 +30,7 @@ Chaque module revu au build fournit un manifeste versionné. La forme exacte ser
 | `providerCapabilities` | capacités obligatoires ou facultatives, jamais un nom de fournisseur concret |
 | `retentionPolicy` | référence vers conservation, export et suppression |
 | `migrations` | lot de migrations explicite et versionné |
-| `agents` | agents facultatifs appartenant au module |
+| `agents` | agents opérationnels facultatifs et éventuel `Domain Steward Agent` requis par la classification du domaine |
 | `healthChecks` | vérifications d'activation et raisons de blocage actionnables |
 
 Le manifeste ne contient jamais de secret, de code téléchargé, de prompt brut destiné au client ou d'accès SQL.
@@ -67,6 +67,8 @@ Un outil est enregistré une seule fois dans le Tool Registry avec son propriét
 
 Un agent est une capacité facultative d'un module, pas un processus autonome. Son manifeste doit référencer uniquement des outils et sources de contexte disponibles. Le passage à `ACTIVE` est refusé si le prompt versionné, la suite d'évaluation, les contrats ou les outils ne sont pas résolus.
 
+Un domaine soumis à une responsabilité professionnelle ou réglementaire déclare en plus un `Domain Steward Agent` avant d'activer son mode `AI`. Celui-ci reçoit uniquement des constats redacted produits par des contrôles déterministes à chaque action et par des audits planifiés. Il peut expliquer, prioriser, alerter et proposer ; il ne remplace jamais une barrière de policy, un DPO, un juriste, un comptable, un médecin, un analyste sécurité ou une validation humaine. Une incapacité à résoudre son manifeste ou son chemin d'escalade bloque le mode `AI`, pas les fonctions normales nécessaires à l'accès, l'export ou la suppression des données.
+
 ## Dépendances entre modules
 
 - Un module ne lit pas directement les tables d'un autre module.
@@ -83,11 +85,11 @@ Les modules restent dans le monolithe tant qu'une extraction n'est pas justifié
 |---|---|---|
 | Music, Content, Campaigns, Calendar, Tasks, Memory, System | capacités Phase 1 partielles | consolider leurs services et outils dans le monolithe |
 | Social, Analytics, Notifications | déclaratif ou futur selon la capacité | aucun effet externe sans provider et approbation adaptés |
-| Finance | futur, non planifié actuellement | lecture seule, isolation et conformité dédiées |
-| Courses (`GROCERIES`) | futur, non planifié actuellement | listes avant achat ; aucune commande implicite |
-| Santé (`HEALTH`) | futur, non planifié actuellement | données sensibles ; aucune décision clinique autonome |
-| Maison (`HOUSEHOLD`) | futur, non planifié actuellement | distinguer inventaire, capteurs et actions physiques critiques |
-| Legal (`LEGAL`) | futur, non planifié actuellement | documents et échéances ; aucune représentation ou signature autonome |
+| Finance | futur, non planifié actuellement | lecture seule, isolation et steward de contrôles financiers/conformité dédié |
+| Courses (`GROCERIES`) | futur, non planifié actuellement | listes avant achat ; agent opérationnel possible, aucune commande implicite |
+| Santé (`HEALTH`) | futur, non planifié actuellement | données sensibles ; steward obligatoire, aucune décision clinique autonome |
+| Maison (`HOUSEHOLD`) | futur, non planifié actuellement | distinguer inventaire, capteurs et actions physiques critiques ; steward sécurité si contrôle physique |
+| Legal (`LEGAL`) | futur, non planifié actuellement | documents et échéances ; steward obligatoire, aucune représentation ou signature autonome |
 
 Les clés entre parenthèses sont indicatives et ne modifient pas les contrats actuels.
 

@@ -58,7 +58,7 @@ Les thèmes visuels, l'introduction cinématique, le futur mode d'ambiance deskt
 
 ### Module Registry v2
 
-Le Module Registry v2 enregistre des modules métier revus au build. Chaque manifeste déclare au minimum : identité et version, contrats compatibles, données possédées, outils, permissions, événements, dépendances, providers requis, modes supportés, politiques de rétention, migrations, agents facultatifs et état d'activation.
+Le Module Registry v2 enregistre des modules métier revus au build. Chaque manifeste déclare au minimum : identité et version, contrats compatibles, données possédées, outils, permissions, événements, dépendances, providers requis, modes supportés, politiques de rétention, migrations, agents opérationnels éventuels, steward de gouvernance requis par le risque et état d'activation.
 
 Le registre valide les doublons, dépendances, versions et références d'outils/providers au démarrage. Un module désactivé ne peut ni enregistrer de route, recevoir du contexte, exécuter un outil ou lancer une migration. Aucun code de module n'est chargé depuis la base, un document importé ou le SSD portable.
 
@@ -91,7 +91,7 @@ Finance, Courses, Santé, Maison et Legal restent hors des phases actuellement e
 - **Maison** : séparation des données d'occupation et des équipements ; aucune serrure, alarme, caméra ou action physique critique sans conception dédiée.
 - **Legal** : documents et échéances sous contrôle utilisateur ; aucune signature, soumission, représentation ou conseil présenté comme professionnel.
 
-Chaque domaine obtient son propre modèle de données, ses outils, permissions, rétention, audit, providers et tests d'échec. Aucun agent généraliste n'y accède par défaut.
+Chaque domaine obtient son propre modèle de données, ses outils, permissions, rétention, audit, providers et tests d'échec. Aucun agent généraliste n'y accède par défaut. Lorsqu'une responsabilité professionnelle ou réglementaire existe, un `Domain Steward Agent` borné observe les contrôles déterministes et escalade vers un humain identifié sans se présenter comme une autorité professionnelle.
 
 ## Conséquences
 
@@ -100,12 +100,13 @@ Chaque domaine obtient son propre modèle de données, ses outils, permissions, 
 - La portabilité concerne le workspace et ses données, pas l'exécution de code non vérifié.
 - Les clients natifs peuvent progresser indépendamment sans créer de logique métier parallèle.
 - L'accès Web/PWA mobile peut être livré et maintenu indépendamment des applications natives, tout en utilisant le même Core et des sessions séparées.
+- L'interface reste française jusqu'à consolidation de la démo ; l'anglais sera une localisation des mêmes contrats et non une branche produit distincte.
 - La sélection des providers devient explicable, contrôlable et testable.
 - Les futurs domaines sensibles ne sont pas « débloqués » par cette décision ; chacun exige une décision et une tranche verticale propres.
 
 ## Non-objectifs immédiats
 
-Cette ADR n'autorise ni application native, synchronisation cloud, endpoint Identity réel, provider IA réel, exécution depuis SSD, contrôle gestuel, caméra au démarrage, mode fond d'écran, module Finance/Courses/Santé/Maison/Legal, action domotique, acte juridique ou migration de la base locale. La validation Identity a autorisé uniquement la première tranche, désormais livrée, de contrats, politique d'accès et tests d'architecture. Cette ADR fixe les frontières à respecter lorsque les autres travaux seront explicitement planifiés.
+Cette ADR n'autorise ni application native, synchronisation cloud, endpoint ou credential Identity réel, provider IA réel, exécution depuis SSD, contrôle gestuel, caméra au démarrage, mode fond d'écran, module Finance/Courses/Santé/Maison/Legal, action domotique, acte juridique ou internationalisation immédiate. La poursuite validée d'Identity a ajouté uniquement des tables locales additives et un résolveur de session technique après les contrats et policies ; elle n'autorise toujours ni login ni exposition réseau. Cette ADR fixe les frontières à respecter lorsque les autres travaux seront explicitement planifiés.
 
 ## Documents associés
 

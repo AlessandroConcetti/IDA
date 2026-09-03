@@ -82,6 +82,7 @@ import {
 } from "./database.js";
 import { demoContext, demoWorkspace } from "./demo-context.js";
 import { CommandInputError, DeterministicIdaCore } from "./ida-core.js";
+import { LocalDemoIdentityContextResolver } from "./identity-context.js";
 import { defaultCalendarRange, getWorkspaceDayRange, type ResolvedCalendarRange } from "./workspace-time.js";
 
 export type CreateAppOptions = DemoDatabaseOptions & {
@@ -981,6 +982,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   const database = await DemoDatabase.open(options);
   const storageDir = options.storageDir ?? defaultStorageDir;
   const serverNow = options.now ?? (() => new Date());
+  const identityContextResolver = new LocalDemoIdentityContextResolver(database, serverNow);
   const core = new DeterministicIdaCore(database, undefined, serverNow);
   const agents = createAgentRegistry();
   const modules = createModuleRegistry();
@@ -1013,6 +1015,15 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
 
   app.addHook("onClose", async () => {
     await database.close();
+  });
+
+  // Le health check reste disponible pour diagnostiquer le processus local.
+  // Toute surface métier /v1 relit en revanche la session persistée avant de
+  // laisser Fastify atteindre une route. Aucun identifiant ne vient du client.
+  app.addHook("onRequest", async (request) => {
+    if (request.url === "/v1" || request.url.startsWith("/v1/")) {
+      await identityContextResolver.resolve();
+    }
   });
 
   app.setErrorHandler((error: AppError, _request, reply) => {

@@ -2,13 +2,13 @@
 
 ## Statut
 
-Cette architecture est **validée**. Sa première tranche de contrats, politique d'accès et tests d'architecture est livrée ; aucun endpoint d'authentification, compte réel, session persistée, association d'instance ou service cloud n'est encore activé.
+Cette architecture est **validée**. Les contrats, la politique d'accès et la première persistance locale des utilisateurs, memberships, instances, sessions et grants sont livrés. Aucun endpoint de login, credential, cookie, passkey, association d'instance ou service cloud n'est encore activé.
 
 ## État actuel
 
-Le runtime local possède déjà `users`, `workspaces` et `memberships`, mais chaque requête reçoit encore le même `demoContext` fixé côté serveur. `GET /v1/me` décrit ce profil `LOCAL_DEMO`; il n'existe ni adresse e-mail vérifiée, credential, session, device, association, révocation ou récupération de compte.
+Le runtime local conserve un unique `demoContext` fixé côté serveur. Sa session technique est désormais représentée par `client_instances`, `identity_sessions` et `client_workspace_grants`, reliés structurellement au compte, à la membership et au workspace. Un résolveur relit ce contexte avant chaque requête `/v1` et échoue avec une erreur publique générique si le compte, la membership, l'instance, le grant ou la session n'est plus valide.
 
-Cette base est utile pour les tests de scope, mais ne constitue pas une authentification et ne doit pas être exposée hors boucle locale avec des données réelles.
+Cette session locale ne contient aucun token ni authenticator et son identifiant n'est accepté depuis aucun header, cookie, body ou query. Elle constitue une garde de migration et de scope, pas une authentification humaine ; IDA ne doit toujours pas être exposée hors boucle locale avec des données réelles.
 
 ## Position dans le Kernel
 
@@ -38,18 +38,19 @@ L'ordre de contrôle cible est :
 
 Une authentification réussie n'élève donc jamais automatiquement un appareil à tous les privilèges du compte.
 
-## Modèle de données cible minimal
+## Modèle de données minimal
 
-Les noms définitifs seront fixés seulement lors d'une future tranche de migration versionnée ; la validation actuelle n'autorise encore aucune table.
+La tranche locale livre uniquement les lignes marquées comme telles. Les credentials et parcours de compte restent futurs et feront l'objet de migrations de production versionnées.
 
 | Entité | Données minimales | Règles |
 |---|---|---|
+| `User` / `Membership` | identifiants, statut, rôle et workspace | **Livré localement :** statuts contrôlés ; une suspension est relue à la requête suivante |
 | `UserEmail` | user, adresse normalisée, état de vérification | une adresse seule n'est jamais une preuve d'accès |
 | `AuthIdentity` | user, type de credential, identifiant fournisseur | aucun secret brut ; fournisseur maintenu ou passkey privilégiée |
-| `ClientInstance` | user, nom, surface, plateforme, clé publique, état, dernière activité | principal d'une installation ou d'un profil client, distinct d'une session, du workspace et du matériel physique éventuel |
+| `ClientInstance` | user, nom, surface, plateforme, état et révocation | **Livré localement sans clé :** principal d'une installation ou d'un profil client, distinct d'une session, du workspace et du matériel physique éventuel |
 | `ClientLinkChallenge` | initiateur, code/nonce haché, expiration, état | usage unique, court, confirmé depuis une instance déjà autorisée |
-| `Session` | user, client instance, token haché, expiration, révocation | rotation, révocation immédiate, portée minimale |
-| `ClientWorkspaceGrant` | client instance, workspace, capacités limitées | ne remplace pas la membership ; peut seulement réduire les droits |
+| `Session` | user, client instance, expiration et révocation | **Livré localement sans token :** scope relu à chaque `/v1`; une vraie session ajoutera rotation et preuve hachée |
+| `ClientWorkspaceGrant` | client instance, user, workspace, profil et état | **Livré localement :** FKs composées ; ne remplace pas la membership et peut seulement réduire les droits |
 | `StepUpChallenge` | session, action sensible, expiration | lié à l'action et non réutilisable |
 | `RecoveryMethod` | user, méthode, état, date | secrets de récupération hachés et affichés une seule fois |
 
@@ -73,9 +74,9 @@ Le matériel physique peut être regroupé pour l'affichage (« cet iPhone », p
 
 ### Association d'un appareil
 
-1. Un appareil déjà autorisé demande un challenge court.
-2. Le nouvel appareil présente sa clé publique et scanne un QR code ou saisit le code temporaire.
-3. L'appareil existant affiche précisément nom, plateforme, moment et permissions proposées.
+1. Une instance déjà autorisée demande un challenge court.
+2. La nouvelle instance présente sa clé publique et scanne un QR code ou saisit le code temporaire.
+3. L'instance existante affiche précisément nom, plateforme, moment et permissions proposées.
 4. L'utilisateur confirme explicitement.
 5. Le serveur consomme le challenge une seule fois et crée un grant minimal.
 6. Le nouvel appareil reçoit sa propre session révocable, jamais une copie de la session existante.
@@ -84,11 +85,11 @@ Un e-mail peut notifier ou aider à la récupération, mais ne peut pas autorise
 
 ### Révocation
 
-Révoquer un appareil invalide immédiatement ses sessions, refresh tokens et challenges, sans supprimer le compte ni révoquer les autres appareils. Les commandes hors ligne de cet appareil sont refusées à leur retour. Une révocation globale reste disponible au propriétaire.
+Révoquer une instance invalide immédiatement ses sessions, refresh tokens et challenges, sans supprimer le compte ni révoquer les autres instances. Les commandes hors ligne de cette instance sont refusées à leur retour. Une révocation globale reste disponible au propriétaire.
 
 ### Action sensible
 
-Finance, publication, changement de sécurité, export complet, connexion sociale ou contrôle physique pourront imposer une réauthentification récente. Cette preuve est liée à l'action exacte, à l'appareil, au workspace et à une expiration courte ; elle ne remplace ni le Tool Gateway ni l'approbation métier.
+Finance, publication, changement de sécurité, export complet, connexion sociale ou contrôle physique pourront imposer une réauthentification récente. Cette preuve est liée au hash de l'action exacte, à la session, à l'instance, au workspace et à une expiration courte ; elle ne remplace ni le Tool Gateway ni l'approbation métier.
 
 ## Local-first et multi-appareils
 
@@ -124,11 +125,11 @@ Les noms sont indicatifs. L'interface pourra regrouper plusieurs instances sous 
 |---|---|
 | `packages/contracts/src/identity.ts` | **Livré :** schémas stricts d'instance, grant, session, step-up et contexte serveur |
 | `packages/domain/src/identity-access-policy.ts` | **Livré :** intersection session, membership, instance, grant, permission et step-up ; le Tool Gateway reste obligatoire |
-| `apps/api/src/plugins/identity-context.ts` | authentification avant les routes et construction du contexte serveur |
+| `apps/api/src/identity-context.ts` | **Livré localement :** résolution fail-closed de l'OWNER/TRUSTED technique avant chaque route `/v1`; aucune preuve client |
 | `apps/api/src/modules/identity/*` | cas d'usage, repositories, routes et audit |
 | `apps/api/src/ida-core.ts` | recevoir un port `RequestContext`, jamais `demoContext` |
-| `apps/api/src/app.ts` | composer le plugin ; aucune logique de credential dans les routes métier |
-| `apps/api/src/database.ts` | migration transitoire seulement, puis repository Identity dédié |
+| `apps/api/src/app.ts` | **Livré localement :** hook global de résolution ; futur plugin sans logique de credential dans les routes métier |
+| `apps/api/src/database.ts` | **Livré localement :** tables additives et jointure de contexte ; futur repository Identity dédié |
 | `apps/web/src/api.ts` | client de session sans token persistant dans le stockage Web |
 | `apps/web/src/App.tsx` | écran compte/appareils, révocation et association explicite |
 | `SECURITY.md` | threat model, cookies/CSRF, stockage natif, récupération et incidents |
@@ -161,4 +162,4 @@ Ce découpage est cible : il ne justifie pas une réécriture massive des fichie
 6. Windows est le premier hôte `LOCAL_OWNER`; le même profil doit être déployable sur macOS sans dupliquer le Core.
 7. Sur téléphone, le Web/PWA et l'application native iOS ou Android restent disponibles en parallèle avec des sessions révocables séparément.
 
-Cette validation a autorisé les contrats, politiques et tests d'architecture désormais livrés. Elle n'active ni migration, endpoint, compte, session, liaison d'instance ou service cloud réel ; `demoContext` reste limité à la démo locale jusqu'à leur livraison par tranches vérifiées.
+Cette validation a autorisé les contrats, politiques, tables locales, résolveur et tests désormais livrés. Elle n'active ni login, credential, endpoint de compte, cookie, passkey, liaison d'instance ou service cloud réel ; `demoContext` reste limité à la démo locale jusqu'à leur livraison par tranches vérifiées.

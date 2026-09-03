@@ -18,12 +18,13 @@ import type {
   MediaListQuery,
   MemoryProposalCreate,
   ReleaseCreate,
+  RequestIdentityContext,
   TaskCreate,
   TrackCreate,
 } from "@ida/contracts";
-import { activityLogActionValues, activityLogEntityTypeValues } from "@ida/contracts";
+import { activityLogActionValues, activityLogEntityTypeValues, requestIdentityContextSchema } from "@ida/contracts";
 
-import { demoContext, demoWorkspace } from "./demo-context.js";
+import { demoContext, demoIdentity, demoWorkspace } from "./demo-context.js";
 
 export const mediaStatuses = ["UNUSED", "USED", "SCHEDULED", "PUBLISHED", "ARCHIVED"] as const;
 
@@ -897,6 +898,81 @@ export class DemoDatabase {
 
   async close(): Promise<void> {
     await this.pglite.close();
+  }
+
+  async resolveRequestIdentityContext(sessionId: string, workspaceId: string): Promise<RequestIdentityContext | null> {
+    const result = await this.pglite.query<ScalarRow>(
+      `
+        SELECT
+          session.id AS "sessionId",
+          session.user_id AS "userId",
+          session.client_instance_id AS "clientInstanceId",
+          session.status AS "sessionStatus",
+          session.issued_at AS "issuedAt",
+          session.expires_at AS "expiresAt",
+          ida_user.status AS "userStatus",
+          client.kind AS "clientKind",
+          client.platform AS "clientPlatform",
+          client.status AS "clientStatus",
+          membership.role AS "membershipRole",
+          membership.status AS "membershipStatus",
+          client_grant.status AS "clientGrantStatus",
+          client_grant.access_level AS "clientAccessLevel"
+        FROM identity_sessions session
+        INNER JOIN users ida_user ON ida_user.id = session.user_id
+        INNER JOIN client_instances client
+          ON client.id = session.client_instance_id
+          AND client.user_id = session.user_id
+        INNER JOIN client_workspace_grants client_grant
+          ON client_grant.client_instance_id = client.id
+          AND client_grant.user_id = session.user_id
+          AND client_grant.workspace_id = $2
+        INNER JOIN memberships membership
+          ON membership.workspace_id = client_grant.workspace_id
+          AND membership.user_id = client_grant.user_id
+        WHERE session.id = $1
+        LIMIT 1
+      `,
+      [sessionId, workspaceId],
+    );
+    const row = result.rows[0];
+
+    if (!row) {
+      return null;
+    }
+
+    return requestIdentityContextSchema.parse({
+      userId: asString(row.userId),
+      userStatus: asString(row.userStatus),
+      workspaceId,
+      membership: {
+        userId: asString(row.userId),
+        workspaceId,
+        role: asString(row.membershipRole),
+        status: asString(row.membershipStatus),
+      },
+      clientInstance: {
+        id: asString(row.clientInstanceId),
+        userId: asString(row.userId),
+        kind: asString(row.clientKind),
+        platform: asString(row.clientPlatform),
+        status: asString(row.clientStatus),
+      },
+      clientGrant: {
+        clientInstanceId: asString(row.clientInstanceId),
+        workspaceId,
+        status: asString(row.clientGrantStatus),
+        accessLevel: asString(row.clientAccessLevel),
+      },
+      session: {
+        id: asString(row.sessionId),
+        userId: asString(row.userId),
+        clientInstanceId: asString(row.clientInstanceId),
+        status: asString(row.sessionStatus),
+        issuedAt: asTimestamp(row.issuedAt),
+        expiresAt: asTimestamp(row.expiresAt),
+      },
+    });
   }
 
   async getArtistProfile(workspaceId: string): Promise<ArtistProfile | null> {
@@ -3796,7 +3872,9 @@ export class DemoDatabase {
         email TEXT NOT NULL UNIQUE,
         display_name TEXT NOT NULL,
         timezone TEXT NOT NULL,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+        status TEXT NOT NULL DEFAULT 'ACTIVE',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT users_status_check CHECK (status IN ('ACTIVE', 'SUSPENDED', 'REVOKED'))
       );
 
       CREATE TABLE IF NOT EXISTS workspaces (
@@ -3812,7 +3890,79 @@ export class DemoDatabase {
         workspace_id TEXT NOT NULL REFERENCES workspaces(id),
         user_id TEXT NOT NULL REFERENCES users(id),
         role TEXT NOT NULL,
-        PRIMARY KEY (workspace_id, user_id)
+        status TEXT NOT NULL DEFAULT 'ACTIVE',
+        PRIMARY KEY (workspace_id, user_id),
+        CONSTRAINT memberships_role_check CHECK (role IN ('OWNER', 'EDITOR', 'VIEWER')),
+        CONSTRAINT memberships_status_check CHECK (status IN ('ACTIVE', 'SUSPENDED', 'REVOKED'))
+      );
+
+      -- Une instance représente une installation ou un profil client. Safari,
+      -- une PWA et l'app native d'un même téléphone restent donc séparés.
+      CREATE TABLE IF NOT EXISTS client_instances (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id),
+        display_name TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        platform TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'PENDING',
+        revoked_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (id, user_id),
+        CONSTRAINT client_instances_kind_check CHECK (
+          kind IN ('WEB_BROWSER', 'PWA', 'NATIVE_DESKTOP', 'NATIVE_MOBILE', 'TV')
+        ),
+        CONSTRAINT client_instances_platform_check CHECK (
+          platform IN ('WINDOWS', 'MACOS', 'LINUX', 'IOS', 'ANDROID', 'TV', 'OTHER')
+        ),
+        CONSTRAINT client_instances_status_check CHECK (status IN ('PENDING', 'ACTIVE', 'REVOKED')),
+        CONSTRAINT client_instances_revocation_check CHECK (
+          (status = 'REVOKED' AND revoked_at IS NOT NULL)
+          OR (status IN ('PENDING', 'ACTIVE') AND revoked_at IS NULL)
+        )
+      );
+
+      -- Cette table ne stocke encore aucun authenticator ou token. Elle porte
+      -- seulement la session d'autorisation locale ; les futurs secrets seront
+      -- hachés ou placés dans un coffre lors de la tranche de login réelle.
+      CREATE TABLE IF NOT EXISTS identity_sessions (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id),
+        client_instance_id TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'ACTIVE',
+        issued_at TIMESTAMPTZ NOT NULL,
+        expires_at TIMESTAMPTZ NOT NULL,
+        revoked_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (client_instance_id, user_id) REFERENCES client_instances(id, user_id),
+        CONSTRAINT identity_sessions_status_check CHECK (status IN ('ACTIVE', 'REVOKED')),
+        CONSTRAINT identity_sessions_lifetime_check CHECK (expires_at > issued_at),
+        CONSTRAINT identity_sessions_revocation_check CHECK (
+          (status = 'REVOKED' AND revoked_at IS NOT NULL)
+          OR (status = 'ACTIVE' AND revoked_at IS NULL)
+        )
+      );
+
+      CREATE TABLE IF NOT EXISTS client_workspace_grants (
+        client_instance_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        workspace_id TEXT NOT NULL,
+        access_level TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'ACTIVE',
+        granted_by TEXT NOT NULL REFERENCES users(id),
+        granted_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        revoked_at TIMESTAMPTZ,
+        PRIMARY KEY (client_instance_id, workspace_id),
+        FOREIGN KEY (client_instance_id, user_id) REFERENCES client_instances(id, user_id),
+        FOREIGN KEY (workspace_id, user_id) REFERENCES memberships(workspace_id, user_id),
+        CONSTRAINT client_workspace_grants_access_check CHECK (
+          access_level IN ('TRUSTED', 'LIMITED', 'VIEW_ONLY')
+        ),
+        CONSTRAINT client_workspace_grants_status_check CHECK (status IN ('ACTIVE', 'REVOKED')),
+        CONSTRAINT client_workspace_grants_revocation_check CHECK (
+          (status = 'REVOKED' AND revoked_at IS NOT NULL)
+          OR (status = 'ACTIVE' AND revoked_at IS NULL)
+        )
       );
 
       CREATE TABLE IF NOT EXISTS artist_projects (
@@ -4120,6 +4270,12 @@ export class DemoDatabase {
 
       CREATE INDEX IF NOT EXISTS idx_releases_workspace_date
         ON releases (workspace_id, release_date);
+      CREATE INDEX IF NOT EXISTS idx_client_instances_user_status
+        ON client_instances (user_id, status, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_identity_sessions_client_status_expiry
+        ON identity_sessions (client_instance_id, status, expires_at);
+      CREATE INDEX IF NOT EXISTS idx_client_workspace_grants_workspace_status
+        ON client_workspace_grants (workspace_id, status, client_instance_id);
       CREATE INDEX IF NOT EXISTS idx_campaigns_workspace_status_created
         ON campaigns (workspace_id, status, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_tracks_workspace_status
@@ -4211,6 +4367,45 @@ export class DemoDatabase {
     // Cette migration additive garde un Artist Brain local déjà modifié intact.
     // Les seeds utilisent ensuite uniquement `ON CONFLICT DO NOTHING`.
     await this.pglite.exec(`
+      ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'ACTIVE';
+      ALTER TABLE memberships
+        ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'ACTIVE';
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conrelid = 'users'::regclass
+            AND conname = 'users_status_check'
+        ) THEN
+          ALTER TABLE users
+            ADD CONSTRAINT users_status_check CHECK (status IN ('ACTIVE', 'SUSPENDED', 'REVOKED'));
+        END IF;
+      END;
+      $$;
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conrelid = 'memberships'::regclass
+            AND conname = 'memberships_role_check'
+        ) THEN
+          ALTER TABLE memberships
+            ADD CONSTRAINT memberships_role_check CHECK (role IN ('OWNER', 'EDITOR', 'VIEWER'));
+        END IF;
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conrelid = 'memberships'::regclass
+            AND conname = 'memberships_status_check'
+        ) THEN
+          ALTER TABLE memberships
+            ADD CONSTRAINT memberships_status_check CHECK (status IN ('ACTIVE', 'SUSPENDED', 'REVOKED'));
+        END IF;
+      END;
+      $$;
       ALTER TABLE artist_profiles
         ADD COLUMN IF NOT EXISTS influences JSON NOT NULL DEFAULT '[]'::json;
       ALTER TABLE artist_profiles
@@ -4626,6 +4821,55 @@ export class DemoDatabase {
           ON CONFLICT (workspace_id, user_id) DO NOTHING
         `,
         [demoWorkspace.id, demoContext.userId, demoContext.membershipRole],
+      );
+      await transaction.query(
+        `
+          INSERT INTO client_instances (id, user_id, display_name, kind, platform, status)
+          VALUES
+            ($1, $2, $3, $4, $5, 'ACTIVE'),
+            ('cli_other_windows_web', 'usr_other', 'Other Web client', 'WEB_BROWSER', 'WINDOWS', 'ACTIVE')
+          ON CONFLICT (id) DO NOTHING
+        `,
+        [
+          demoIdentity.clientInstanceId,
+          demoContext.userId,
+          demoIdentity.displayName,
+          demoIdentity.kind,
+          demoIdentity.platform,
+        ],
+      );
+      await transaction.query(
+        `
+          INSERT INTO client_workspace_grants (
+            client_instance_id, user_id, workspace_id, access_level, status, granted_by
+          )
+          VALUES
+            ($1, $2, $3, $4, 'ACTIVE', $2),
+            ('cli_other_windows_web', 'usr_other', 'wsp_other', 'TRUSTED', 'ACTIVE', 'usr_other')
+          ON CONFLICT (client_instance_id, workspace_id) DO NOTHING
+        `,
+        [demoIdentity.clientInstanceId, demoContext.userId, demoWorkspace.id, demoIdentity.accessLevel],
+      );
+      await transaction.query(
+        `
+          INSERT INTO identity_sessions (
+            id, user_id, client_instance_id, status, issued_at, expires_at
+          )
+          VALUES
+            ($1, $2, $3, 'ACTIVE', $4, $5),
+            (
+              'ses_other_windows_web', 'usr_other', 'cli_other_windows_web', 'ACTIVE',
+              '2026-01-01T00:00:00.000Z', '2099-12-31T23:59:59.999Z'
+            )
+          ON CONFLICT (id) DO NOTHING
+        `,
+        [
+          demoIdentity.sessionId,
+          demoContext.userId,
+          demoIdentity.clientInstanceId,
+          demoIdentity.issuedAt,
+          demoIdentity.expiresAt,
+        ],
       );
       await transaction.query(
         `

@@ -67,7 +67,7 @@ Le premier client est une application web responsive servant à la fois de hub d
 
 Les futures applications Windows, macOS, iOS et Android consommeront l'API versionnée et les contrats partagés. Un client TV pourra ensuite exposer un sous-ensemble déclaré des mêmes capacités. Aucun client ne créera de base autoritaire, mémoire ou « cerveau mobile » séparé. Un cache local, si nécessaire, sera borné, révocable et revalidé avec le backend central avant toute mutation. Sur un même téléphone, le navigateur Web/PWA et l'application native sont deux instances clientes du même compte et du même Core, avec credentials et sessions distincts pouvant être révoqués séparément.
 
-Windows et macOS pourront héberger le même profil local du Core. iOS, Android, le Web, la PWA et la TV restent des clients fins. L'architecture d'identité et d'association des instances décrite dans `IDENTITY_DEVICE_LINKING.md` est validée ; sa première tranche de contrats, politique d'accès et tests est livrée, mais aucun endpoint réel d'authentification ou d'association n'est encore implémenté.
+Windows et macOS pourront héberger le même profil local du Core. iOS, Android, le Web, la PWA et la TV restent des clients fins. L'architecture d'identité et d'association des instances décrite dans `IDENTITY_DEVICE_LINKING.md` est validée. Les contrats, la politique d'accès, les tables locales additives et un résolveur `LOCAL_DEMO` relu à chaque requête `/v1` sont livrés ; aucun endpoint réel de login, credential ou association n'est encore implémenté.
 
 ### 4.3 Voix
 
@@ -87,6 +87,10 @@ Le design repose sur des tokens et composants communs afin d'autoriser plus tard
 Un futur `GestureInputProvider` pourra convertir localement des gestes simples en événements d'interface. Il ne contrôlera d'abord que le défilement du carousel d'agents et ne pourra appeler ni Core ni outil. **Sans demande explicite de l'utilisateur, aucun client n'accède à la caméra**, même si la fonction est configurée. Voir `INPUT_PROVIDERS.md`.
 
 Une future surface d'ambiance est réservée aux clients desktop. Elle ne maintient ni caméra, microphone, modèle IA ou donnée privée en arrière-plan et ne remplace jamais l'interface classique.
+
+### 4.5 Langues
+
+La démo et ses parcours métier sont d'abord consolidés en français. L'anglais sera ajouté ensuite par une couche d'internationalisation partagée entre Web/PWA et clients natifs : catalogues de messages, formats via locale, prompts et jeux d'évaluation versionnés par langue. Les identifiants, enums, événements, permissions et contrats API restent stables et indépendants de la langue ; aucune donnée artistique ni mémoire utilisateur n'est traduite automatiquement. Ce jalon est documenté dans la roadmap et ne doit pas ralentir la démo française.
 
 ## 5. Monolithe modulaire API-first
 
@@ -226,12 +230,15 @@ Les premiers agents prévus sont :
 - `Content Manager` ;
 - `Content Curator` ;
 - `Copywriter` ;
+- `Social Manager` ;
 - `Calendar Manager` ;
 - `Campaign Manager` ;
 - `Analytics Agent` ;
 - `System Agent`.
 
 Ils sont introduits seulement lorsque leur module métier et leurs tests sont prêts. IDA Core peut composer plusieurs agents pour une commande, avec un propriétaire de résultat clairement désigné.
+
+Deux familles restent distinctes : les agents opérationnels préparent le travail du domaine ; les futurs `Domain Steward Agents` vérifient ses obligations, anomalies et règles de gouvernance. Lorsqu'un domaine ferait normalement intervenir un métier réglementé ou spécialisé, ce steward devient obligatoire avant activation du mode `AI`. Les contrôles bloquants restent déterministes et exécutés à chaque action ; le steward analyse leurs résultats, alerte et escalade vers l'utilisateur ou un professionnel identifié. Il ne certifie jamais à lui seul une conformité juridique, financière, médicale ou de cybersécurité.
 
 ### 7.2 Agent Registry
 
@@ -333,7 +340,7 @@ Il n'est **pas** inclus dans le MVP : pas de liste, catalogue produit, commande 
 
 ### 12.3 Règle d'ajout de domaine
 
-Chaque nouveau domaine personnel doit être ajouté comme un module indépendant avec : modèle de données, permissions, registre d'outils, agent dédié facultatif, politiques de rétention, audit et écrans propres. Il peut réutiliser le noyau (`Identity`, `Conversation`, `Tasks`, `Notifications`, `ActivityLog`) sans réutiliser indûment les données sensibles d'un autre domaine.
+Chaque nouveau domaine personnel doit être ajouté comme un module indépendant avec : modèle de données, permissions, registre d'outils, politiques de rétention, audit et écrans propres. Il peut réutiliser le noyau (`Identity`, `Conversation`, `Tasks`, `Notifications`, `ActivityLog`) sans réutiliser indûment les données sensibles d'un autre domaine. Un agent opérationnel reste facultatif si aucune IA n'est utile ; en revanche, lorsqu'une responsabilité normalement portée par un professionnel humain ou une obligation réglementaire est en jeu, un `Domain Steward Agent` borné, ses contrôles déterministes et son chemin d'escalade humaine sont requis avant activation du domaine concerné.
 
 ## 13. Sécurité et exploitation
 
@@ -341,8 +348,10 @@ Les détails sont documentés dans `SECURITY.md`. Les invariants architecturaux 
 
 - secrets et tokens exclusivement côté serveur, chiffrés au repos lorsque pertinent ;
 - autorisation vérifiée côté serveur pour chaque ressource, outil et intégration ;
+- aucune confiance implicite fondée sur le réseau local, l'appareil ou un agent ; identité et droits sont réévalués à chaque requête sensible ;
 - validation des fichiers, URLs signées courtes et stockage média privé ;
 - journaux d'audit pour commandes, approbations, outils et événements système ;
+- exposition réseau interdite avant le jalon de durcissement défini dans `SECURITY.md`, puis audits et tests d'intrusion avant les domaines les plus sensibles ;
 - séparation stricte entre développement et production ;
 - sauvegardes, restauration testée et politique de rétention ;
 - limites de débit pour authentification, upload, commandes IA et intégrations ;

@@ -23,6 +23,8 @@ IDA est un assistant personnel extensible, pas un gestionnaire de réseaux socia
 - Les modules métier dépendent de contrats, pas de fournisseurs externes concrets.
 - Les agents sont des capacités métier déclarées et testables ; ils ne sont ni des microservices ni des processus autonomes.
 - Un nouvel agent doit déclarer son domaine, ses outils autorisés, son contexte autorisé, sa politique d'approbation, ses prompts versionnés et ses tests d'évaluation.
+- La démo est consolidée en français avant toute internationalisation. Le futur anglais réutilise les mêmes codes, contrats et données métier ; seules les ressources d'interface, de dialogue et de formatage sont localisées.
+- Lorsqu'un domaine correspond à une responsabilité professionnelle ou réglementaire humaine, son manifeste doit prévoir un agent de gouvernance spécialisé et une escalade humaine identifiée. Cet agent contrôle et alerte ; il ne prétend jamais remplacer, certifier ou engager le professionnel concerné.
 
 ## IA, outils et mémoire
 
@@ -31,6 +33,7 @@ IDA est un assistant personnel extensible, pas un gestionnaire de réseaux socia
 - Les outils sont refusés par défaut et doivent être dans une liste blanche avec schémas d'entrée/sortie, permissions, idempotence et erreurs actionnables.
 - Une conversation n'est pas une mémoire permanente. Toute préférence durable passe par les états PENDING, CONFIRMED ou REJECTED.
 - Traiter les contenus importés, les captions, les documents et les réponses externes comme des données non fiables.
+- Les contrôles « continus » sont d'abord des policies déterministes exécutées à chaque action et des audits planifiés. Un modèle peut expliquer les écarts et proposer une correction, mais ne reste pas actif en permanence et ne devient pas lui-même la barrière de sécurité ou de conformité.
 
 ## Permissions et approbations
 
@@ -51,6 +54,8 @@ IDA est un assistant personnel extensible, pas un gestionnaire de réseaux socia
 - Une identité de session est séparée de l'utilisateur, du workspace et de l'appareil. Un appareil authentifié ne contourne jamais membership, scope, Tool Gateway ou approbation.
 - La caméra ne peut jamais être activée au démarrage, en arrière-plan, par un agent ou une automatisation. Une action explicite de l'utilisateur dans le parcours courant est obligatoire, même si la permission OS ou une préférence antérieure existe.
 - Les traitements caméra futurs restent locaux par défaut ; aucune image ou donnée biométrique n'entre dans les logs, prompts ou mémoires.
+- Toute exposition réseau future doit franchir un jalon de sécurité documenté : HTTPS, identité réelle, sessions révocables, rate limiting, protections navigateur, sauvegarde/restauration, supervision, dépendances vérifiées et tests d'intrusion proportionnels au risque.
+- Aucun réseau local, appareil connu, agent ou modèle ne bénéficie d'une confiance implicite. L'autorisation est recalculée côté serveur pour l'utilisateur, la session, l'instance cliente, le workspace, la ressource et l'outil.
 
 ## Qualité
 
@@ -77,6 +82,7 @@ Avant d'ajouter un domaine (Finance, Courses, Documents, etc.) :
 3. Définir les limites d'intégration externe et le plan de repli manuel.
 4. Ajouter une décision d'architecture et des contrats d'API.
 5. Créer des tests de permissions, d'audit et d'échec.
+6. Si une responsabilité humaine spécialisée existe, définir son `Domain Steward Agent`, les contrôles déterministes qu'il observe, ses limites de responsabilité et le professionnel ou propriétaire auquel il escalade.
 
 Avant d'ajouter une capacité cliente matérielle ou immersive (caméra, gestes, surface desktop, thème cinématique) :
 

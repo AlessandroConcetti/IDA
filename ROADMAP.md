@@ -65,6 +65,7 @@ Créer le premier produit réellement utilisable : un Command Center responsive 
 - Command Center React responsive desktop/mobile avec tous les modules initiaux, dont `SOCIAL`, `CAMPAIGNS`, `ANALYTICS`, `TASKS`, `MEMORY` et `SYSTEM` ;
 - résumé d’accueil factuel du workspace : approbations actionnables, snapshots de planification interne actifs, campagnes actives et releases à venir, avec date calculée côté serveur dans le fuseau du workspace et valeurs indisponibles plutôt que fictives en cas d’API absente ;
 - API Fastify locale, contrats Zod partagés et policy d’outils ;
+- Identity locale transitoire : statuts compte/membership, instances, sessions techniques et grants persistés additivement, FKs composées anti-croisement, contexte strict relu avant chaque route `/v1` et refus public générique ; aucun credential, cookie, passkey, login ou accès réseau réel ;
 - Agent Registry déclaratif : manifestes versionnés pour `Memory Manager` et `Music Librarian`, visibles dans System, strictement `PLANNED`/`PROPOSAL_ONLY`, sans exécution, prompt ni accès implicite ;
 - données musicales, médias, mémoire et tâches de démonstration isolées par workspace côté serveur, ainsi qu’une matrice sociale globale déclarative en lecture seule sans compte, token, connexion ni appel externe ;
 - commandes textuelles déterministes de lecture : journée civile du workspace (aujourd’hui ou demain, tâches et calendrier interne valides), médias réellement disponibles à proposer (formulation naturelle « contenus inutilisés »), état système et diagnostic social ciblé qui ne prétend jamais qu’un compte, OAuth, token ou publication est actif ;
@@ -80,7 +81,7 @@ Créer le premier produit réellement utilisable : un Command Center responsive 
 - IDA History : registre privé local des paires demande/réponse de commandes `READ / COMPLETED`, restauré pour le même acteur/workspace par pagination cléset, sans résultat d’outil, paramètres, raisonnement ni mémoire implicite ; l’écriture est auditée sans texte libre et la consultation reste sans effet ;
 - PGlite uniquement pour le développement/test local ; aucun compte social, aucun token, aucune publication et aucune donnée personnelle réelle.
 
-Les décisions d'Identity/Device Linking décrites dans `IDENTITY_DEVICE_LINKING.md` sont validées. La première tranche livre les contrats stricts, la politique d'accès et les tests d'architecture pour les instances clientes, sessions et grants ; aucun endpoint réel d'authentification n'est encore actif. Les mutations de base, routes et écrans d'association viendront dans des tranches verticales ultérieures avant le remplacement du contexte de démonstration. La suite du calendrier couvrira surcharge, répétitions et fraîcheur avant toute automatisation ; aucune de ces étapes ne débloque encore la publication sociale.
+Les décisions d'Identity/Device Linking décrites dans `IDENTITY_DEVICE_LINKING.md` sont validées. Les contrats stricts, la politique d'accès, les tables locales additives et le résolveur `LOCAL_DEMO` sont livrés ; aucun endpoint ni credential réel d'authentification n'est actif. Les preuves de connexion, cookies/passkeys, routes et écrans d'association viendront dans des tranches verticales ultérieures avant tout accès réseau et avant le remplacement complet du contexte de démonstration. La suite du calendrier couvrira surcharge, répétitions et fraîcheur avant toute automatisation ; aucune de ces étapes ne débloque encore la publication sociale.
 
 ### Périmètre
 
@@ -111,6 +112,19 @@ Les décisions d'Identity/Device Linking décrites dans `IDENTITY_DEVICE_LINKING
 - une commande textuelle simple retourne un résultat fondé sur les données autorisées ;
 - une préférence durable nécessite une décision explicite de l'utilisateur ;
 - les parcours critiques disposent de tests et aucune donnée sensible n'est exposée au client.
+- avant toute exposition hors boucle locale : identité réelle, HTTPS, sessions courtes/révocables, protections Web, limites de débit, sauvegarde restaurable, supervision sécurité et audit de surface d'attaque sont validés.
+
+## Jalon post-démo française — Internationalisation FR/EN différée
+
+Ce jalon commence uniquement lorsque les parcours et textes français de la démo sont consolidés. Aucun travail d'interface bilingue n'est requis avant cette condition.
+
+1. Extraire les textes d'interface dans des catalogues versionnés `fr` et `en`, sans modifier les codes métier ni les contrats API.
+2. Localiser dates, heures, nombres, pluriels, notifications et erreurs présentables, avec le français comme fallback initial.
+3. Versionner séparément les prompts, exemples et évaluations françaises et anglaises ; une réussite dans une langue ne vaut pas validation de l'autre.
+4. Ajouter une préférence de langue par utilisateur et un fallback par workspace/appareil sans traduire automatiquement les contenus, titres, captions ou mémoires.
+5. Vérifier les parcours Web/PWA desktop et mobile, puis réutiliser exactement les mêmes catalogues sémantiques dans les clients natifs.
+
+Critère de sortie : un utilisateur peut passer du français à l'anglais sans changer de compte, de données, de permissions, d'agent ou d'état métier, et tous les tests de commandes critiques existent dans les deux langues.
 
 ## Phase 2 — Content Manager et Approval Center
 
@@ -121,7 +135,7 @@ Faire d'IDA un assistant éditorial qui propose, organise et soumet du contenu �
 ### Périmètre
 
 1. Étendre le `Campaign Brief Registry`, déjà rattachable de façon contrôlée à une release et un morceau, vers les entités `Campaign`, `Post`, `PostVariant`, `ContentPlan` et `Approval` avec leurs états et associations contrôlés.
-2. Créer les agents `Content Manager`, `Content Curator`, `Copywriter` et `Calendar Manager`.
+2. Créer les agents `Content Manager`, `Content Curator`, `Copywriter` et `Calendar Manager`, puis préparer `Social Manager` en `PROPOSAL_ONLY` pour adapter les propositions à la matrice de capacités sans appeler de plateforme.
 3. Générer des propositions de contenu liées à des médias, tracks, objectifs et règles artistiques.
 4. Créer le calendrier éditorial en vues jour, semaine et mois.
 5. Détecter conflits, surcharge, répétitions et indisponibilités de médias.
@@ -156,7 +170,8 @@ Ajouter des intégrations une à une, en respectant strictement les capacités, 
 2. Ajouter son adaptateur, OAuth, stockage chiffré des credentials, renouvellement de token et état système.
 3. Ajouter lecture des capacités et analytics disponibles.
 4. Ajouter export, brouillon ou planification seulement lorsque l'API officielle le permet et que le parcours est validé.
-5. Répéter pour les plateformes suivantes : Instagram, YouTube, TikTok, Facebook, selon faisabilité documentée.
+5. Activer progressivement les capacités de `Social Manager` uniquement sur les adaptateurs et opérations officiellement vérifiés ; il reste soumis au Tool Gateway et à l'approbation humaine.
+6. Répéter pour les plateformes suivantes : Instagram, YouTube, TikTok, Facebook, selon faisabilité documentée.
 
 ### Règles de sécurité et produit
 
@@ -189,6 +204,7 @@ Passer d'un outil de proposition à un assistant quotidien fiable : exécutions 
 5. Ajouter collecte et affichage d'analytics lorsque les APIs les autorisent.
 6. Ajouter `Analytics Agent` : recommandations justifiées, jamais changement autonome de stratégie.
 7. Ajouter `System Agent` et la page `IDA SYSTEM` : AI, base, stockage, connexions, scheduler et notifications.
+8. Ajouter `Campaign Manager` en proposition et orchestration interne, sans pouvoir publier ni modifier seul une stratégie validée.
 
 ### Critères de sortie
 
@@ -240,6 +256,7 @@ Faire évoluer IDA en assistant personnel plus proactif, multimodal et modulaire
 - mémoire enrichie avec sources, confiance et contrôle utilisateur ;
 - planification inter-domaines à partir de règles explicites ;
 - activation progressive et processus d’onboarding d’un nouvel agent à partir du registre versionné ;
+- `Security Guardian` et `Privacy Steward` par domaine sensible, alimentés par des contrôles déterministes et des audits planifiés plutôt que par une boucle LLM permanente ;
 - modules personnels opt-in : tâches avancées, calendrier personnel, documents, notes et automatisations ;
 - amélioration progressive des clients natifs si la PWA ne couvre plus les besoins ;
 - personnalisation par design tokens et thèmes `IDA_AURORA` / `IDA_COSMOS`, sans logique métier propre au thème ;
@@ -254,6 +271,7 @@ Faire évoluer IDA en assistant personnel plus proactif, multimodal et modulaire
 - le registre d'agents empêche un agent d'accéder à des outils ou données non déclarés ;
 - aucune automatisation sensible ne contourne le contrôle humain ;
 - les limites de coût, latence et fiabilité sont mesurées pour chaque agent ajouté ;
+- chaque domaine réglementé ou assimilable à une responsabilité professionnelle possède un steward borné, un chemin d'escalade humaine et des tests prouvant qu'il ne peut ni certifier ni agir seul ;
 - l'interface classique reste complète avec thème par défaut, mouvement coupé, caméra refusée et aucun geste disponible.
 
 ## Après la phase 6 — Domaines personnels différés
@@ -280,8 +298,9 @@ Le futur module Courses pourra gérer listes, préférences et propositions de r
 4. Mesurer précision, coût, latence, erreurs et taux de validation humaine.
 5. Accorder seulement les permissions supplémentaires justifiées par les résultats.
 6. Documenter la décision et conserver un mécanisme de désactivation immédiat.
+7. Lorsqu'un métier humain ou une obligation réglementaire est concerné, ajouter aussi le `Domain Steward Agent` correspondant, ses contrôles déterministes et son destinataire d'escalade avant activation du mode `AI`.
 
-Les premiers candidats naturels après le socle sont `Campaign Manager`, `Analytics Agent` et `System Agent`. Un agent Finance ou Courses ne sera évalué qu'au moment de l'ouverture de son module, avec des politiques propres.
+Les premiers candidats naturels après le socle sont `Campaign Manager`, `Analytics Agent`, `System Agent`, puis `Security Guardian`. Un `Privacy Steward` sera instancié séparément pour chaque domaine manipulant des données personnelles. Un agent Finance ou Courses ne sera évalué qu'au moment de l'ouverture de son module, avec des politiques propres.
 
 ## Definition of Done pour chaque fonctionnalité
 
