@@ -19,6 +19,8 @@ servers:
 x-ida-local-identity-guard:
   appliesTo: /v1/**
   sessionSelector: fixé côté serveur
+  requestContextAttached: true
+  actionPermissionIntersection: membership-role + client-grant + tool-permission
   clientCredentialAccepted: false
   failureStatus: 401
   failureCode: AUTHENTICATION_REQUIRED
@@ -56,6 +58,8 @@ paths:
       operationId: listModules
       summary: Liste les modules déclarés du Command Center
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Modules de l'interface commune
           content:
@@ -71,6 +75,8 @@ paths:
         jamais un prompt, secret, token, état d’exécution ni capacité d’appel
         d’outil. Les manifestes locaux restent planifiés.
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Manifestes versionnés, déclaratifs et non exécutables
           content:
@@ -82,6 +88,8 @@ paths:
       operationId: getSystemStatus
       summary: Retourne les états système observés
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: États du runtime local et des intégrations absentes
           content:
@@ -97,6 +105,8 @@ paths:
         planifications comptées sont uniquement des snapshots internes actifs,
         jamais des livraisons ou publications sociales.
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Résumé borné du Command Center et date du workspace
           content:
@@ -135,6 +145,8 @@ paths:
             maxLength: 512
             pattern: '^[A-Za-z0-9_-]+$'
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Page d’activité sûre, triée par createdAt puis id décroissants
           content:
@@ -148,6 +160,8 @@ paths:
       operationId: getArtistProfile
       summary: Retourne le profil artistique de démonstration
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Artist Brain de démonstration
           content:
@@ -170,6 +184,8 @@ paths:
             schema:
               $ref: '#/components/schemas/ArtistProfileUpdateRequest'
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Artist Brain local mis à jour
           content:
@@ -178,6 +194,8 @@ paths:
                 $ref: '#/components/schemas/ArtistProfileResponse'
         '400':
           $ref: '#/components/responses/InvalidArtistProfile'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
   /v1/releases:
@@ -188,6 +206,8 @@ paths:
         Lecture du workspace résolu côté serveur. Elle ne retourne aucune
         relation de track ou média, aucun lien externe et n'écrit aucun audit.
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Releases du workspace local
           content:
@@ -210,6 +230,8 @@ paths:
             schema:
               $ref: '#/components/schemas/ReleaseCreateRequest'
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '201':
           description: Release locale créée
           content:
@@ -231,6 +253,8 @@ paths:
         que leurs liens optionnels de release et morceau; ils ne portent encore
         ni date, ni pilier, ni contenu ou effet externe.
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Briefs de campagne internes dans un ordre stable
           content:
@@ -253,6 +277,8 @@ paths:
             schema:
               $ref: '#/components/schemas/CampaignCreateRequest'
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '201':
           description: Brief de campagne DRAFT créé
           content:
@@ -286,6 +312,8 @@ paths:
             schema:
               $ref: '#/components/schemas/CampaignReleaseLinkRequest'
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Lien déjà présent ou campagne mise à jour
           content:
@@ -319,6 +347,8 @@ paths:
             schema:
               $ref: '#/components/schemas/CampaignTrackLinkRequest'
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Lien déjà présent ou campagne mise à jour
           content:
@@ -338,6 +368,8 @@ paths:
       operationId: listTracks
       summary: Liste les tracks de démonstration
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Tracks du workspace local
           content:
@@ -360,6 +392,8 @@ paths:
             schema:
               $ref: '#/components/schemas/TrackCreateRequest'
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '201':
           description: Morceau local créé
           content:
@@ -435,6 +469,8 @@ paths:
             maximum: 50
             default: 50
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Médias filtrés dans le workspace local
           content:
@@ -461,6 +497,8 @@ paths:
             schema:
               $ref: '#/components/schemas/MediaImportRequest'
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '201':
           description: Média privé importé dans le workspace local
           content:
@@ -500,6 +538,8 @@ paths:
             maxLength: 80
             pattern: '^med_[A-Za-z0-9_]+$'
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Média privé complet, avec son Content-Type validé.
           headers:
@@ -561,6 +601,8 @@ paths:
             maximum: 12
             default: 12
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Candidats disponibles dans un ordre stable
           content:
@@ -574,6 +616,8 @@ paths:
       operationId: listMemories
       summary: Liste les mémoires du workspace local avec leurs timestamps persistés
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Mémoires structurées du workspace local
           content:
@@ -595,6 +639,8 @@ paths:
             schema:
               $ref: '#/components/schemas/MemoryProposalRequest'
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '201':
           description: Proposition PENDING créée
           content:
@@ -615,6 +661,8 @@ paths:
       parameters:
         - $ref: '#/components/parameters/MemoryId'
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Mémoire confirmée
           content:
@@ -639,6 +687,8 @@ paths:
       parameters:
         - $ref: '#/components/parameters/MemoryId'
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Mémoire refusée
           content:
@@ -664,6 +714,8 @@ paths:
         éventuelle, texte et médias ordonnés. Les médias n'exposent que id,
         filename, type et status.
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: File d'approbations internes dans un ordre stable
           content:
@@ -695,6 +747,8 @@ paths:
           required: false
           schema: { type: string, format: date-time }
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Projection bornée et triée du calendrier du workspace
           content:
@@ -720,6 +774,8 @@ paths:
             schema:
               $ref: '#/components/schemas/PostVariantDecisionRequest'
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Décision APPROVED ou retry idempotent de la même décision
           content:
@@ -755,6 +811,8 @@ paths:
             schema:
               $ref: '#/components/schemas/PostVariantDecisionRequest'
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Décision REJECTED ou retry idempotent de la même décision
           content:
@@ -790,6 +848,8 @@ paths:
             schema:
               $ref: '#/components/schemas/InternalPostScheduleRequest'
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '201':
           description: Snapshot interne créé
           content:
@@ -826,6 +886,8 @@ paths:
       parameters:
         - $ref: '#/components/parameters/InternalPostScheduleId'
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Snapshot annulé ou résultat idempotent déjà CANCELLED
           content:
@@ -850,6 +912,8 @@ paths:
       summary: Liste les tâches du workspace local
       description: Les tâches sans échéance restent visibles ici, mais n'apparaissent pas dans la commande de journée civile.
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Tâches structurées du workspace local
           content:
@@ -869,6 +933,8 @@ paths:
             schema:
               $ref: '#/components/schemas/TaskCreateRequest'
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '201':
           description: Tâche TODO créée
           content:
@@ -890,6 +956,8 @@ paths:
       parameters:
         - $ref: '#/components/parameters/TaskId'
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Tâche complétée ou résultat idempotent déjà DONE
           content:
@@ -914,6 +982,8 @@ paths:
         ni scope accordé, ni autorisation d'action externe. La route ne lance pas
         OAuth, n'appelle aucune plateforme et n'écrit aucun audit.
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Capacités de démonstration à revalider avant intégration
           content:
@@ -949,6 +1019,8 @@ paths:
             maxLength: 512
             pattern: '^[A-Za-z0-9_-]+$'
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Page de commandes terminées du workspace autorisé
           content:
@@ -978,6 +1050,8 @@ paths:
             schema:
               $ref: '#/components/schemas/IdaCommandRequest'
       responses:
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
         '200':
           description: Commande comprise et exécutée avec des outils READ
           content:
@@ -1272,7 +1346,7 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
     Forbidden:
-      description: Outil non autorisé par la policy serveur
+      description: Permission Identity effective ou outil refusé par les policies serveur
       content:
         application/json:
           schema:
@@ -1304,7 +1378,7 @@ components:
               type: string
     DemoIdentity:
       type: object
-      required: [id, email, displayName, timezone, workspace, authentication]
+      required: [id, email, displayName, timezone, workspace, client, authorization, authentication]
       properties:
         id:
           type: string
@@ -1317,6 +1391,25 @@ components:
           type: string
         workspace:
           $ref: '#/components/schemas/Workspace'
+        client:
+          type: object
+          additionalProperties: false
+          required: [id, kind, platform, accessLevel]
+          properties:
+            id: { type: string }
+            kind: { enum: [WEB_BROWSER, PWA, NATIVE_DESKTOP, NATIVE_MOBILE, TV] }
+            platform: { enum: [WINDOWS, MACOS, LINUX, IOS, ANDROID, TV, OTHER] }
+            accessLevel: { enum: [TRUSTED, LIMITED, VIEW_ONLY] }
+        authorization:
+          type: object
+          additionalProperties: false
+          required: [effectivePermissions]
+          properties:
+            effectivePermissions:
+              type: array
+              uniqueItems: true
+              items:
+                enum: [READ, WRITE, APPROVAL_REQUIRED, PUBLISH, SYSTEM]
         authentication:
           type: object
           required: [mode, message]

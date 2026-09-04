@@ -6,9 +6,9 @@ Cette architecture est **validée**. Les contrats, la politique d'accès et la p
 
 ## État actuel
 
-Le runtime local conserve un unique `demoContext` fixé côté serveur. Sa session technique est désormais représentée par `client_instances`, `identity_sessions` et `client_workspace_grants`, reliés structurellement au compte, à la membership et au workspace. Un résolveur relit ce contexte avant chaque requête `/v1` et échoue avec une erreur publique générique si le compte, la membership, l'instance, le grant ou la session n'est plus valide.
+Le runtime local conserve un sélecteur technique fixé côté serveur. Sa session est représentée par `client_instances`, `identity_sessions` et `client_workspace_grants`, reliés structurellement au compte, à la membership et au workspace. Un résolveur relit ces données avant chaque requête `/v1` et échoue avec une erreur publique générique si le compte, la membership, l'instance, le grant ou la session n'est plus valide. Le résultat est profondément gelé puis associé à l'objet de requête dans une `WeakMap` privée non réassignable : routes, réponses, audits et IDA Core en tirent désormais leur acteur et leur workspace au lieu de consulter `demoContext`. `/v1/me` relit en plus le profil par cette paire user/workspace et projette rôle, grant client et permissions effectives sans exposer la preuve de session.
 
-Cette session locale ne contient aucun token ni authenticator et son identifiant n'est accepté depuis aucun header, cookie, body ou query. Elle constitue une garde de migration et de scope, pas une authentification humaine ; IDA ne doit toujours pas être exposée hors boucle locale avec des données réelles.
+Cette session locale ne contient aucun token ni authenticator et son identifiant n'est accepté depuis aucun header, cookie, body ou query. Les permissions sont recalculées pour chaque action à partir du rôle, du grant de l'instance et du niveau demandé par l'outil. Elle constitue une garde de migration et de scope, pas une authentification humaine ; IDA ne doit toujours pas être exposée hors boucle locale avec des données réelles.
 
 ## Position dans le Kernel
 
@@ -125,10 +125,10 @@ Les noms sont indicatifs. L'interface pourra regrouper plusieurs instances sous 
 |---|---|
 | `packages/contracts/src/identity.ts` | **Livré :** schémas stricts d'instance, grant, session, step-up et contexte serveur |
 | `packages/domain/src/identity-access-policy.ts` | **Livré :** intersection session, membership, instance, grant, permission et step-up ; le Tool Gateway reste obligatoire |
-| `apps/api/src/identity-context.ts` | **Livré localement :** résolution fail-closed de l'OWNER/TRUSTED technique avant chaque route `/v1`; aucune preuve client |
+| `apps/api/src/identity-context.ts` | **Livré localement :** résolution fail-closed du contexte technique, gel et attachement par requête ; aucune preuve client |
 | `apps/api/src/modules/identity/*` | cas d'usage, repositories, routes et audit |
-| `apps/api/src/ida-core.ts` | recevoir un port `RequestContext`, jamais `demoContext` |
-| `apps/api/src/app.ts` | **Livré localement :** hook global de résolution ; futur plugin sans logique de credential dans les routes métier |
+| `apps/api/src/ida-core.ts` | **Livré localement :** reçoit le `RequestIdentityContext`, dérive acteur/workspace et recoupe chaque permission avant son Tool Gateway |
+| `apps/api/src/app.ts` | **Livré localement :** hook global, contexte attaché, scopes issus de la requête et permissions par action ; futur plugin sans logique de credential dans les routes métier |
 | `apps/api/src/database.ts` | **Livré localement :** tables additives et jointure de contexte ; futur repository Identity dédié |
 | `apps/web/src/api.ts` | client de session sans token persistant dans le stockage Web |
 | `apps/web/src/App.tsx` | écran compte/appareils, révocation et association explicite |
@@ -161,5 +161,6 @@ Ce découpage est cible : il ne justifie pas une réécriture massive des fichie
 5. Les grants initiaux sont les profils bornés `TRUSTED`, `LIMITED` et `VIEW_ONLY` ; ils peuvent uniquement réduire les permissions de la membership.
 6. Windows est le premier hôte `LOCAL_OWNER`; le même profil doit être déployable sur macOS sans dupliquer le Core.
 7. Sur téléphone, le Web/PWA et l'application native iOS ou Android restent disponibles en parallèle avec des sessions révocables séparément.
+8. Avant les passkeys et le Device Linking, le PC hôte peut recevoir le verrou local transitoire défini par `docs/adr/0004-local-owner-lock-and-session.md` : passphrase dérivée, session opaque et aucune exposition réseau.
 
-Cette validation a autorisé les contrats, politiques, tables locales, résolveur et tests désormais livrés. Elle n'active ni login, credential, endpoint de compte, cookie, passkey, liaison d'instance ou service cloud réel ; `demoContext` reste limité à la démo locale jusqu'à leur livraison par tranches vérifiées.
+Cette validation a autorisé les contrats, politiques, tables locales, résolveur, contexte par requête et tests désormais livrés. Elle n'active ni login, credential, endpoint de compte, cookie, passkey, liaison d'instance ou service cloud réel ; le sélecteur `demoContext` reste uniquement une donnée technique de seed/mode locale jusqu'à leur livraison par tranches vérifiées.

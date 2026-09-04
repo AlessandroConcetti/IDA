@@ -43,6 +43,7 @@ import {
   memoryDecisionRequestSchema,
   memoryProposalCreateSchema,
   memorySchema,
+  type PermissionLevel,
   postVariantDecisionParamsSchema,
   postVariantDecisionRequestSchema,
   postVariantDecisionSchema,
@@ -57,7 +58,15 @@ import {
   trackCreateSchema,
   trackSchema,
 } from "@ida/contracts";
-import { createAgentRegistry, createModuleRegistry, ToolGateway, ToolPolicyError } from "@ida/domain";
+import {
+  createAgentRegistry,
+  createModuleRegistry,
+  IdentityAccessPolicy,
+  IdentityPolicyError,
+  type ToolAuthorizationRequest,
+  ToolGateway,
+  ToolPolicyError,
+} from "@ida/domain";
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import { toContentRotationCandidateResponse } from "./content-rotation.js";
 import {
@@ -80,9 +89,15 @@ import {
   type Task,
   type Track,
 } from "./database.js";
-import { demoContext, demoWorkspace } from "./demo-context.js";
+import { demoContext } from "./demo-context.js";
 import { CommandInputError, DeterministicIdaCore } from "./ida-core.js";
-import { LocalDemoIdentityContextResolver } from "./identity-context.js";
+import {
+  attachRequestIdentityContext,
+  getRequestIdentityContext,
+  isIdaApiRequestPath,
+  LocalDemoAuthenticationError,
+  LocalDemoIdentityContextResolver,
+} from "./identity-context.js";
 import { defaultCalendarRange, getWorkspaceDayRange, type ResolvedCalendarRange } from "./workspace-time.js";
 
 export type CreateAppOptions = DemoDatabaseOptions & {
@@ -454,10 +469,10 @@ function resolveSupportedMedia(
   return { filename: normalizedFilename, mediaType: supported.mediaType, extension };
 }
 
-function toMediaAssetResponse(asset: MediaAsset) {
+function toMediaAssetResponse(asset: MediaAsset, workspaceId: string) {
   return mediaAssetSchema.parse({
     id: asset.id,
-    workspaceId: demoContext.workspaceId,
+    workspaceId,
     artistProjectId: optionalString(asset.projectId),
     releaseId: optionalString(asset.releaseId),
     releaseTitle: optionalString(asset.releaseTitle),
@@ -741,10 +756,10 @@ async function removePrivateMedia(filePath: string): Promise<void> {
   }
 }
 
-function toArtistProfileResponse(profile: ArtistProfile) {
+function toArtistProfileResponse(profile: ArtistProfile, workspaceId: string) {
   return artistProfileSchema.parse({
     id: profile.id,
-    workspaceId: demoContext.workspaceId,
+    workspaceId,
     artistProjectId: profile.projectId,
     identity: profile.identity,
     genres: profile.genres,
@@ -760,10 +775,10 @@ function toArtistProfileResponse(profile: ArtistProfile) {
   });
 }
 
-function toTrackResponse(track: Track) {
+function toTrackResponse(track: Track, workspaceId: string) {
   return trackSchema.parse({
     id: track.id,
-    workspaceId: demoContext.workspaceId,
+    workspaceId,
     artistProjectId: track.projectId,
     releaseId: optionalString(track.releaseId),
     releaseTitle: optionalString(track.releaseTitle),
@@ -783,10 +798,10 @@ function toTrackResponse(track: Track) {
   });
 }
 
-function toReleaseResponse(release: Release) {
+function toReleaseResponse(release: Release, workspaceId: string) {
   return releaseSchema.parse({
     id: release.id,
-    workspaceId: demoContext.workspaceId,
+    workspaceId,
     artistProjectId: release.projectId,
     title: release.title,
     releaseType: release.releaseType,
@@ -801,10 +816,10 @@ function toReleaseResponse(release: Release) {
   });
 }
 
-function toCampaignResponse(campaign: Campaign) {
+function toCampaignResponse(campaign: Campaign, workspaceId: string) {
   return campaignSchema.parse({
     id: campaign.id,
-    workspaceId: demoContext.workspaceId,
+    workspaceId,
     artistProjectId: campaign.projectId,
     name: campaign.name,
     objective: campaign.objective,
@@ -879,10 +894,10 @@ function decodeCommandRunHistoryCursor(cursor: string) {
   }
 }
 
-function toMemoryResponse(memory: Memory) {
+function toMemoryResponse(memory: Memory, workspaceId: string) {
   return memorySchema.parse({
     id: memory.id,
-    workspaceId: demoContext.workspaceId,
+    workspaceId,
     category: memory.category,
     content: memory.content,
     state: memory.state,
@@ -893,10 +908,10 @@ function toMemoryResponse(memory: Memory) {
   });
 }
 
-function toTaskResponse(task: Task) {
+function toTaskResponse(task: Task, workspaceId: string) {
   return taskSchema.parse({
     id: task.id,
-    workspaceId: demoContext.workspaceId,
+    workspaceId,
     title: task.title,
     description: optionalString(task.description),
     status: task.status,
@@ -983,6 +998,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   const storageDir = options.storageDir ?? defaultStorageDir;
   const serverNow = options.now ?? (() => new Date());
   const identityContextResolver = new LocalDemoIdentityContextResolver(database, serverNow);
+  const identityPolicy = new IdentityAccessPolicy();
   const core = new DeterministicIdaCore(database, undefined, serverNow);
   const agents = createAgentRegistry();
   const modules = createModuleRegistry();
@@ -1004,6 +1020,24 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     { toolKey: "cancel_internal_post_schedule", moduleKey: "CALENDAR", permission: "WRITE" },
   ]);
 
+  const assertRequestPermission = (request: FastifyRequest, permission: PermissionLevel) => {
+    const identity = getRequestIdentityContext(request);
+    identityPolicy.assertAuthorized({
+      context: identity,
+      permission,
+      now: serverNow(),
+    });
+
+    return identity;
+  };
+
+  const assertToolAuthorized = (request: FastifyRequest, authorization: ToolAuthorizationRequest) => {
+    const identity = assertRequestPermission(request, authorization.permission);
+    toolGateway.assertAuthorized(authorization);
+
+    return identity;
+  };
+
   await app.register(cors, {
     origin: "http://127.0.0.1:5173",
     methods: ["GET", "PATCH", "POST", "OPTIONS"],
@@ -1020,9 +1054,13 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   // Le health check reste disponible pour diagnostiquer le processus local.
   // Toute surface métier /v1 relit en revanche la session persistée avant de
   // laisser Fastify atteindre une route. Aucun identifiant ne vient du client.
+  // Le plugin CORS, enregistré avant ce hook, termine les vrais preflights et
+  // rejette les OPTIONS incomplets ; aucune route métier OPTIONS n'est rendue
+  // publique par une exemption Identity générale.
   app.addHook("onRequest", async (request) => {
-    if (request.url === "/v1" || request.url.startsWith("/v1/")) {
-      await identityContextResolver.resolve();
+    if (isIdaApiRequestPath(request.url)) {
+      attachRequestIdentityContext(request, await identityContextResolver.resolve());
+      assertRequestPermission(request, "READ");
     }
   });
 
@@ -1036,6 +1074,12 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     if (error instanceof ToolPolicyError) {
       return reply.status(403).send({
         error: { code: error.code, message: error.message },
+      });
+    }
+
+    if (error instanceof IdentityPolicyError) {
+      return reply.status(403).send({
+        error: { code: "AUTHORIZATION_DENIED", message: "Cette action n’est pas autorisée." },
       });
     }
 
@@ -1118,18 +1162,13 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
       throw new MemoryDecisionInputError();
     }
 
-    toolGateway.assertAuthorized({
+    const identity = assertToolAuthorized(request, {
       toolKey: decision === "CONFIRMED" ? "confirm_memory" : "reject_memory",
       moduleKey: "MEMORY",
       permission: "WRITE",
     });
 
-    const result = await database.decideMemory(
-      demoContext.workspaceId,
-      demoContext.userId,
-      params.data.memoryId,
-      decision,
-    );
+    const result = await database.decideMemory(identity.workspaceId, identity.userId, params.data.memoryId, decision);
 
     if (result.kind === "not-found") {
       return reply.status(404).send({
@@ -1146,7 +1185,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
       });
     }
 
-    return { data: toMemoryResponse(result.memory) };
+    return { data: toMemoryResponse(result.memory, identity.workspaceId) };
   };
 
   const completeTask = async (request: FastifyRequest, reply: FastifyReply) => {
@@ -1159,13 +1198,13 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
       throw new TaskCompletionInputError();
     }
 
-    toolGateway.assertAuthorized({
+    const identity = assertToolAuthorized(request, {
       toolKey: "complete_task",
       moduleKey: "TASKS",
       permission: "WRITE",
     });
 
-    const result = await database.completeTask(demoContext.workspaceId, demoContext.userId, params.data.taskId);
+    const result = await database.completeTask(identity.workspaceId, identity.userId, params.data.taskId);
 
     if (result.kind === "not-found") {
       return reply.status(404).send({
@@ -1174,7 +1213,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     }
 
     if (result.kind === "already-completed") {
-      return { data: toTaskResponse(result.task) };
+      return { data: toTaskResponse(result.task, identity.workspaceId) };
     }
 
     if (result.kind === "not-actionable") {
@@ -1186,7 +1225,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
       });
     }
 
-    return { data: toTaskResponse(result.task) };
+    return { data: toTaskResponse(result.task, identity.workspaceId) };
   };
 
   const decidePostVariant = async (request: FastifyRequest, reply: FastifyReply, decision: ApprovalDecision) => {
@@ -1197,11 +1236,13 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
       throw new ApprovalDecisionInputError();
     }
 
+    const identity = assertRequestPermission(request, "APPROVAL_REQUIRED");
+
     // Résoudre d'abord la précondition dans le scope serveur. Cela vérifie que
     // l'approvalId et le hash désignent encore la version courante avant de
     // construire une preuve humaine ; aucun champ du client ne devient preuve.
     const precondition = await database.preparePostVariantDecision(
-      demoContext.workspaceId,
+      identity.workspaceId,
       params.data.variantId,
       body.data.approvalId,
       body.data.expectedPayloadHash,
@@ -1246,14 +1287,14 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
       permission: "APPROVAL_REQUIRED",
       explicitApproval: {
         approvalId: precondition.approvalId,
-        approvedBy: demoContext.userId,
+        approvedBy: identity.userId,
         approvedAt: serverNow().toISOString(),
       },
     });
 
     const result = await database.decidePostVariant(
-      demoContext.workspaceId,
-      demoContext.userId,
+      identity.workspaceId,
+      identity.userId,
       params.data.variantId,
       body.data.approvalId,
       body.data.expectedPayloadHash,
@@ -1295,12 +1336,14 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
       throw new InternalPostScheduleInputError();
     }
 
+    const identity = assertRequestPermission(request, "APPROVAL_REQUIRED");
+
     // Une seule horloge injectée est capturée pour la précondition, la preuve
     // d'autorisation et la revérification transactionnelle. Le client ne peut
     // jamais fournir l'horaire ou le fuseau de la planification.
     const actionNow = serverNow().toISOString();
     const precondition = await database.prepareInternalPostSchedule(
-      demoContext.workspaceId,
+      identity.workspaceId,
       params.data.variantId,
       body.data.approvalId,
       body.data.expectedPayloadHash,
@@ -1365,8 +1408,8 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     });
 
     const result = await database.createInternalPostSchedule(
-      demoContext.workspaceId,
-      demoContext.userId,
+      identity.workspaceId,
+      identity.userId,
       params.data.variantId,
       body.data.approvalId,
       body.data.expectedPayloadHash,
@@ -1420,15 +1463,15 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
       throw new InternalPostScheduleCancellationInputError();
     }
 
-    toolGateway.assertAuthorized({
+    const identity = assertToolAuthorized(request, {
       toolKey: "cancel_internal_post_schedule",
       moduleKey: "CALENDAR",
       permission: "WRITE",
     });
 
     const result = await database.cancelInternalPostSchedule(
-      demoContext.workspaceId,
-      demoContext.userId,
+      identity.workspaceId,
+      identity.userId,
       params.data.scheduleId,
       serverNow().toISOString(),
     );
@@ -1458,22 +1501,65 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     database: "ready",
   }));
 
-  app.get("/v1/me", async () => ({
-    data: {
-      id: demoContext.userId,
-      email: "aless@ida.local",
-      displayName: "Aless",
-      timezone: demoWorkspace.timezone,
-      workspace: {
-        ...demoWorkspace,
-        role: demoContext.membershipRole,
+  app.get("/v1/me", async (request) => {
+    const identity = getRequestIdentityContext(request);
+    const profile = await database.getRequestIdentityProfile(identity.userId, identity.workspaceId);
+
+    // Le profil et le contexte doivent désigner exactement la même relation
+    // user/workspace. En cas de dérive, répondre comme pour une session non
+    // authentifiée évite de révéler quel maillon a disparu ou changé.
+    if (
+      profile === null ||
+      profile.userId !== identity.userId ||
+      profile.workspaceId !== identity.workspaceId ||
+      profile.userStatus !== identity.userStatus ||
+      profile.membershipRole !== identity.membership.role ||
+      profile.membershipStatus !== identity.membership.status
+    ) {
+      throw new LocalDemoAuthenticationError();
+    }
+
+    const permissionNow = serverNow();
+    const effectivePermissions = (
+      ["READ", "WRITE", "APPROVAL_REQUIRED", "PUBLISH", "SYSTEM"] as const satisfies readonly PermissionLevel[]
+    ).filter(
+      (permission) =>
+        identityPolicy.evaluate({
+          context: identity,
+          permission,
+          now: permissionNow,
+        }).allowed,
+    );
+
+    return {
+      data: {
+        id: identity.userId,
+        email: profile.email,
+        displayName: profile.displayName,
+        timezone: profile.userTimezone,
+        workspace: {
+          id: identity.workspaceId,
+          name: profile.workspaceName,
+          timezone: profile.workspaceTimezone,
+          locale: profile.workspaceLocale,
+          role: identity.membership.role,
+        },
+        client: {
+          id: identity.clientInstance.id,
+          kind: identity.clientInstance.kind,
+          platform: identity.clientInstance.platform,
+          accessLevel: identity.clientGrant.accessLevel,
+        },
+        authorization: {
+          effectivePermissions,
+        },
+        authentication: {
+          mode: demoContext.mode,
+          message: "Contexte local de démonstration ; aucune authentification réelle n’est active.",
+        },
       },
-      authentication: {
-        mode: demoContext.mode,
-        message: "Contexte local de démonstration ; aucune authentification réelle n’est active.",
-      },
-    },
-  }));
+    };
+  });
 
   app.get("/v1/modules", async () => ({ data: modules.list() }));
 
@@ -1487,6 +1573,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   app.get("/v1/system/status", async () => ({ data: core.getSystemStatus() }));
 
   app.get("/v1/dashboard/summary", async (request) => {
+    const identity = getRequestIdentityContext(request);
     const query = dashboardSummaryQuerySchema.safeParse(request.query);
 
     if (!query.success) {
@@ -1495,7 +1582,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
 
     // La date de référence est calculée côté serveur dans le fuseau du
     // workspace ; le client ne peut ni forcer un scope, ni déplacer la date.
-    const timezone = await database.getWorkspaceTimezone(demoContext.workspaceId);
+    const timezone = await database.getWorkspaceTimezone(identity.workspaceId);
 
     if (!timezone) {
       throw new DashboardSummaryQueryInputError();
@@ -1503,7 +1590,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
 
     const now = serverNow();
     const dayRange = getWorkspaceDayRange(now, timezone);
-    const counts = await database.getCommandCenterSummary(demoContext.workspaceId, dayRange.workspaceDate);
+    const counts = await database.getCommandCenterSummary(identity.workspaceId, dayRange.workspaceDate);
 
     return dashboardSummaryResponseSchema.parse({
       data: {
@@ -1516,6 +1603,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   });
 
   app.get("/v1/activity-logs", async (request) => {
+    const identity = getRequestIdentityContext(request);
     const query = activityLogListQuerySchema.safeParse(request.query);
 
     if (!query.success) {
@@ -1524,7 +1612,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
 
     // La requête ne peut ni choisir un workspace, ni demander le JSON payload
     // d'audit. Le curseur est un tuple opaque validé avant toute requête SQL.
-    const page = await database.listActivityLogs(demoContext.workspaceId, {
+    const page = await database.listActivityLogs(identity.workspaceId, {
       limit: query.data.limit,
       ...(query.data.cursor ? { cursor: decodeActivityLogCursor(query.data.cursor) } : {}),
     });
@@ -1537,8 +1625,9 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     });
   });
 
-  app.get("/v1/artist-profile", async (_request, reply) => {
-    const profile = await database.getArtistProfile(demoContext.workspaceId);
+  app.get("/v1/artist-profile", async (request, reply) => {
+    const identity = getRequestIdentityContext(request);
+    const profile = await database.getArtistProfile(identity.workspaceId);
 
     if (!profile) {
       return reply
@@ -1547,7 +1636,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     }
 
     return {
-      data: toArtistProfileResponse(profile),
+      data: toArtistProfileResponse(profile, identity.workspaceId),
     };
   });
 
@@ -1558,7 +1647,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
       throw new ArtistProfileInputError();
     }
 
-    toolGateway.assertAuthorized({
+    const identity = assertToolAuthorized(request, {
       toolKey: "update_artist_profile",
       moduleKey: "MEMORY",
       permission: "WRITE",
@@ -1566,7 +1655,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
 
     // Le workspace est imposé par le contexte serveur local ; le client ne peut
     // ni choisir un autre workspace, ni déplacer le profil vers un projet tiers.
-    const profile = await database.updateArtistProfile(demoContext.workspaceId, update.data);
+    const profile = await database.updateArtistProfile(identity.workspaceId, update.data);
 
     if (!profile) {
       return reply
@@ -1574,14 +1663,15 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
         .send({ error: { code: "ARTIST_PROFILE_NOT_FOUND", message: "Profil artistique introuvable." } });
     }
 
-    return { data: toArtistProfileResponse(profile) };
+    return { data: toArtistProfileResponse(profile, identity.workspaceId) };
   });
 
-  app.get("/v1/releases", async () => {
-    const releases = await database.listReleases(demoContext.workspaceId);
+  app.get("/v1/releases", async (request) => {
+    const identity = getRequestIdentityContext(request);
+    const releases = await database.listReleases(identity.workspaceId);
 
     return {
-      data: releases.map(toReleaseResponse),
+      data: releases.map((release) => toReleaseResponse(release, identity.workspaceId)),
     };
   });
 
@@ -1592,7 +1682,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
       throw new ReleaseInputError();
     }
 
-    toolGateway.assertAuthorized({
+    const identity = assertToolAuthorized(request, {
       toolKey: "create_release",
       moduleKey: "MUSIC",
       permission: "WRITE",
@@ -1601,7 +1691,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     // Scope, projet, acteur, identifiant, timestamps et relations restent
     // imposés par le serveur. Cette écriture ne relie encore aucun track ou
     // média et ne crée aucun appel externe.
-    const release = await database.createRelease(demoContext.workspaceId, demoContext.userId, input.data);
+    const release = await database.createRelease(identity.workspaceId, identity.userId, input.data);
 
     if (!release) {
       return reply.status(404).send({
@@ -1609,13 +1699,14 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
       });
     }
 
-    return reply.status(201).send({ data: toReleaseResponse(release) });
+    return reply.status(201).send({ data: toReleaseResponse(release, identity.workspaceId) });
   });
 
-  app.get("/v1/campaigns", async () => {
-    const campaigns = await database.listCampaigns(demoContext.workspaceId);
+  app.get("/v1/campaigns", async (request) => {
+    const identity = getRequestIdentityContext(request);
+    const campaigns = await database.listCampaigns(identity.workspaceId);
 
-    return { data: campaigns.map(toCampaignResponse) };
+    return { data: campaigns.map((campaign) => toCampaignResponse(campaign, identity.workspaceId)) };
   });
 
   app.post("/v1/campaigns", async (request, reply) => {
@@ -1625,7 +1716,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
       throw new CampaignInputError();
     }
 
-    toolGateway.assertAuthorized({
+    const identity = assertToolAuthorized(request, {
       toolKey: "create_campaign",
       moduleKey: "CAMPAIGNS",
       permission: "WRITE",
@@ -1634,7 +1725,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     // Cette route n'enregistre qu'un brief interne DRAFT. Scope, projet,
     // acteur, identifiant et état sont toujours dérivés côté serveur ; aucun
     // contenu, calendrier, compte social ou action externe n'est touché.
-    const result = await database.createCampaign(demoContext.workspaceId, demoContext.userId, input.data);
+    const result = await database.createCampaign(identity.workspaceId, identity.userId, input.data);
 
     if (result.kind === "project-not-found") {
       return reply.status(404).send({
@@ -1648,7 +1739,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
       });
     }
 
-    return reply.status(201).send({ data: toCampaignResponse(result.campaign) });
+    return reply.status(201).send({ data: toCampaignResponse(result.campaign, identity.workspaceId) });
   });
 
   app.patch("/v1/campaigns/:campaignId/release", async (request, reply) => {
@@ -1659,7 +1750,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
       throw new CampaignReleaseLinkInputError();
     }
 
-    toolGateway.assertAuthorized({
+    const identity = assertToolAuthorized(request, {
       toolKey: "link_campaign_release",
       moduleKey: "CAMPAIGNS",
       permission: "WRITE",
@@ -1669,8 +1760,8 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     // le même projet artistique. Cette mutation ne planifie, ne publie et ne
     // relie aucun contenu ou compte social.
     const result = await database.linkCampaignRelease(
-      demoContext.workspaceId,
-      demoContext.userId,
+      identity.workspaceId,
+      identity.userId,
       params.data.campaignId,
       input.data,
     );
@@ -1696,7 +1787,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
       });
     }
 
-    return { data: toCampaignResponse(result.campaign) };
+    return { data: toCampaignResponse(result.campaign, identity.workspaceId) };
   });
 
   app.patch("/v1/campaigns/:campaignId/track", async (request, reply) => {
@@ -1707,7 +1798,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
       throw new CampaignTrackLinkInputError();
     }
 
-    toolGateway.assertAuthorized({
+    const identity = assertToolAuthorized(request, {
       toolKey: "link_campaign_track",
       moduleKey: "CAMPAIGNS",
       permission: "WRITE",
@@ -1717,8 +1808,8 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     // morceau est résolu dans le même workspace et projet de la campagne. Il
     // ne crée ni contenu, ni planification, ni action sociale ou externe.
     const result = await database.linkCampaignTrack(
-      demoContext.workspaceId,
-      demoContext.userId,
+      identity.workspaceId,
+      identity.userId,
       params.data.campaignId,
       input.data,
     );
@@ -1744,14 +1835,15 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
       });
     }
 
-    return { data: toCampaignResponse(result.campaign) };
+    return { data: toCampaignResponse(result.campaign, identity.workspaceId) };
   });
 
-  app.get("/v1/tracks", async () => {
-    const tracks = await database.listTracks(demoContext.workspaceId);
+  app.get("/v1/tracks", async (request) => {
+    const identity = getRequestIdentityContext(request);
+    const tracks = await database.listTracks(identity.workspaceId);
 
     return {
-      data: tracks.map(toTrackResponse),
+      data: tracks.map((track) => toTrackResponse(track, identity.workspaceId)),
     };
   });
 
@@ -1762,7 +1854,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
       throw new TrackInputError();
     }
 
-    toolGateway.assertAuthorized({
+    const identity = assertToolAuthorized(request, {
       toolKey: "create_track",
       moduleKey: "MUSIC",
       permission: "WRITE",
@@ -1771,7 +1863,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     // Le client ne transmet aucun scope : workspace, projet et acteur sont
     // résolus par le contexte serveur local. Une release optionnelle est
     // vérifiée dans ce même scope avant l'écriture, sans relation implicite.
-    const result = await database.createTrack(demoContext.workspaceId, demoContext.userId, input.data);
+    const result = await database.createTrack(identity.workspaceId, identity.userId, input.data);
 
     if (result.kind === "project-not-found") {
       return reply.status(404).send({
@@ -1785,10 +1877,11 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
       });
     }
 
-    return reply.status(201).send({ data: toTrackResponse(result.track) });
+    return reply.status(201).send({ data: toTrackResponse(result.track, identity.workspaceId) });
   });
 
   app.get("/v1/media", async (request) => {
+    const identity = getRequestIdentityContext(request);
     const rawQuery = isRecord(request.query) ? request.query : {};
     // Ne lire que les clés de filtre reconnues. Un workspace transmis par le
     // client est donc volontairement ignoré : le scope vient du contexte
@@ -1807,22 +1900,23 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
       throw new MediaListQueryInputError();
     }
 
-    const media = await database.listMedia(demoContext.workspaceId, query.data);
+    const media = await database.listMedia(identity.workspaceId, query.data);
 
     return {
-      data: media.map(toMediaAssetResponse),
+      data: media.map((asset) => toMediaAssetResponse(asset, identity.workspaceId)),
     };
   });
 
   app.get("/v1/media/:mediaId/preview", async (request, reply) => {
+    const identity = getRequestIdentityContext(request);
     const params = mediaPreviewParamsSchema.safeParse(request.params);
 
     if (!params.success) {
       throw new MediaPreviewParamsInputError();
     }
 
-    const media = await database.findPrivateMediaFile(demoContext.workspaceId, params.data.mediaId);
-    const buffer = media ? await readPrivateMediaPreview(storageDir, demoContext.workspaceId, media) : undefined;
+    const media = await database.findPrivateMediaFile(identity.workspaceId, params.data.mediaId);
+    const buffer = media ? await readPrivateMediaPreview(storageDir, identity.workspaceId, media) : undefined;
 
     // Même réponse pour une ressource inexistante, hors workspace, non
     // prévisualisable ou manquante du stockage. Aucun détail de stockage n'est
@@ -1861,13 +1955,14 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   });
 
   app.get("/v1/content/rotation", async (request) => {
+    const identity = getRequestIdentityContext(request);
     const query = contentRotationQuerySchema.safeParse(request.query);
 
     if (!query.success) {
       throw new ContentRotationQueryInputError();
     }
 
-    const candidates = await database.listContentRotationCandidates(demoContext.workspaceId, query.data.limit ?? 12);
+    const candidates = await database.listContentRotationCandidates(identity.workspaceId, query.data.limit ?? 12);
 
     return contentRotationResponseSchema.parse({
       data: {
@@ -1877,6 +1972,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   });
 
   app.post("/v1/media", async (request, reply) => {
+    const identity = assertRequestPermission(request, "WRITE");
     const input = await parseMediaImport(request);
 
     toolGateway.assertAuthorized({
@@ -1889,16 +1985,16 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
 
     // Le hash est vérifié avant tout accès au stockage afin qu'un doublon
     // exact n'ajoute ni second enregistrement, ni second fichier privé.
-    if (await database.hasMediaWithHash(demoContext.workspaceId, sha256)) {
+    if (await database.hasMediaWithHash(identity.workspaceId, sha256)) {
       return reply.status(409).send({
         error: { code: "DUPLICATE_MEDIA", message: "Ce fichier est déjà présent dans la bibliothèque." },
       });
     }
 
-    const stored = await writePrivateMedia(storageDir, demoContext.workspaceId, sha256, input.extension, input.buffer);
+    const stored = await writePrivateMedia(storageDir, identity.workspaceId, sha256, input.extension, input.buffer);
 
     try {
-      const result = await database.createMedia(demoContext.workspaceId, demoContext.userId, input, {
+      const result = await database.createMedia(identity.workspaceId, identity.userId, input, {
         filename: input.filename,
         mediaType: input.mediaType,
         mimeType: input.mimeType,
@@ -1935,17 +2031,18 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
         });
       }
 
-      return reply.status(201).send({ data: toMediaAssetResponse(result.asset) });
+      return reply.status(201).send({ data: toMediaAssetResponse(result.asset, identity.workspaceId) });
     } catch (error) {
       await removePrivateMedia(stored.filePath).catch(() => undefined);
       throw error;
     }
   });
 
-  app.get("/v1/memories", async () => {
-    const memories = await database.listMemories(demoContext.workspaceId);
+  app.get("/v1/memories", async (request) => {
+    const identity = getRequestIdentityContext(request);
+    const memories = await database.listMemories(identity.workspaceId);
 
-    return { data: memories.map(toMemoryResponse) };
+    return { data: memories.map((memory) => toMemoryResponse(memory, identity.workspaceId)) };
   });
 
   app.post("/v1/memories/proposals", async (request, reply) => {
@@ -1955,7 +2052,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
       throw new MemoryProposalInputError();
     }
 
-    toolGateway.assertAuthorized({
+    const identity = assertToolAuthorized(request, {
       toolKey: "propose_preference_memory",
       moduleKey: "MEMORY",
       permission: "WRITE",
@@ -1963,36 +2060,38 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
 
     // Le client ne peut proposer que le texte. La catégorie, l'état PENDING,
     // le workspace, l'acteur et l'identifiant sont toujours imposés ici.
-    const memory = await database.createMemoryProposal(demoContext.workspaceId, demoContext.userId, input.data);
+    const memory = await database.createMemoryProposal(identity.workspaceId, identity.userId, input.data);
 
-    return reply.status(201).send({ data: toMemoryResponse(memory) });
+    return reply.status(201).send({ data: toMemoryResponse(memory, identity.workspaceId) });
   });
 
   app.post("/v1/memories/:memoryId/confirm", async (request, reply) => decideMemory(request, reply, "CONFIRMED"));
 
   app.post("/v1/memories/:memoryId/reject", async (request, reply) => decideMemory(request, reply, "REJECTED"));
 
-  app.get("/v1/approvals/queue", async () => {
-    const approvals = await database.listApprovalQueue(demoContext.workspaceId);
+  app.get("/v1/approvals/queue", async (request) => {
+    const identity = getRequestIdentityContext(request);
+    const approvals = await database.listApprovalQueue(identity.workspaceId);
 
     return { data: approvals.map(toApprovalQueueItemResponse) };
   });
 
   app.get("/v1/calendar", async (request) => {
+    const identity = getRequestIdentityContext(request);
     const query = calendarQuerySchema.safeParse(request.query);
 
     if (!query.success) {
       throw new CalendarQueryInputError();
     }
 
-    const timezone = await database.getWorkspaceTimezone(demoContext.workspaceId);
+    const timezone = await database.getWorkspaceTimezone(identity.workspaceId);
 
     if (!timezone) {
       throw new CalendarQueryInputError();
     }
 
     const range = resolveCalendarRange(query.data, serverNow(), timezone);
-    const items = await database.listCalendarItems(demoContext.workspaceId, range.from, range.to);
+    const items = await database.listCalendarItems(identity.workspaceId, range.from, range.to);
 
     return calendarResponseSchema.parse({
       data: {
@@ -2018,10 +2117,11 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     cancelInternalPostSchedule(request, reply),
   );
 
-  app.get("/v1/tasks", async () => {
-    const tasks = await database.listTasks(demoContext.workspaceId);
+  app.get("/v1/tasks", async (request) => {
+    const identity = getRequestIdentityContext(request);
+    const tasks = await database.listTasks(identity.workspaceId);
 
-    return { data: tasks.map(toTaskResponse) };
+    return { data: tasks.map((task) => toTaskResponse(task, identity.workspaceId)) };
   });
 
   app.post("/v1/tasks", async (request, reply) => {
@@ -2031,7 +2131,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
       throw new TaskInputError();
     }
 
-    toolGateway.assertAuthorized({
+    const identity = assertToolAuthorized(request, {
       toolKey: "create_task",
       moduleKey: "TASKS",
       permission: "WRITE",
@@ -2039,9 +2139,9 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
 
     // Le serveur impose l'ID, le workspace, l'acteur et TODO : le client ne
     // peut pas créer une tâche déjà finalisée ou dans un autre périmètre.
-    const task = await database.createTask(demoContext.workspaceId, demoContext.userId, input.data);
+    const task = await database.createTask(identity.workspaceId, identity.userId, input.data);
 
-    return reply.status(201).send({ data: toTaskResponse(task) });
+    return reply.status(201).send({ data: toTaskResponse(task, identity.workspaceId) });
   });
 
   app.post("/v1/tasks/:taskId/complete", async (request, reply) => completeTask(request, reply));
@@ -2069,6 +2169,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   });
 
   app.get("/v1/ida/command-runs", async (request) => {
+    const identity = getRequestIdentityContext(request);
     const query = idaCommandRunListQuerySchema.safeParse(request.query);
 
     if (!query.success) {
@@ -2078,7 +2179,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     // L'historique ne peut pas sélectionner un workspace ou un acteur, ni
     // demander le résultat complet d'un outil. Le curseur est validé avant
     // la requête.
-    const page = await database.listCommandRuns(demoContext.workspaceId, demoContext.userId, {
+    const page = await database.listCommandRuns(identity.workspaceId, identity.userId, {
       limit: query.data.limit,
       ...(query.data.cursor ? { cursor: decodeCommandRunHistoryCursor(query.data.cursor) } : {}),
     });
@@ -2091,7 +2192,9 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     });
   });
 
-  app.post("/v1/ida/commands", async (request) => ({ data: await core.execute(request.body) }));
+  app.post("/v1/ida/commands", async (request) => ({
+    data: await core.execute(getRequestIdentityContext(request), request.body),
+  }));
 
   return app;
 }

@@ -6,14 +6,14 @@ import {
   idaCommandInputSchema,
   idaCommandSchema,
   type PermissionLevel,
+  type RequestIdentityContext,
   type SystemStatus,
   systemStatusSchema,
 } from "@ida/contracts";
-import { ToolGateway } from "@ida/domain";
+import { IdentityAccessPolicy, ToolGateway } from "@ida/domain";
 
 import { toContentRotationCandidateResponse } from "./content-rotation.js";
 import type { DemoDatabase, TodayItem } from "./database.js";
-import { demoContext } from "./demo-context.js";
 import { getWorkspaceDayRange } from "./workspace-time.js";
 
 export class CommandInputError extends Error {
@@ -177,6 +177,7 @@ function getMessageFromBody(body: unknown): string {
 
 export class DeterministicIdaCore {
   private readonly gateway: ToolGateway;
+  private readonly identityPolicy = new IdentityAccessPolicy();
 
   constructor(
     private readonly database: DemoDatabase,
@@ -186,7 +187,21 @@ export class DeterministicIdaCore {
     this.gateway = gateway;
   }
 
-  private async complete(command: IdaCommand, completion: CommandCompletion): Promise<CommandResponse> {
+  private assertAuthorized(
+    identity: RequestIdentityContext,
+    tool: { key: string; moduleKey: CommandToolUse["moduleKey"]; permission: PermissionLevel },
+    now: Date,
+  ): void {
+    this.identityPolicy.assertAuthorized({ context: identity, permission: tool.permission, now });
+    this.gateway.assertAuthorized({ toolKey: tool.key, moduleKey: tool.moduleKey, permission: tool.permission });
+  }
+
+  private async complete(
+    identity: RequestIdentityContext,
+    authorizationNow: Date,
+    command: IdaCommand,
+    completion: CommandCompletion,
+  ): Promise<CommandResponse> {
     const response: CommandResponse = {
       command,
       commandRunId: command.id,
@@ -194,32 +209,39 @@ export class DeterministicIdaCore {
       ...completion,
     };
 
-    // Une commande réussie reste consultable pour le même acteur du même
-    // workspace après un rechargement. Le registre retient seulement la paire
-    // user/IDA, jamais le résultat détaillé des outils ni une mémoire durable.
-    this.gateway.assertAuthorized({
-      toolKey: "persist_command_history",
-      moduleKey: "IDA",
+    // L'historique est un effet WRITE distinct de la commande READ. Il reste
+    // consultable après rechargement lorsque le contexte autorise cette
+    // écriture, mais ne transforme jamais une simple lecture en refus pour une
+    // instance VIEW_ONLY.
+    const historyPermission = this.identityPolicy.evaluate({
+      context: identity,
       permission: "WRITE",
+      now: authorizationNow,
     });
-    await this.database.createCommandRun(demoContext.workspaceId, demoContext.userId, {
-      id: command.id,
-      intent: command.intent,
-      state: command.state,
-      requestedPermission: command.requestedPermission,
-      message: command.message,
-      responseMessage: response.message,
-      createdAt: command.createdAt,
-    });
+
+    if (historyPermission.allowed) {
+      this.gateway.assertAuthorized({
+        toolKey: "persist_command_history",
+        moduleKey: "IDA",
+        permission: "WRITE",
+      });
+      await this.database.createCommandRun(identity.workspaceId, identity.userId, {
+        id: command.id,
+        intent: command.intent,
+        state: command.state,
+        requestedPermission: command.requestedPermission,
+        message: command.message,
+        responseMessage: response.message,
+        createdAt: command.createdAt,
+      });
+    }
 
     return response;
   }
 
-  async execute(body: unknown): Promise<CommandResponse> {
-    // Le workspace du client est délibérément ignoré : l'auth réelle remplacera
-    // ce contexte local sans laisser le client choisir un autre périmètre.
+  async execute(identity: RequestIdentityContext, body: unknown): Promise<CommandResponse> {
     const input = idaCommandInputSchema.safeParse({
-      workspaceId: demoContext.workspaceId,
+      workspaceId: identity.workspaceId,
       message: getMessageFromBody(body),
     });
 
@@ -244,18 +266,18 @@ export class DeterministicIdaCore {
       case "TODAY":
       case "TOMORROW": {
         const tool: CommandToolUse = { key: "get_today", moduleKey: "TASKS", permission: "READ" };
-        this.gateway.assertAuthorized({ toolKey: tool.key, moduleKey: tool.moduleKey, permission: tool.permission });
-        const timezone = await this.database.getWorkspaceTimezone(demoContext.workspaceId);
+        this.assertAuthorized(identity, tool, commandNow);
+        const timezone = await this.database.getWorkspaceTimezone(identity.workspaceId);
 
         if (!timezone) {
           throw new Error("Le fuseau du workspace est introuvable.");
         }
 
         const dayRange = getWorkspaceDayRange(commandNow, timezone, classified.dayOffset ?? 0);
-        const items = await this.database.listToday(demoContext.workspaceId, dayRange.from, dayRange.to);
+        const items = await this.database.listToday(identity.workspaceId, dayRange.from, dayRange.to);
         const dayLabel = classified.kind === "TODAY" ? "Aujourd’hui" : "Demain";
 
-        return this.complete(command, {
+        return this.complete(identity, commandNow, command, {
           kind: classified.kind,
           message:
             items.length === 0
@@ -271,12 +293,12 @@ export class DeterministicIdaCore {
           moduleKey: "CONTENT",
           permission: "READ",
         };
-        this.gateway.assertAuthorized({ toolKey: tool.key, moduleKey: tool.moduleKey, permission: tool.permission });
-        const items = (await this.database.listContentRotationCandidates(demoContext.workspaceId, 12)).map(
+        this.assertAuthorized(identity, tool, commandNow);
+        const items = (await this.database.listContentRotationCandidates(identity.workspaceId, 12)).map(
           toContentRotationCandidateResponse,
         );
 
-        return this.complete(command, {
+        return this.complete(identity, commandNow, command, {
           kind: classified.kind,
           message:
             items.length === 0
@@ -288,10 +310,10 @@ export class DeterministicIdaCore {
       }
       case "SYSTEM": {
         const tool: CommandToolUse = { key: "get_system_status", moduleKey: "SYSTEM", permission: "READ" };
-        this.gateway.assertAuthorized({ toolKey: tool.key, moduleKey: tool.moduleKey, permission: tool.permission });
+        this.assertAuthorized(identity, tool, commandNow);
         const system = currentSystemStatus(timestamp);
 
-        return this.complete(command, {
+        return this.complete(identity, commandNow, command, {
           kind: classified.kind,
           message: systemMessage(classified.socialPlatform),
           tools: [tool],
@@ -300,9 +322,9 @@ export class DeterministicIdaCore {
       }
       case "HELP": {
         const tool: CommandToolUse = { key: "describe_supported_commands", moduleKey: "IDA", permission: "READ" };
-        this.gateway.assertAuthorized({ toolKey: tool.key, moduleKey: tool.moduleKey, permission: tool.permission });
+        this.assertAuthorized(identity, tool, commandNow);
 
-        return this.complete(command, {
+        return this.complete(identity, commandNow, command, {
           kind: classified.kind,
           message:
             "Je peux actuellement résumer aujourd’hui ou demain, lister les médias réellement disponibles à proposer et expliquer l’état du système. Essaie : « Qu’est-ce que j’ai aujourd’hui ? »",

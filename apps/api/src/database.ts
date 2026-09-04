@@ -22,7 +22,14 @@ import type {
   TaskCreate,
   TrackCreate,
 } from "@ida/contracts";
-import { activityLogActionValues, activityLogEntityTypeValues, requestIdentityContextSchema } from "@ida/contracts";
+import {
+  activityLogActionValues,
+  activityLogEntityTypeValues,
+  identityUserStatusSchema,
+  membershipRoleSchema,
+  membershipStatusSchema,
+  requestIdentityContextSchema,
+} from "@ida/contracts";
 
 import { demoContext, demoIdentity, demoWorkspace } from "./demo-context.js";
 
@@ -40,6 +47,20 @@ const visibleActivityEntityTypesSql = activityLogEntityTypeValues.map((entityTyp
 export type DemoDatabaseOptions = {
   dataDir?: string;
   seed?: boolean;
+};
+
+export type RequestIdentityProfile = {
+  userId: string;
+  email: string;
+  displayName: string;
+  userTimezone: string;
+  userStatus: RequestIdentityContext["userStatus"];
+  workspaceId: string;
+  workspaceName: string;
+  workspaceTimezone: string;
+  workspaceLocale: string;
+  membershipRole: RequestIdentityContext["membership"]["role"];
+  membershipStatus: RequestIdentityContext["membership"]["status"];
 };
 
 export type ArtistProfile = {
@@ -973,6 +994,54 @@ export class DemoDatabase {
         expiresAt: asTimestamp(row.expiresAt),
       },
     });
+  }
+
+  async getRequestIdentityProfile(userId: string, workspaceId: string): Promise<RequestIdentityProfile | null> {
+    const result = await this.pglite.query<ScalarRow>(
+      `
+        SELECT
+          ida_user.id AS "userId",
+          ida_user.email,
+          ida_user.display_name AS "displayName",
+          ida_user.timezone AS "userTimezone",
+          ida_user.status AS "userStatus",
+          workspace.id AS "workspaceId",
+          workspace.name AS "workspaceName",
+          workspace.timezone AS "workspaceTimezone",
+          workspace.locale AS "workspaceLocale",
+          membership.role AS "membershipRole",
+          membership.status AS "membershipStatus"
+        FROM users ida_user
+        INNER JOIN memberships membership
+          ON membership.user_id = ida_user.id
+          AND membership.workspace_id = $2
+        INNER JOIN workspaces workspace
+          ON workspace.id = membership.workspace_id
+        WHERE ida_user.id = $1
+          AND workspace.id = $2
+        LIMIT 1
+      `,
+      [userId, workspaceId],
+    );
+    const row = result.rows[0];
+
+    if (!row) {
+      return null;
+    }
+
+    return {
+      userId: asString(row.userId),
+      email: asString(row.email),
+      displayName: asString(row.displayName),
+      userTimezone: asString(row.userTimezone),
+      userStatus: identityUserStatusSchema.parse(row.userStatus),
+      workspaceId: asString(row.workspaceId),
+      workspaceName: asString(row.workspaceName),
+      workspaceTimezone: asString(row.workspaceTimezone),
+      workspaceLocale: asString(row.workspaceLocale),
+      membershipRole: membershipRoleSchema.parse(row.membershipRole),
+      membershipStatus: membershipStatusSchema.parse(row.membershipStatus),
+    };
   }
 
   async getArtistProfile(workspaceId: string): Promise<ArtistProfile | null> {
