@@ -63,6 +63,8 @@ Le premier client est une application web responsive servant à la fois de hub d
 - Sur mobile : parcours resserré `HOME`, `IDA`, `CONTENT`, `CALENDAR`, `MORE`, disponible dans le navigateur Web/PWA même lorsqu'une application native iOS ou Android est installée.
 - Les écrans peuvent présenter différemment une même ressource, mais n'en créent jamais une version métier parallèle.
 
+Le client local utilise `LocalAccessGate` avant de monter le Command Center : `local-access.ts` contrôle le cycle d’accès, `api-transport.ts` invalide les requêtes privées devenues obsolètes et le serveur reste l’unique autorité. Ni erreur réseau ni `404` ne basculent implicitement vers la démo. Le premier écran est livré, mais sa recette navigateur reste à effectuer. Ce mécanisme client ne crée aucune nouvelle permission ou identité distante.
+
 ### 4.2 Applications natives futures
 
 Les futures applications Windows, macOS, iOS et Android consommeront l'API versionnée et les contrats partagés. Un client TV pourra ensuite exposer un sous-ensemble déclaré des mêmes capacités. Aucun client ne créera de base autoritaire, mémoire ou « cerveau mobile » séparé. Un cache local, si nécessaire, sera borné, révocable et revalidé avec le backend central avant toute mutation. Sur un même téléphone, le navigateur Web/PWA et l'application native sont deux instances clientes du même compte et du même Core, avec credentials et sessions distincts pouvant être révoqués séparément.

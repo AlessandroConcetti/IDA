@@ -18,7 +18,8 @@ Le premier runtime est une API Fastify locale sur `http://127.0.0.1:8787`, conso
 | Route | État actuel | Contrat actif |
 |---|---|---|
 | `GET /health` | Livrée | Santé du runtime local et disponibilité de la base locale. |
-| `GET /v1/auth/status`, `POST /v1/auth/setup`, `POST /v1/auth/unlock` | Livrées en `LOCAL_LOCK` | Bootstrap public strict du verrou local : état minimal, initialisation unique et déverrouillage. Ces routes ne sont pas enregistrées en `LOCAL_DEMO`. |
+| `GET /v1/auth/status` | Livrée dans les deux modes | État minimal explicite. `LOCAL_DEMO/UNLOCKED` exige le contexte technique valide ; bootstrap sans session uniquement en `LOCAL_LOCK`, avec contrôle Host/origine et sans prolonger l’inactivité. |
+| `POST /v1/auth/setup`, `POST /v1/auth/unlock` | Livrées en `LOCAL_LOCK` | Bootstrap public strict : initialisation unique et déverrouillage. Non enregistrées en `LOCAL_DEMO`. |
 | `POST /v1/auth/lock` | Livrée en `LOCAL_LOCK` | Révoque la session locale courante si elle existe et expire toujours son cookie ; ce nettoyage idempotent conserve les contrôles Host/origine mais n’exige pas une session encore valide. |
 | `GET /v1/me` | Livrée | Profil utilisateur/workspace relu dans le scope Identity, rôle, type de client, grant et permissions actuellement effectives ; aucun secret ni preuve de session n'est exposé. |
 | `GET /v1/modules` | Livrée | Registre des modules visibles du Command Center. |
@@ -320,6 +321,16 @@ Les clients envoient `X-Request-Id` lorsqu’ils en possèdent un. Toute mutatio
 - Les jetons OAuth sociaux, clés IA et secrets de stockage ne figurent dans aucune réponse API.
 
 Après création du credential local, son existence prime sur la configuration au démarrage : le mode effectif demeure `LOCAL_LOCK` et ne peut pas être rétrogradé silencieusement vers `LOCAL_DEMO`. `GET /v1/auth/status` contrôle l’éventuel cookie sans rafraîchir son délai d’inactivité. Toutes les réponses `/v1`, erreurs comprises, utilisent `Cache-Control: no-store`. Le cookie HTTP local est limité à `Path=/v1`; comme un cookie n’est pas isolé par port, ce profil reste impropre aux données réelles ou à toute exposition réseau.
+
+### Cycle d’accès du client local
+
+Le verrouillage vise l’instance locale fixée côté serveur, non l’identifiant contenu dans le cookie. Il ferme ainsi aussi une session déjà émise dont la réponse de rotation n’est pas encore arrivée au navigateur. Aucun identifiant d’utilisateur ou d’instance n’est accepté du client. Cette route idempotente reste volontairement appelable sans cookie, sous les contrôles Host/origine ; ce contrat ne doit pas être transposé sans revue au futur login multi-appareils.
+
+Le hub attend `GET /v1/auth/status` avant de monter ses modules. Les états sont `LOCAL_DEMO/UNLOCKED` ou `LOCAL_LOCK/{UNINITIALIZED,LOCKED,UNLOCKED}` ; une échéance `sessionExpiresAt` n’est présente et obligatoire que pour `LOCAL_LOCK/UNLOCKED`. Un `404`, une réponse invalide ou une erreur réseau ne valent jamais permission d’ouvrir la démo. En `LOCAL_DEMO`, cette route reste protégée par le contexte Identity technique.
+
+L’écran appelle les endpoints via le proxy de même origine, sans lire le cookie `HttpOnly` et sans stockage durable de passphrase. `401` métier masque le hub ; `403` métier reste un refus d’action. Les tentatives utilisateur ne sont jamais rejouées automatiquement, et `Retry-After` borne une nouvelle tentative de déverrouillage. Quitter le hub invalide les réponses métier en vol, même si leur transport termine tardivement. Cela n’annule pas une écriture déjà exécutée par le serveur.
+
+`POST /v1/auth/lock` invalide également les émissions de session encore en attente ou en cours dans le runtime local, y compris sans cookie. Après un échec de fermeture, le client masque les données et exige une nouvelle tentative explicite de verrouillage ; un polling ne peut pas rouvrir cet écran. Un setup déjà persisté reste définitif même si sa session est annulée : il faut ensuite utiliser unlock, pas réinitialiser le credential.
 
 ## Permissions
 

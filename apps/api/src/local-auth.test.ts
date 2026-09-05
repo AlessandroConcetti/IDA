@@ -55,6 +55,34 @@ describe("Verrou local propriétaire", () => {
     expect(() => assertLocalOnlyHost("192.168.1.20")).toThrow(/boucle locale/u);
   });
 
+  it.each(["ancien", "absent"])("ferme la session déjà émise même avec un cookie %s", async (cookieState) => {
+    const app = await createApp({ dataDir: "memory://", identityMode: "LOCAL_LOCK" });
+    const passphrase = "Phrase éphémère du test de réponse tardive";
+    try {
+      const setup = await app.inject({ method: "POST", url: "/v1/auth/setup", payload: { passphrase } });
+      const oldCookie = cookiePair(setup.headers["set-cookie"]);
+      const unlock = await app.inject({ method: "POST", url: "/v1/auth/unlock", payload: { passphrase } });
+      const newCookie = cookiePair(unlock.headers["set-cookie"]);
+      expect(unlock.statusCode).toBe(200);
+      // Le serveur a émis la rotation, mais le navigateur n'a pas encore reçu
+      // sa réponse : sa demande de fermeture porte encore l'ancien cookie.
+      const locking = await app.inject({
+        method: "POST",
+        url: "/v1/auth/lock",
+        headers: cookieState === "ancien" ? { cookie: oldCookie } : {},
+      });
+      expect(locking.statusCode).toBe(204);
+      expect((await app.inject({ method: "GET", url: "/v1/me", headers: { cookie: newCookie } })).statusCode).toBe(401);
+      expect(
+        (await app.inject({ method: "GET", url: "/v1/auth/status", headers: { cookie: newCookie } })).json(),
+      ).toEqual({
+        data: { mode: "LOCAL_LOCK", state: "LOCKED" },
+      });
+    } finally {
+      await app.close();
+    }
+  });
+
   it("couvre setup, unlock, rotation, rate limit, révocation, expiration et permissions", async () => {
     const dataDir = await mkdtemp(join(tmpdir(), "ida-local-lock-"));
     const storageDir = await mkdtemp(join(tmpdir(), "ida-local-lock-storage-"));

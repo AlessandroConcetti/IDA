@@ -56,15 +56,19 @@ paths:
   /v1/auth/status:
     get:
       operationId: getLocalAuthStatus
-      summary: Retourne uniquement l'état du verrou local
-      description: Route disponible seulement dans le mode LOCAL_LOCK opt-in ; elle ne retourne aucun profil ou secret.
+      summary: Retourne l'état d'accès minimal au hub local
+      description: En LOCAL_LOCK, bootstrap sans session avec contrôle Host/origine, sans prolongation d'inactivité. En LOCAL_DEMO, requiert le contexte Identity technique valide. Aucun profil ou secret n'est retourné.
       responses:
         '200':
-          description: État UNINITIALIZED, LOCKED ou UNLOCKED
+          description: Mode LOCAL_DEMO explicitement UNLOCKED ou état du verrou LOCAL_LOCK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LocalAuthStatusResponse'
+                $ref: '#/components/schemas/ClientAccessStatusResponse'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/Forbidden'
   /v1/auth/setup:
     post:
       operationId: setupLocalAuth
@@ -88,6 +92,10 @@ paths:
                 $ref: '#/components/schemas/LocalAuthStatusResponse'
         '400':
           $ref: '#/components/responses/InvalidLocalAuthRequest'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '409':
           $ref: '#/components/responses/LocalAuthAlreadyInitialized'
   /v1/auth/unlock:
@@ -115,19 +123,23 @@ paths:
           $ref: '#/components/responses/InvalidLocalAuthRequest'
         '401':
           $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '429':
           $ref: '#/components/responses/LocalAuthRateLimited'
   /v1/auth/lock:
     post:
       operationId: lockLocalAuth
       summary: Révoque immédiatement la session locale courante
-      description: Route de nettoyage locale idempotente ; elle révoque le cookie s'il est encore valide et l'efface même s'il est absent ou expiré. Les contrôles Host/origine restent actifs.
+      description: Route LOCAL_LOCK de nettoyage idempotente ; elle annule les setup/unlock en attente ou en cours et ferme les sessions de l'instance locale fixée côté serveur, même avec un cookie absent ou ancien après rotation. Elle efface le cookie. Les contrôles Host/origine restent actifs. Aucune annulation d'une action métier déjà exécutée n'est promise.
       responses:
         '204':
           description: Session révoquée et cookie expiré
           headers:
             Set-Cookie:
               schema: { type: string }
+        '403':
+          $ref: '#/components/responses/Forbidden'
   /v1/me:
     get:
       operationId: getDemoIdentity
@@ -1499,6 +1511,20 @@ components:
           minLength: 15
           maxLength: 1024
           format: password
+    ClientAccessStatusResponse:
+      oneOf:
+        - $ref: '#/components/schemas/LocalAuthStatusResponse'
+        - type: object
+          additionalProperties: false
+          required: [data]
+          properties:
+            data:
+              type: object
+              additionalProperties: false
+              required: [mode, state]
+              properties:
+                mode: { const: LOCAL_DEMO }
+                state: { const: UNLOCKED }
     LocalAuthStatusResponse:
       type: object
       additionalProperties: false
@@ -1512,6 +1538,15 @@ components:
             mode: { const: LOCAL_LOCK }
             state: { enum: [UNINITIALIZED, LOCKED, UNLOCKED] }
             sessionExpiresAt: { type: string, format: date-time }
+          allOf:
+            - if:
+                properties:
+                  state: { const: UNLOCKED }
+              then:
+                required: [sessionExpiresAt]
+              else:
+                not:
+                  required: [sessionExpiresAt]
     DemoIdentity:
       type: object
       required: [id, email, displayName, timezone, workspace, client, authorization, authentication]

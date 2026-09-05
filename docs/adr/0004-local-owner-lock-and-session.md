@@ -2,17 +2,17 @@
 
 ## Statut
 
-Décision **implémentée côté backend en mode opt-in**. `LOCAL_DEMO` reste le profil par défaut ; l’activation produit et le parcours UI de setup/unlock ne sont pas encore livrés.
+Décision **implémentée côté backend avec un premier écran en mode opt-in**. `LOCAL_DEMO` reste le profil par défaut avant initialisation ; la recette navigateur, la récupération et l’activation par défaut restent différées.
 
 ## Contexte
 
 Le runtime `LOCAL_DEMO` possède un contexte Identity persistant et des autorisations par requête, mais aucune preuve humaine : son sélecteur de session reste compilé côté serveur. Ajouter directement passkeys, e-mail, cloud et association multi-appareils créerait une surface trop large avant que la démo française et le Core local soient stabilisés.
 
-Un verrou local intermédiaire est donc utile sur le PC hôte. La tranche backend protège l’accès à l’API et prépare le futur écran de verrouillage sans prétendre être l'authentification multi-appareils finale. Elle n'autorise aucune exposition LAN ou Internet.
+Un verrou local intermédiaire est donc utile sur le PC hôte. La tranche protège l’accès à l’API et fournit le premier écran de verrouillage sans prétendre être l'authentification multi-appareils finale. Elle n'autorise aucune exposition LAN ou Internet.
 
 ## Décision
 
-Le mode `LOCAL_LOCK`, activé explicitement avec `IDA_IDENTITY_MODE=LOCAL_LOCK`, livre le parcours backend `setup → locked → unlock → lock/logout` pour un unique propriétaire local. Ses points d’entrée sont `GET /v1/auth/status`, `POST /v1/auth/setup`, `POST /v1/auth/unlock` et `POST /v1/auth/lock` :
+Le mode `LOCAL_LOCK`, activé explicitement avec `IDA_IDENTITY_MODE=LOCAL_LOCK`, livre le parcours `setup → unlocked → lock → unlock` pour un unique propriétaire local. Ses points d’entrée sont `GET /v1/auth/status`, `POST /v1/auth/setup`, `POST /v1/auth/unlock` et `POST /v1/auth/lock` :
 
 - une passphrase choisie par l'utilisateur est dérivée avec `scrypt`, un sel aléatoire propre au credential et des paramètres versionnés ; aucune passphrase brute ou réversible n'est stockée ;
 - le profil initial utilise `N=2^17`, `r=8`, `p=1`, une clé de 32 octets et une limite mémoire explicite de 256 Mio ; les paramètres sont versionnés afin de préparer une évolution contrôlée ;
@@ -28,7 +28,7 @@ Le mode `LOCAL_LOCK`, activé explicitement avec `IDA_IDENTITY_MODE=LOCAL_LOCK`,
 
 Le `Identity Session Gateway` remplace alors le sélecteur compilé, résout la session opaque et attache le même `RequestIdentityContext`. Les routes métier, l'IDA Core, les scopes et le Tool Gateway ne changent pas de modèle d'autorisation.
 
-`status`, `setup` et `unlock` sont les seules routes bootstrap sans session. `lock` est un nettoyage idempotent : sous contrôle Host/origine, il révoque une session encore valide et efface le cookie même s’il est absent, expiré ou déjà révoqué. Toutes les routes métier `/v1` exigent une session valide et repassent par la politique Identity. Le serveur refuse de démarrer sur un hôte autre que `127.0.0.1`, `localhost` ou `::1`; les mutations rejettent les origines étrangères et les requêtes signalées `cross-site`. L’interface de setup/unlock, la récupération et l’activation par défaut restent hors de cette tranche.
+`status`, `setup` et `unlock` sont les seules routes bootstrap sans session. `lock` est un nettoyage idempotent : sous contrôle Host/origine, il révoque une session encore valide et efface le cookie même s’il est absent, expiré ou déjà révoqué. Toutes les routes métier `/v1` exigent une session valide et repassent par la politique Identity. Le serveur refuse de démarrer sur un hôte autre que `127.0.0.1`, `localhost` ou `::1`; les mutations rejettent les origines étrangères et les requêtes signalées `cross-site`. Le premier écran de setup/unlock/lock est livré ; sa recette navigateur, la récupération et l’activation par défaut restent hors de cette tranche.
 
 Une fois le credential initialisé, sa présence force `LOCAL_LOCK` au démarrage. Une variable absente ou une configuration repassée à `LOCAL_DEMO` ne peut donc pas restaurer silencieusement la session technique.
 
@@ -41,15 +41,21 @@ Une fois le credential initialisé, sa présence force `LOCAL_LOCK` au démarrag
 - Le runtime reste limité à la boucle locale (`127.0.0.1`, `localhost` ou `::1`) jusqu'au jalon réseau de `SECURITY.md`.
 - Le cookie HTTP est réduit à `Path=/v1`, mais un cookie navigateur n’est pas isolé par port. Une origine dédiée ou intégrée et HTTPS restent obligatoires avant données réelles ; le profil loopback n’est pas une frontière contre un autre processus local.
 
+## Complément : cycle d’accès et révocation définitive
+
+`LocalAccessGate`, `local-access.ts` et `api-transport.ts` constituent le premier parcours client. Les tests isolent les réponses obsolètes et les fermetures incomplètes ; l’interface ne remplace jamais l’autorisation serveur. Le client exige une origine unique via le proxy local. `/v1/auth/status` est aussi disponible en démo, mais seulement avec le contexte technique valide : aucune déduction de mode à partir d’un échec HTTP.
+
+Les gardes SQL rendent la révocation des tokens définitive après désactivation puis réactivation d’un compte, appareil, membership ou grant. Un verrouillage explicite annule aussi les setup/unlock en attente ou dont l’émission de session est en cours. Un credential de setup déjà créé n’est pas effacé par cette annulation. Les autres instances du même compte conservent leurs droits propres. Voir `DATABASE.md` pour la portée conservatrice du profil mono-workspace et `SECURITY.md` pour les limites de la frontière navigateur.
+
 ## Évolution multi-appareils
 
 Les passkeys/WebAuthn restent la cible privilégiée pour les clients Web/PWA et natifs, car une authentification cryptographique liée au vérificateur peut résister au phishing. Chaque navigateur ou application conserve néanmoins sa propre `ClientInstance`, sa propre session et son grant révocable. Le verrou local ne remplace ni le Device Linking, ni le step-up lié à une action sensible.
 
-## Vérification de la tranche backend
+## Vérification du cycle d’accès
 
 Les tests automatisés livrés couvrent le setup unique, le refus d’une passphrase invalide, la temporisation des échecs, l’unlock, la rotation et le digest des sessions, les attributs du cookie, le verrouillage et la révocation, les expirations, la fixation de session, les cookies ambigus, les requêtes cross-site, l’hôte étranger, la réduction des permissions et la révocation d’une instance. Ils vérifient également que le profil local refuse une écoute hors boucle locale.
 
-Avant activation par défaut ou utilisation avec des données personnelles réelles, il reste à livrer et vérifier le parcours UI accessible, la récupération, le benchmark sur les machines cibles, la migration/rehash des paramètres, les protections de distribution desktop et une revue de sécurité proportionnelle au risque. Ce jalon ne vaut pas autorisation d’exposition réseau.
+Avant activation par défaut ou utilisation avec des données personnelles réelles, il reste à vérifier en navigateur et consolider le parcours UI accessible, la récupération, le benchmark sur les machines cibles, la migration/rehash des paramètres, les protections de distribution desktop et une revue de sécurité proportionnelle au risque. Ce jalon ne vaut pas autorisation d’exposition réseau.
 
 ## Références de sécurité
 

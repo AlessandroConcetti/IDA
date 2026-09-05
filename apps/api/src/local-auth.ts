@@ -140,6 +140,7 @@ export function digestOpaqueLocalSessionToken(token: string): string | null {
 export class LocalAuthService {
   private readonly identityPolicy = new IdentityAccessPolicy();
   private credentialQueue: Promise<void> = Promise.resolve();
+  private credentialGeneration = 0;
 
   constructor(
     private readonly database: DemoDatabase,
@@ -147,7 +148,8 @@ export class LocalAuthService {
     private readonly now: () => Date,
   ) {}
 
-  private async createSession(): Promise<LocalAuthSession | null> {
+  private async createSession(generation: number): Promise<LocalAuthSession | null> {
+    if (generation !== this.credentialGeneration) return null;
     const issuedAt = this.now();
     const expiresAt = new Date(issuedAt.getTime() + absoluteSessionLifetimeMs);
     const idleExpiresAt = new Date(issuedAt.getTime() + idleSessionLifetimeMs);
@@ -169,6 +171,10 @@ export class LocalAuthService {
       idleExpiresAt: idleExpiresAt.toISOString(),
     });
 
+    if (created && generation !== this.credentialGeneration) {
+      await this.database.revokeLocalAuthSession(tokenDigest, this.now().toISOString());
+      return null;
+    }
     return created ? { token, expiresAt: expiresAt.toISOString() } : null;
   }
 
@@ -189,10 +195,12 @@ export class LocalAuthService {
   }
 
   async setup(passphrase: string): Promise<LocalAuthSetupResult> {
-    return this.serializeCredentialOperation(() => this.setupSerialized(passphrase));
+    const generation = this.credentialGeneration;
+    return this.serializeCredentialOperation(() => this.setupSerialized(passphrase, generation));
   }
 
-  private async setupSerialized(passphrase: string): Promise<LocalAuthSetupResult> {
+  private async setupSerialized(passphrase: string, generation: number): Promise<LocalAuthSetupResult> {
+    if (generation !== this.credentialGeneration) return { kind: "denied" };
     if (await this.database.hasLocalOwnerCredential(this.account.userId)) {
       return { kind: "already-initialized" };
     }
@@ -204,15 +212,17 @@ export class LocalAuthService {
       return { kind: "already-initialized" };
     }
 
-    const session = await this.createSession();
+    const session = await this.createSession(generation);
     return session ? { kind: "created", session } : { kind: "denied" };
   }
 
   async unlock(passphrase: string): Promise<LocalAuthUnlockResult> {
-    return this.serializeCredentialOperation(() => this.unlockSerialized(passphrase));
+    const generation = this.credentialGeneration;
+    return this.serializeCredentialOperation(() => this.unlockSerialized(passphrase, generation));
   }
 
-  private async unlockSerialized(passphrase: string): Promise<LocalAuthUnlockResult> {
+  private async unlockSerialized(passphrase: string, generation: number): Promise<LocalAuthUnlockResult> {
+    if (generation !== this.credentialGeneration) return { kind: "invalid" };
     const credential = await this.database.getLocalOwnerCredential(this.account.userId);
 
     if (!credential) {
@@ -234,7 +244,7 @@ export class LocalAuthService {
       return { kind: "invalid" };
     }
 
-    const session = await this.createSession();
+    const session = await this.createSession(generation);
     return session ? { kind: "authenticated", session } : { kind: "invalid" };
   }
 
@@ -296,6 +306,19 @@ export class LocalAuthService {
     if (tokenDigest) {
       await this.database.revokeLocalAuthSession(tokenDigest, this.now().toISOString());
     }
+  }
+
+  // Une demande humaine de fermeture invalide aussi les setup/unlock déjà
+  // lancés. Une dérivation ou transaction tardive ne doit pas rouvrir le hub.
+  async explicitLock(): Promise<void> {
+    this.credentialGeneration += 1;
+    await this.serializeCredentialOperation(async () => {
+      await this.database.revokeLocalAuthSessionsForClient(
+        this.account.userId,
+        this.account.clientInstanceId,
+        this.now().toISOString(),
+      );
+    });
   }
 }
 

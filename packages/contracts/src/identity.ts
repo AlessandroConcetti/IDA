@@ -229,7 +229,16 @@ export const localAuthStatusSchema = z
     state: localAuthStateSchema,
     sessionExpiresAt: identityTimestampSchema.optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((status, context) => {
+    if ((status.state === "UNLOCKED") !== (status.sessionExpiresAt !== undefined)) {
+      context.addIssue({
+        code: "custom",
+        path: ["sessionExpiresAt"],
+        message: "Une échéance est obligatoire uniquement pour une session déverrouillée.",
+      });
+    }
+  });
 
 export type LocalAuthStatus = z.infer<typeof localAuthStatusSchema>;
 
@@ -240,3 +249,12 @@ export const localAuthStatusResponseSchema = z
   .strict();
 
 export type LocalAuthStatusResponse = z.infer<typeof localAuthStatusResponseSchema>;
+
+// Découverte explicite par le client : une erreur/404 ne vaut jamais permission
+// d'ouvrir une prévisualisation. LOCAL_DEMO doit aussi être annoncé par l'API.
+export const clientAccessStatusSchema = z.union([
+  localAuthStatusSchema,
+  z.object({ mode: z.literal("LOCAL_DEMO"), state: z.literal("UNLOCKED") }).strict(),
+]);
+
+export const clientAccessStatusResponseSchema = z.object({ data: clientAccessStatusSchema }).strict();

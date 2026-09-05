@@ -270,6 +270,8 @@ describe("Migration et frontière HTTP Identity", () => {
     try {
       database = await DemoDatabase.open({ dataDir });
       await database.pglite.exec(`
+        DROP TRIGGER memberships_revoke_local_auth ON memberships;
+        DROP TRIGGER users_revoke_local_auth ON users;
         DROP TABLE identity_security_events;
         DROP TABLE local_auth_sessions;
         DROP TABLE local_owner_credentials;
@@ -320,6 +322,7 @@ describe("Migration et frontière HTTP Identity", () => {
     try {
       const health = await app.inject({ method: "GET", url: "/health" });
       const me = await app.inject({ method: "GET", url: "/v1/me" });
+      const accessStatus = await app.inject({ method: "GET", url: "/v1/auth/status" });
       const v1RootWithQuery = await app.inject({ method: "GET", url: "/v1?probe=1" });
       const preflight = await app.inject({
         method: "OPTIONS",
@@ -333,6 +336,7 @@ describe("Migration et frontière HTTP Identity", () => {
 
       expect(health.statusCode).toBe(200);
       expect(me.statusCode).toBe(401);
+      expect(accessStatus.statusCode).toBe(401);
       expect(v1RootWithQuery.statusCode).toBe(401);
       expect(preflight.statusCode).toBe(204);
       expect(ordinaryOptions.statusCode).toBe(400);
@@ -402,6 +406,7 @@ describe("Migration et frontière HTTP Identity", () => {
 
       const context = await app.inject({ method: "GET", url: "/v1/__request-context-test" });
       const me = await app.inject({ method: "GET", url: "/v1/me" });
+      const accessStatus = await app.inject({ method: "GET", url: "/v1/auth/status" });
       const tasksBefore = await app.inject({ method: "GET", url: "/v1/tasks?workspaceId=wsp_other&userId=usr_other" });
       const createTask = await app.inject({
         method: "POST",
@@ -428,6 +433,8 @@ describe("Migration et frontière HTTP Identity", () => {
       const commandRunsAfter = await app.inject({ method: "GET", url: "/v1/ida/command-runs" });
 
       expect(context.statusCode).toBe(200);
+      expect(accessStatus.json()).toEqual({ data: { mode: "LOCAL_DEMO", state: "UNLOCKED" } });
+      expect(accessStatus.headers["set-cookie"]).toBeUndefined();
       expect(context.json()).toEqual({ data: { present: true, replacementBlocked: true, frozen: true } });
       expect(me.statusCode).toBe(200);
       expect(me.json()).toMatchObject({

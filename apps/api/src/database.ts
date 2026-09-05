@@ -1392,6 +1392,38 @@ export class DemoDatabase {
     return identity ? { identity, expiresAt: session.expiresAt } : null;
   }
 
+  async revokeLocalAuthSessionsForClient(userId: string, clientInstanceId: string, revokedAt: string): Promise<void> {
+    // Un lock explicite ferme l'instance locale fixée par le serveur, même si
+    // une réponse de rotation n'a pas encore livré son nouveau cookie au client.
+    // Cette seule instruction rend révocation et audit atomiques.
+    await this.pglite.query(
+      `
+        WITH revoked_local AS (
+          UPDATE local_auth_sessions local_session
+          SET status = 'REVOKED', revoked_at = $3
+          FROM identity_sessions identity_session
+          WHERE local_session.session_id = identity_session.id
+            AND local_session.status = 'ACTIVE'
+            AND identity_session.user_id = $1
+            AND identity_session.client_instance_id = $2
+          RETURNING local_session.session_id, identity_session.user_id, identity_session.client_instance_id
+        ), revoked_identity AS (
+          UPDATE identity_sessions identity_session
+          SET status = 'REVOKED', revoked_at = $3
+          FROM revoked_local
+          WHERE identity_session.id = revoked_local.session_id AND identity_session.status = 'ACTIVE'
+          RETURNING identity_session.id
+        )
+        INSERT INTO identity_security_events (id, user_id, client_instance_id, event_type, outcome, created_at)
+        SELECT 'ise_explicit_lock_' || session_id, user_id, client_instance_id,
+          'LOCAL_SESSION_REVOKED', 'SUCCEEDED', $3
+        FROM revoked_local
+        ON CONFLICT (id) DO NOTHING
+      `,
+      [userId, clientInstanceId, revokedAt],
+    );
+  }
+
   async revokeLocalAuthSession(tokenDigest: string, revokedAt: string): Promise<boolean> {
     return this.pglite.transaction(async (transaction) => {
       const result = await transaction.query<ScalarRow>(
@@ -5215,6 +5247,110 @@ export class DemoDatabase {
       CREATE TRIGGER media_assets_reference_scope_guard
       BEFORE INSERT OR UPDATE OF release_id, track_id, workspace_id, artist_project_id ON media_assets
       FOR EACH ROW EXECUTE FUNCTION enforce_media_asset_reference_scope();
+    `);
+
+    // La révocation ne doit pas dépendre d'une requête HTTP reçue entre une
+    // désactivation et une réactivation. Ces gardes ne ciblent que les sessions
+    // portant un token LOCAL_LOCK, jamais les sessions techniques LOCAL_DEMO.
+    await this.pglite.exec(`
+      CREATE OR REPLACE FUNCTION revoke_disallowed_local_auth_sessions()
+      RETURNS VOID AS $$
+      DECLARE
+        invalid_session RECORD;
+        revoked_time TIMESTAMPTZ := CURRENT_TIMESTAMP;
+      BEGIN
+        FOR invalid_session IN
+          SELECT session.id, session.user_id, session.client_instance_id
+          FROM identity_sessions session
+          INNER JOIN local_auth_sessions local_session ON local_session.session_id = session.id
+          INNER JOIN users ida_user ON ida_user.id = session.user_id
+          INNER JOIN client_instances client ON client.id = session.client_instance_id
+          WHERE local_session.status = 'ACTIVE'
+            AND (
+              session.status <> 'ACTIVE'
+              OR ida_user.status <> 'ACTIVE'
+              OR client.status <> 'ACTIVE'
+              OR EXISTS (
+                SELECT 1
+                FROM client_workspace_grants client_grant
+                INNER JOIN memberships membership
+                  ON membership.workspace_id = client_grant.workspace_id
+                  AND membership.user_id = client_grant.user_id
+                WHERE client_grant.client_instance_id = session.client_instance_id
+                  AND client_grant.user_id = session.user_id
+                  AND (client_grant.status <> 'ACTIVE' OR membership.status <> 'ACTIVE')
+              )
+            )
+          FOR UPDATE OF session, local_session
+        LOOP
+          UPDATE identity_sessions
+          SET status = 'REVOKED', revoked_at = revoked_time
+          WHERE id = invalid_session.id AND status = 'ACTIVE';
+          UPDATE local_auth_sessions
+          SET status = 'REVOKED', revoked_at = revoked_time
+          WHERE session_id = invalid_session.id AND status = 'ACTIVE';
+          INSERT INTO identity_security_events (
+            id, user_id, client_instance_id, event_type, outcome, created_at
+          ) VALUES (
+            'ise_policy_revoke_' || invalid_session.id,
+            invalid_session.user_id, invalid_session.client_instance_id,
+            'LOCAL_SESSION_REVOKED', 'SUCCEEDED', revoked_time
+          ) ON CONFLICT (id) DO NOTHING;
+        END LOOP;
+      END;
+      $$ LANGUAGE plpgsql;
+
+      CREATE OR REPLACE FUNCTION revoke_local_auth_after_identity_status_change()
+      RETURNS TRIGGER AS $$
+      BEGIN
+        PERFORM revoke_disallowed_local_auth_sessions();
+        RETURN NULL;
+      END;
+      $$ LANGUAGE plpgsql;
+
+      DROP TRIGGER IF EXISTS users_revoke_local_auth ON users;
+      CREATE TRIGGER users_revoke_local_auth
+      AFTER UPDATE OF status ON users
+      FOR EACH STATEMENT EXECUTE FUNCTION revoke_local_auth_after_identity_status_change();
+      DROP TRIGGER IF EXISTS clients_revoke_local_auth ON client_instances;
+      CREATE TRIGGER clients_revoke_local_auth
+      AFTER UPDATE OF status ON client_instances
+      FOR EACH STATEMENT EXECUTE FUNCTION revoke_local_auth_after_identity_status_change();
+      DROP TRIGGER IF EXISTS memberships_revoke_local_auth ON memberships;
+      CREATE TRIGGER memberships_revoke_local_auth
+      AFTER UPDATE OF status ON memberships
+      FOR EACH STATEMENT EXECUTE FUNCTION revoke_local_auth_after_identity_status_change();
+      DROP TRIGGER IF EXISTS grants_revoke_local_auth ON client_workspace_grants;
+      CREATE TRIGGER grants_revoke_local_auth
+      AFTER UPDATE OF status ON client_workspace_grants
+      FOR EACH STATEMENT EXECUTE FUNCTION revoke_local_auth_after_identity_status_change();
+
+      CREATE OR REPLACE FUNCTION prevent_local_auth_session_reactivation()
+      RETURNS TRIGGER AS $$
+      BEGIN
+        IF TG_TABLE_NAME = 'local_auth_sessions' THEN
+          RAISE EXCEPTION 'Une session locale révoquée ne peut pas être réactivée.';
+        ELSIF EXISTS (SELECT 1 FROM local_auth_sessions WHERE session_id = OLD.id) THEN
+          RAISE EXCEPTION 'Une session Identity locale révoquée ne peut pas être réactivée.';
+        END IF;
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+
+      DROP TRIGGER IF EXISTS local_auth_sessions_no_reactivation ON local_auth_sessions;
+      CREATE TRIGGER local_auth_sessions_no_reactivation
+      BEFORE UPDATE OF status ON local_auth_sessions
+      FOR EACH ROW WHEN (OLD.status = 'REVOKED' AND NEW.status = 'ACTIVE')
+      EXECUTE FUNCTION prevent_local_auth_session_reactivation();
+      DROP TRIGGER IF EXISTS identity_local_sessions_no_reactivation ON identity_sessions;
+      CREATE TRIGGER identity_local_sessions_no_reactivation
+      BEFORE UPDATE OF status ON identity_sessions
+      FOR EACH ROW WHEN (OLD.status = 'REVOKED' AND NEW.status = 'ACTIVE')
+      EXECUTE FUNCTION prevent_local_auth_session_reactivation();
+
+      -- Répare aussi une ancienne base contenant une session encore ACTIVE
+      -- alors que l'une de ses autorisations persistées est déjà inactive.
+      SELECT revoke_disallowed_local_auth_sessions();
     `);
 
     await this.migrateRequestedApprovalPayloadHashes();

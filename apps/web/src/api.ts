@@ -1,4 +1,7 @@
+import { apiBaseUrl, IdaApiError, requestApi } from "./api-transport";
 import type { ArtistBrain, MediaAsset, OperationalState, SystemService, Track } from "./data";
+
+export { apiBaseUrl, IdaApiError } from "./api-transport";
 
 export interface IdaCommandResult {
   message: string;
@@ -317,21 +320,6 @@ export interface MediaUploadInput {
   tags?: string;
 }
 
-export class IdaApiError extends Error {
-  public readonly status?: number;
-
-  public constructor(message: string, status?: number) {
-    super(message);
-    this.name = "IdaApiError";
-    this.status = status;
-  }
-}
-
-const configuredApiUrl = import.meta.env.VITE_IDA_API_URL?.trim() ?? "";
-
-// An empty base URL deliberately targets the shared API on the current origin.
-// `VITE_IDA_API_URL` is only needed when web and API use separate origins.
-export const apiBaseUrl = configuredApiUrl.replace(/\/+$/, "");
 export const isApiConfigured = true;
 
 // Cette URL pointe vers une route API autorisée, jamais vers une clé ou un
@@ -429,20 +417,6 @@ function toIdaCommandRunPage(payload: unknown): IdaCommandRunPage {
   };
 }
 
-function extractErrorMessage(payload: unknown, status: number): string {
-  if (isRecord(payload)) {
-    const data = isRecord(payload.data) ? payload.data : {};
-    const error = isRecord(payload.error) ? payload.error : {};
-    const detail = readString(payload.detail, payload.message, data.detail, data.message, error.detail, error.message);
-
-    if (detail) {
-      return detail;
-    }
-  }
-
-  return `IDA API a répondu avec le statut ${status}.`;
-}
-
 export async function submitIdaCommand(text: string): Promise<IdaCommandResult> {
   return extractResult(
     await postApiJson("/v1/ida/commands", {
@@ -464,119 +438,47 @@ export async function fetchIdaCommandRuns(input: IdaCommandRunListInput = {}): P
 }
 
 async function postApiJson(path: string, body?: unknown): Promise<unknown> {
-  if (!isApiConfigured) {
-    throw new IdaApiError("VITE_IDA_API_URL n’est pas configurée.");
-  }
-
-  let response: Response;
-
-  try {
-    response = await fetch(`${apiBaseUrl}${path}`, {
-      method: "POST",
-      headers: {
-        ...(body === undefined ? {} : { "Content-Type": "application/json" }),
-        Accept: "application/json",
-        "X-Request-Id": createRequestId(),
-      },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-  } catch {
-    throw new IdaApiError("IDA API est indisponible.");
-  }
-
-  const payload: unknown = await response.json().catch(() => null);
-
-  if (!response.ok) {
-    throw new IdaApiError(extractErrorMessage(payload, response.status), response.status);
-  }
-
-  return payload;
+  return requestApi(path, {
+    method: "POST",
+    headers: {
+      ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+      Accept: "application/json",
+      "X-Request-Id": createRequestId(),
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
 }
 
 async function postApiFormData(path: string, body: FormData): Promise<unknown> {
-  if (!isApiConfigured) {
-    throw new IdaApiError("VITE_IDA_API_URL n’est pas configurée.");
-  }
-
-  let response: Response;
-
-  try {
-    response = await fetch(`${apiBaseUrl}${path}`, {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "X-Request-Id": createRequestId(),
-      },
-      body,
-    });
-  } catch {
-    throw new IdaApiError("IDA API est indisponible.");
-  }
-
-  const payload: unknown = await response.json().catch(() => null);
-
-  if (!response.ok) {
-    throw new IdaApiError(extractErrorMessage(payload, response.status), response.status);
-  }
-
-  return payload;
+  return requestApi(path, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "X-Request-Id": createRequestId(),
+    },
+    body,
+  });
 }
 
 async function getApiJson(path: string): Promise<unknown> {
-  if (!isApiConfigured) {
-    throw new IdaApiError("VITE_IDA_API_URL n’est pas configurée.");
-  }
-
-  let response: Response;
-
-  try {
-    response = await fetch(`${apiBaseUrl}${path}`, {
-      headers: {
-        Accept: "application/json",
-        "X-Request-Id": createRequestId(),
-      },
-    });
-  } catch {
-    throw new IdaApiError("IDA API est indisponible.");
-  }
-
-  const payload: unknown = await response.json().catch(() => null);
-
-  if (!response.ok) {
-    throw new IdaApiError(extractErrorMessage(payload, response.status), response.status);
-  }
-
-  return payload;
+  return requestApi(path, {
+    headers: {
+      Accept: "application/json",
+      "X-Request-Id": createRequestId(),
+    },
+  });
 }
 
 async function patchApiJson(path: string, body: unknown): Promise<unknown> {
-  if (!isApiConfigured) {
-    throw new IdaApiError("VITE_IDA_API_URL n’est pas configurée.");
-  }
-
-  let response: Response;
-
-  try {
-    response = await fetch(`${apiBaseUrl}${path}`, {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        "X-Request-Id": createRequestId(),
-      },
-      body: JSON.stringify(body),
-    });
-  } catch {
-    throw new IdaApiError("IDA API est indisponible.");
-  }
-
-  const payload: unknown = await response.json().catch(() => null);
-
-  if (!response.ok) {
-    throw new IdaApiError(extractErrorMessage(payload, response.status), response.status);
-  }
-
-  return payload;
+  return requestApi(path, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      "X-Request-Id": createRequestId(),
+    },
+    body: JSON.stringify(body),
+  });
 }
 
 function readDataObject(payload: unknown, endpoint: string): Record<string, unknown> {

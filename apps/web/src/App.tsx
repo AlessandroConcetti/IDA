@@ -4256,7 +4256,7 @@ function SectionContent({
   }
 }
 
-function App() {
+function App({ onLock }: { onLock?: (() => void) | undefined }) {
   const [activeId, setActiveId] = useState<NavigationId>("home");
   const [messages, setMessages] = useState<ConversationMessage[]>(initialMessages);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -4457,9 +4457,13 @@ function App() {
             >
               {formatDashboardDate(dashboard.summary, dashboardSource)}
             </span>
-            <button className="profile-button" type="button" aria-label="Ouvrir le profil">
-              A
-            </button>
+            {onLock ? (
+              <button className="local-lock-button" type="button" onClick={onLock}>
+                Verrouiller IDA
+              </button>
+            ) : (
+              <span className="local-demo-label">Démo locale</span>
+            )}
           </div>
         </header>
 

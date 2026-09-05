@@ -24,6 +24,7 @@ import {
   campaignSchema,
   campaignTrackLinkParamsSchema,
   campaignTrackLinkSchema,
+  clientAccessStatusResponseSchema,
   contentRotationQuerySchema,
   contentRotationResponseSchema,
   dashboardSummaryQuerySchema,
@@ -1613,12 +1614,15 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     return { data: toInternalPostScheduleResponse(result.schedule) };
   };
 
-  if (identityMode === "LOCAL_LOCK") {
-    app.get("/v1/auth/status", async (request) => {
-      const token = readLocalSessionCookie(request.headers.cookie, secureLocalAuthCookies);
-      return localAuthStatusResponseSchema.parse({ data: await localAuth.status(token) });
-    });
+  app.get("/v1/auth/status", async (request) => {
+    if (identityMode === "LOCAL_DEMO") {
+      return clientAccessStatusResponseSchema.parse({ data: { mode: "LOCAL_DEMO", state: "UNLOCKED" } });
+    }
+    const token = readLocalSessionCookie(request.headers.cookie, secureLocalAuthCookies);
+    return localAuthStatusResponseSchema.parse({ data: await localAuth.status(token) });
+  });
 
+  if (identityMode === "LOCAL_LOCK") {
     app.post("/v1/auth/setup", async (request, reply) => {
       const input = localAuthCredentialRequestSchema.safeParse(request.body);
 
@@ -1670,12 +1674,8 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
       );
     });
 
-    app.post("/v1/auth/lock", async (request, reply) => {
-      const token = readLocalSessionCookie(request.headers.cookie, secureLocalAuthCookies);
-
-      if (token) {
-        await localAuth.lock(token);
-      }
+    app.post("/v1/auth/lock", async (_request, reply) => {
+      await localAuth.explicitLock();
 
       return reply.header("Set-Cookie", serializeClearedLocalSessionCookie(secureLocalAuthCookies)).status(204).send();
     });

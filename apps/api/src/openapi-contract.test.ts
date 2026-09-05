@@ -6,11 +6,7 @@ const openApiPath = fileURLToPath(new URL("../../../docs/openapi/phase1-local.ya
 const appSourcePath = fileURLToPath(new URL("./app.ts", import.meta.url));
 
 const httpMethods = new Set(["get", "post", "patch", "put", "delete"]);
-const publicOperationsWithoutAuthenticationFailure = new Set([
-  "GET /v1/auth/status",
-  "POST /v1/auth/setup",
-  "POST /v1/auth/lock",
-]);
+const publicOperationsWithoutAuthenticationFailure = new Set(["POST /v1/auth/lock"]);
 
 function normalizeFastifyPath(path: string): string {
   return path.replace(/:([A-Za-z][A-Za-z0-9_]*)/gu, "{$1}");

@@ -180,6 +180,16 @@ Les payloads bruts d’analytics doivent être minimisés, retenus selon une pol
 
 La présence d’une ligne `local_owner_credentials` force le mode effectif `LOCAL_LOCK` au démarrage ; elle ne peut pas être ignorée par une configuration `LOCAL_DEMO`. La résolution passive utilisée par l’état du verrou vérifie les échéances sans mettre à jour `last_seen_at` ni `idle_expires_at`.
 
+### Révocation locale définitive
+
+`revokeLocalAuthSessionsForClient` traite le verrouillage explicite de l’instance locale fixée côté serveur. Une instruction SQL commune révoque ses sessions locales et Identity avec audit idempotent ; les sessions techniques et les autres instances restent intactes. Le cookie peut être absent ou obsolète : la cible ne dépend pas de la réception de la dernière réponse d’unlock.
+
+Les triggers de changement de statut sur `users`, `client_instances`, `memberships` et `client_workspace_grants` révoquent transactionnellement les sessions `LOCAL_LOCK` dont l’autorisation devient inactive, avec un événement `LOCAL_SESSION_REVOKED` idempotent par session. Ils ne révoquent pas les sessions techniques `LOCAL_DEMO`. Une annulation de transaction annule aussi la révocation et l’événement. La migration répare les sessions historiques encore actives sous une autorisation inactive.
+
+Des gardes `BEFORE UPDATE` interdisent `REVOKED → ACTIVE` dans `local_auth_sessions` et dans ses `identity_sessions` associées. Réactiver un appareil ou grant exige donc un nouveau token. Les autres instances autorisées, y compris celles du même propriétaire, conservent leur propre session et leurs droits restreints.
+
+Limite volontaire du profil mono-workspace : la session locale ne porte pas de `workspace_id` propre. Un grant ou une membership inactive révoque donc conservativement les sessions locales de l’instance/utilisateur associés, même si un autre grant reste actif. Avant le login multi-workspaces, définir explicitement la portée de session ; ne pas alléger ces gardes sans tests d’isolation. Les migrations/accès SQL privilégiés ne sont pas une interface de gestion d’appareil et ne remplacent pas les futurs endpoints contrôlés.
+
 ## Relations, contraintes et index indispensables
 
 - `workspaces 1:n memberships`, `users 1:n memberships`; une seule adhésion par utilisateur et workspace.

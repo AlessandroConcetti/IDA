@@ -2,7 +2,7 @@
 
 ## Statut
 
-Cette architecture est **validée**. Les contrats, la politique d'accès et la première persistance locale des utilisateurs, memberships, instances, sessions et grants sont livrés. Le verrou transitoire du propriétaire est également disponible côté backend dans le mode explicitement opt-in `LOCAL_LOCK`. Il ne constitue pas encore l’identité réseau ou multi-appareils cible : aucun compte distant, passkey, association d’instance, récupération distante ou service cloud n’est activé, et l’interface produit de setup/unlock reste à construire.
+Cette architecture est **validée**. Les contrats, la politique d'accès et la première persistance locale des utilisateurs, memberships, instances, sessions et grants sont livrés. Le verrou transitoire du propriétaire est également disponible côté backend et avec un premier écran dans le mode explicitement opt-in `LOCAL_LOCK`. Il ne constitue pas encore l’identité réseau ou multi-appareils cible : aucun compte distant, passkey, association d’instance, récupération distante ou service cloud n’est activé, et le parcours setup/unlock/lock doit encore passer une recette navigateur.
 
 ## État actuel
 
@@ -113,7 +113,7 @@ POST /v1/auth/unlock
 POST /v1/auth/lock
 ```
 
-`status`, `setup` et `unlock` sont les seuls points bootstrap sans session dans ce mode. `lock` reste volontairement idempotent afin d’effacer un cookie absent, expiré ou déjà révoqué ; il conserve les contrôles Host/origine mais n’accorde aucun accès. Toutes les routes métier exigent le cookie de session valide, puis les contrôles de membership, instance, grant, ressource et outil. Cette surface est un contrat local provisoire, pas une API de compte distante ; aucun écran de configuration ne la consomme encore dans le produit.
+`status`, `setup` et `unlock` sont les seuls points bootstrap sans session dans ce mode. `lock` reste volontairement idempotent afin d’effacer un cookie absent, expiré ou déjà révoqué ; il conserve les contrôles Host/origine mais n’accorde aucun accès. Toutes les routes métier exigent le cookie de session valide, puis les contrôles de membership, instance, grant, ressource et outil. Cette surface est un contrat local provisoire, pas une API de compte distante ; le premier écran `LocalAccessGate` la consomme sans monter les vues métier avant confirmation serveur.
 
 ## Surface API multi-appareils cible, non active
 
@@ -181,4 +181,4 @@ Ce découpage est cible : il ne justifie pas une réécriture massive des fichie
 7. Sur téléphone, le Web/PWA et l'application native iOS ou Android restent disponibles en parallèle avec des sessions révocables séparément.
 8. Avant les passkeys et le Device Linking, le PC hôte dispose en mode opt-in du verrou local transitoire défini par `docs/adr/0004-local-owner-lock-and-session.md` : passphrase dérivée, session opaque et aucune exposition réseau.
 
-Cette validation a autorisé les contrats, politiques, tables locales, résolveurs, contexte par requête et tests désormais livrés. Le mode opt-in `LOCAL_LOCK` active uniquement le credential propriétaire local, les quatre endpoints de verrou et le cookie de session associé ; `LOCAL_DEMO` reste le défaut. Elle n'active ni compte réseau, passkey, liaison d'instance, récupération distante, service cloud réel ou exposition multi-appareils. Le prochain incrément Identity doit consolider le parcours UI local avant toute activation par défaut ; les passkeys/WebAuthn et le Device Linking restent des tranches futures soumises au jalon réseau de `SECURITY.md`.
+Cette validation a autorisé les contrats, politiques, tables locales, résolveurs, contexte par requête et tests désormais livrés. Le mode opt-in `LOCAL_LOCK` active uniquement le credential propriétaire local, les quatre endpoints de verrou, le cookie de session associé et leur premier parcours UI ; `LOCAL_DEMO` reste le défaut. Elle n'active ni compte réseau, passkey, liaison d'instance, récupération distante, service cloud réel ou exposition multi-appareils. Le prochain incrément Identity doit vérifier et polir le parcours UI local dans le navigateur avant toute activation par défaut ; les passkeys/WebAuthn et le Device Linking restent des tranches futures soumises au jalon réseau de `SECURITY.md`.
