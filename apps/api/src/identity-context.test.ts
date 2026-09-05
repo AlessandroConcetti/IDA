@@ -270,6 +270,9 @@ describe("Migration et frontière HTTP Identity", () => {
     try {
       database = await DemoDatabase.open({ dataDir });
       await database.pglite.exec(`
+        DROP TABLE identity_security_events;
+        DROP TABLE local_auth_sessions;
+        DROP TABLE local_owner_credentials;
         DROP TABLE client_workspace_grants;
         DROP TABLE identity_sessions;
         DROP TABLE client_instances;
@@ -296,12 +299,15 @@ describe("Migration et frontière HTTP Identity", () => {
           SELECT COUNT(*)::integer AS count
           FROM information_schema.tables
           WHERE table_schema = 'public'
-            AND table_name IN ('client_instances', 'identity_sessions', 'client_workspace_grants')
+            AND table_name IN (
+              'client_instances', 'identity_sessions', 'client_workspace_grants',
+              'local_owner_credentials', 'local_auth_sessions', 'identity_security_events'
+            )
         `,
       );
 
       expect(migrated.rows).toEqual([{ userStatus: "ACTIVE", membershipStatus: "ACTIVE" }]);
-      expect(identityTables.rows[0]?.count).toBe(3);
+      expect(identityTables.rows[0]?.count).toBe(6);
     } finally {
       await database?.close().catch(() => undefined);
       await rm(dataDir, { recursive: true, force: true });

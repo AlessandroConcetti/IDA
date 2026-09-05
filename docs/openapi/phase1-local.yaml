@@ -10,18 +10,35 @@ info:
     de release contrôlé, un flux
     de mémoire consentie local, un Approval Center interne sans livraison et
     un Task Center interne contrôlé, ainsi qu’un registre d’agents strictement
-    déclaratif sans exécution. Toutes les routes /v1 sont précédées d'une
-    résolution Identity locale persistée ; aucun credential client n'est encore
-    accepté et ce mécanisme ne constitue pas une authentification de production.
+    déclaratif sans exécution. LOCAL_DEMO reste le mode par défaut sans
+    credential client. LOCAL_LOCK est un verrou local opt-in par passphrase et
+    session opaque : seules ses trois routes de bootstrap sont publiques, puis
+    toutes les routes métier /v1 utilisent la même résolution Identity
+    persistée. Aucun de ces modes ne constitue une authentification réseau ou de
+    production.
 servers:
   - url: http://127.0.0.1:8787
     description: API locale de développement
 x-ida-local-identity-guard:
   appliesTo: /v1/**
-  sessionSelector: fixé côté serveur
+  defaultMode: LOCAL_DEMO
+  localLockLoopbackOnly: true
+  localLockStickyAfterSetup: true
+  statusRefreshesIdleExpiry: false
+  responseCacheControl: no-store
+  publicLocalLockBootstrap:
+    - GET /v1/auth/status
+    - POST /v1/auth/setup
+    - POST /v1/auth/unlock
+  localLockProtected:
+    - toutes les routes métier /v1
+  localLockSessionCleanup:
+    - POST /v1/auth/lock (idempotent, sans session requise, contrôles Host/origine conservés)
+  sessionSelector:
+    LOCAL_DEMO: contexte fixé côté serveur, aucun credential client
+    LOCAL_LOCK: cookie opaque HttpOnly, empreinte seule persistée côté serveur
   requestContextAttached: true
   actionPermissionIntersection: membership-role + client-grant + tool-permission
-  clientCredentialAccepted: false
   failureStatus: 401
   failureCode: AUTHENTICATION_REQUIRED
 paths:
@@ -36,13 +53,88 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Health'
+  /v1/auth/status:
+    get:
+      operationId: getLocalAuthStatus
+      summary: Retourne uniquement l'état du verrou local
+      description: Route disponible seulement dans le mode LOCAL_LOCK opt-in ; elle ne retourne aucun profil ou secret.
+      responses:
+        '200':
+          description: État UNINITIALIZED, LOCKED ou UNLOCKED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocalAuthStatusResponse'
+  /v1/auth/setup:
+    post:
+      operationId: setupLocalAuth
+      summary: Initialise une seule fois le verrou du propriétaire local
+      description: Route disponible seulement dans le mode LOCAL_LOCK opt-in et uniquement sur le runtime loopback.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LocalAuthCredentialRequest'
+      responses:
+        '201':
+          description: Credential dérivé créé et nouvelle session opaque placée dans un cookie HttpOnly
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocalAuthStatusResponse'
+        '400':
+          $ref: '#/components/responses/InvalidLocalAuthRequest'
+        '409':
+          $ref: '#/components/responses/LocalAuthAlreadyInitialized'
+  /v1/auth/unlock:
+    post:
+      operationId: unlockLocalAuth
+      summary: Déverrouille le Core local et effectue une rotation de session
+      description: Route disponible seulement dans le mode LOCAL_LOCK opt-in et uniquement sur le runtime loopback.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LocalAuthCredentialRequest'
+      responses:
+        '200':
+          description: Nouvelle session opaque ; toute session locale active précédente de cette instance est révoquée
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocalAuthStatusResponse'
+        '400':
+          $ref: '#/components/responses/InvalidLocalAuthRequest'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '429':
+          $ref: '#/components/responses/LocalAuthRateLimited'
+  /v1/auth/lock:
+    post:
+      operationId: lockLocalAuth
+      summary: Révoque immédiatement la session locale courante
+      description: Route de nettoyage locale idempotente ; elle révoque le cookie s'il est encore valide et l'efface même s'il est absent ou expiré. Les contrôles Host/origine restent actifs.
+      responses:
+        '204':
+          description: Session révoquée et cookie expiré
+          headers:
+            Set-Cookie:
+              schema: { type: string }
   /v1/me:
     get:
       operationId: getDemoIdentity
-      summary: Retourne l'identité locale de démonstration
+      summary: Retourne l'identité locale courante
       responses:
         '200':
-          description: Identité et workspace fixés côté serveur
+          description: Identité et workspace résolus côté serveur en LOCAL_DEMO ou LOCAL_LOCK
           content:
             application/json:
               schema:
@@ -1106,7 +1198,28 @@ components:
         minLength: 1
   responses:
     AuthenticationRequired:
-      description: Le contexte Identity local fixé côté serveur est absent, suspendu, révoqué, expiré ou hors scope
+      description: La preuve ou le contexte Identity local est absent, invalide, suspendu, révoqué, expiré ou hors scope
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InvalidLocalAuthRequest:
+      description: Corps strict invalide ou passphrase hors limites
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    LocalAuthAlreadyInitialized:
+      description: Le credential du propriétaire local existe déjà et ne peut pas être remplacé par setup
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    LocalAuthRateLimited:
+      description: Temporisation serveur active après un échec de déverrouillage
+      headers:
+        Retry-After:
+          schema: { type: integer, minimum: 1 }
       content:
         application/json:
           schema:
@@ -1361,7 +1474,7 @@ components:
         service:
           const: ida-api
         mode:
-          const: LOCAL_DEMO
+          enum: [LOCAL_DEMO, LOCAL_LOCK]
         database:
           const: ready
     ErrorResponse:
@@ -1376,6 +1489,29 @@ components:
               type: string
             message:
               type: string
+    LocalAuthCredentialRequest:
+      type: object
+      additionalProperties: false
+      required: [passphrase]
+      properties:
+        passphrase:
+          type: string
+          minLength: 15
+          maxLength: 1024
+          format: password
+    LocalAuthStatusResponse:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required: [mode, state]
+          properties:
+            mode: { const: LOCAL_LOCK }
+            state: { enum: [UNINITIALIZED, LOCKED, UNLOCKED] }
+            sessionExpiresAt: { type: string, format: date-time }
     DemoIdentity:
       type: object
       required: [id, email, displayName, timezone, workspace, client, authorization, authentication]
@@ -1415,7 +1551,7 @@ components:
           required: [mode, message]
           properties:
             mode:
-              const: LOCAL_DEMO
+              enum: [LOCAL_DEMO, LOCAL_LOCK]
             message:
               type: string
     Workspace:

@@ -35,6 +35,8 @@ import {
   internalPostScheduleCancelParamsSchema,
   internalPostScheduleCancelRequestSchema,
   internalPostScheduleSchema,
+  localAuthCredentialRequestSchema,
+  localAuthStatusResponseSchema,
   mediaAssetSchema,
   mediaImportSchema,
   mediaListQuerySchema,
@@ -89,7 +91,7 @@ import {
   type Task,
   type Track,
 } from "./database.js";
-import { demoContext } from "./demo-context.js";
+import { demoContext, demoIdentity } from "./demo-context.js";
 import { CommandInputError, DeterministicIdaCore } from "./ida-core.js";
 import {
   attachRequestIdentityContext,
@@ -97,12 +99,23 @@ import {
   isIdaApiRequestPath,
   LocalDemoAuthenticationError,
   LocalDemoIdentityContextResolver,
+  LocalLockIdentityContextResolver,
 } from "./identity-context.js";
+import {
+  type LocalAuthMode,
+  LocalAuthService,
+  readLocalSessionCookie,
+  serializeClearedLocalSessionCookie,
+  serializeLocalSessionCookie,
+} from "./local-auth.js";
+import { resolveIdentityMode } from "./runtime-config.js";
 import { defaultCalendarRange, getWorkspaceDayRange, type ResolvedCalendarRange } from "./workspace-time.js";
 
 export type CreateAppOptions = DemoDatabaseOptions & {
   now?: () => Date;
   storageDir?: string;
+  identityMode?: LocalAuthMode;
+  secureLocalAuthCookies?: boolean;
 };
 
 type AppError = Error & {
@@ -190,6 +203,28 @@ function timestampFromDate(value: string | null, fallback: string): string | und
 }
 
 const maximumCalendarWindowMilliseconds = 62 * 24 * 60 * 60 * 1_000;
+const localWebOrigin = "http://127.0.0.1:5173";
+const loopbackHostPattern = /^(?:127\.0\.0\.1|localhost)(?::[0-9]{1,5})?$|^\[::1\](?::[0-9]{1,5})?$/u;
+
+function assertLocalLockHttpBoundary(request: FastifyRequest): void {
+  const host = request.headers.host;
+
+  if (!host || !loopbackHostPattern.test(host.toLocaleLowerCase("en-US"))) {
+    throw new IdentityPolicyError("CLIENT_PERMISSION_DENIED", "L’hôte HTTP n’appartient pas à la boucle locale.");
+  }
+
+  if (request.method === "GET" || request.method === "HEAD" || request.method === "OPTIONS") {
+    return;
+  }
+
+  const origin = request.headers.origin;
+  const fetchSiteHeader = request.headers["sec-fetch-site"];
+  const fetchSite = typeof fetchSiteHeader === "string" ? fetchSiteHeader : undefined;
+
+  if ((origin !== undefined && origin !== localWebOrigin) || fetchSite === "cross-site") {
+    throw new IdentityPolicyError("CLIENT_PERMISSION_DENIED", "L’origine HTTP n’est pas autorisée.");
+  }
+}
 
 function resolveCalendarRange(
   query: { view?: CalendarView; from?: string; to?: string },
@@ -403,6 +438,33 @@ class CommandRunHistoryQueryInputError extends Error {
 
   constructor() {
     super("La pagination de l’historique des commandes est invalide.");
+  }
+}
+
+class LocalAuthInputError extends Error {
+  readonly statusCode = 400;
+  readonly code = "INVALID_LOCAL_AUTH_REQUEST";
+
+  constructor() {
+    super("La demande d’authentification locale est invalide.");
+  }
+}
+
+class LocalAuthAlreadyInitializedError extends Error {
+  readonly statusCode = 409;
+  readonly code = "LOCAL_AUTH_ALREADY_INITIALIZED";
+
+  constructor() {
+    super("Le verrou local est déjà initialisé.");
+  }
+}
+
+class LocalAuthRateLimitError extends Error {
+  readonly statusCode = 429;
+  readonly code = "LOCAL_AUTH_RATE_LIMITED";
+
+  constructor(readonly retryAfterSeconds: number) {
+    super("Trop de tentatives. Réessaie plus tard.");
   }
 }
 
@@ -993,11 +1055,30 @@ function toInternalPostScheduleResponse(schedule: InternalPostSchedule) {
 }
 
 export async function createApp(options: CreateAppOptions = {}): Promise<FastifyInstance> {
+  const configuredIdentityMode = resolveIdentityMode(options.identityMode);
   const app = Fastify({ logger: false });
   const database = await DemoDatabase.open(options);
   const storageDir = options.storageDir ?? defaultStorageDir;
   const serverNow = options.now ?? (() => new Date());
-  const identityContextResolver = new LocalDemoIdentityContextResolver(database, serverNow);
+  // LOCAL_LOCK est un verrou persistant, pas un simple feature flag. Une fois
+  // le credential créé, retirer ou modifier la variable d'environnement ne
+  // doit jamais restaurer silencieusement la session technique LOCAL_DEMO.
+  const identityMode =
+    configuredIdentityMode === "LOCAL_LOCK" || (await database.hasLocalOwnerCredential(demoContext.userId))
+      ? "LOCAL_LOCK"
+      : "LOCAL_DEMO";
+  const secureLocalAuthCookies = options.secureLocalAuthCookies ?? false;
+  const demoIdentityContextResolver = new LocalDemoIdentityContextResolver(database, serverNow);
+  const localAuth = new LocalAuthService(
+    database,
+    {
+      userId: demoContext.userId,
+      workspaceId: demoContext.workspaceId,
+      clientInstanceId: demoIdentity.clientInstanceId,
+    },
+    serverNow,
+  );
+  const localLockIdentityContextResolver = new LocalLockIdentityContextResolver(localAuth, serverNow);
   const identityPolicy = new IdentityAccessPolicy();
   const core = new DeterministicIdaCore(database, undefined, serverNow);
   const agents = createAgentRegistry();
@@ -1039,8 +1120,9 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   };
 
   await app.register(cors, {
-    origin: "http://127.0.0.1:5173",
+    origin: localWebOrigin,
     methods: ["GET", "PATCH", "POST", "OPTIONS"],
+    credentials: identityMode === "LOCAL_LOCK",
   });
   await app.register(multipart, {
     limits: mediaMultipartLimits,
@@ -1057,14 +1139,51 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   // Le plugin CORS, enregistré avant ce hook, termine les vrais preflights et
   // rejette les OPTIONS incomplets ; aucune route métier OPTIONS n'est rendue
   // publique par une exemption Identity générale.
-  app.addHook("onRequest", async (request) => {
+  app.addHook("onRequest", async (request, reply) => {
     if (isIdaApiRequestPath(request.url)) {
-      attachRequestIdentityContext(request, await identityContextResolver.resolve());
+      // Les réponses Identity et métier sont privées et dynamiques. Cette
+      // protection vaut aussi pour les erreurs afin qu'un navigateur ou proxy
+      // local ne conserve pas un profil, un statut de verrou ou une donnée.
+      reply.header("Cache-Control", "no-store");
+
+      if (identityMode === "LOCAL_LOCK") {
+        assertLocalLockHttpBoundary(request);
+      }
+
+      const pathname = request.url.split("?", 1)[0];
+      const isLocalAuthRequestWithoutRequiredSession =
+        identityMode === "LOCAL_LOCK" &&
+        ((request.method === "GET" && pathname === "/v1/auth/status") ||
+          (request.method === "POST" &&
+            (pathname === "/v1/auth/setup" || pathname === "/v1/auth/unlock" || pathname === "/v1/auth/lock")));
+
+      if (isLocalAuthRequestWithoutRequiredSession) {
+        return;
+      }
+
+      const identity =
+        identityMode === "LOCAL_DEMO"
+          ? await demoIdentityContextResolver.resolve()
+          : await localLockIdentityContextResolver.resolve(
+              readLocalSessionCookie(request.headers.cookie, secureLocalAuthCookies) ?? "",
+            );
+      attachRequestIdentityContext(request, identity);
       assertRequestPermission(request, "READ");
     }
   });
 
   app.setErrorHandler((error: AppError, _request, reply) => {
+    if (error instanceof LocalAuthRateLimitError) {
+      return reply
+        .header("Retry-After", String(error.retryAfterSeconds))
+        .status(error.statusCode)
+        .send({ error: { code: error.code, message: error.message } });
+    }
+
+    if (error instanceof LocalAuthInputError || error instanceof LocalAuthAlreadyInitializedError) {
+      return reply.status(error.statusCode).send({ error: { code: error.code, message: error.message } });
+    }
+
     if (error instanceof CommandInputError) {
       return reply.status(error.statusCode).send({
         error: { code: error.code, message: error.message },
@@ -1494,10 +1613,78 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     return { data: toInternalPostScheduleResponse(result.schedule) };
   };
 
+  if (identityMode === "LOCAL_LOCK") {
+    app.get("/v1/auth/status", async (request) => {
+      const token = readLocalSessionCookie(request.headers.cookie, secureLocalAuthCookies);
+      return localAuthStatusResponseSchema.parse({ data: await localAuth.status(token) });
+    });
+
+    app.post("/v1/auth/setup", async (request, reply) => {
+      const input = localAuthCredentialRequestSchema.safeParse(request.body);
+
+      if (!input.success) {
+        throw new LocalAuthInputError();
+      }
+
+      const result = await localAuth.setup(input.data.passphrase);
+
+      if (result.kind === "already-initialized") {
+        throw new LocalAuthAlreadyInitializedError();
+      }
+
+      if (result.kind === "denied") {
+        throw new LocalDemoAuthenticationError();
+      }
+
+      return reply
+        .header("Set-Cookie", serializeLocalSessionCookie(result.session.token, secureLocalAuthCookies))
+        .status(201)
+        .send(
+          localAuthStatusResponseSchema.parse({
+            data: { mode: "LOCAL_LOCK", state: "UNLOCKED", sessionExpiresAt: result.session.expiresAt },
+          }),
+        );
+    });
+
+    app.post("/v1/auth/unlock", async (request, reply) => {
+      const input = localAuthCredentialRequestSchema.safeParse(request.body);
+
+      if (!input.success) {
+        throw new LocalAuthInputError();
+      }
+
+      const result = await localAuth.unlock(input.data.passphrase);
+
+      if (result.kind === "invalid") {
+        throw new LocalDemoAuthenticationError();
+      }
+
+      if (result.kind === "rate-limited") {
+        throw new LocalAuthRateLimitError(result.retryAfterSeconds);
+      }
+
+      return reply.header("Set-Cookie", serializeLocalSessionCookie(result.session.token, secureLocalAuthCookies)).send(
+        localAuthStatusResponseSchema.parse({
+          data: { mode: "LOCAL_LOCK", state: "UNLOCKED", sessionExpiresAt: result.session.expiresAt },
+        }),
+      );
+    });
+
+    app.post("/v1/auth/lock", async (request, reply) => {
+      const token = readLocalSessionCookie(request.headers.cookie, secureLocalAuthCookies);
+
+      if (token) {
+        await localAuth.lock(token);
+      }
+
+      return reply.header("Set-Cookie", serializeClearedLocalSessionCookie(secureLocalAuthCookies)).status(204).send();
+    });
+  }
+
   app.get("/health", async () => ({
     status: "ok",
     service: "ida-api",
-    mode: demoContext.mode,
+    mode: identityMode,
     database: "ready",
   }));
 
@@ -1554,8 +1741,11 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
           effectivePermissions,
         },
         authentication: {
-          mode: demoContext.mode,
-          message: "Contexte local de démonstration ; aucune authentification réelle n’est active.",
+          mode: identityMode,
+          message:
+            identityMode === "LOCAL_LOCK"
+              ? "Verrou local actif ; cette session reste limitée au PC hôte et n’autorise aucun accès réseau."
+              : "Contexte local de démonstration ; aucune authentification réelle n’est active.",
         },
       },
     };

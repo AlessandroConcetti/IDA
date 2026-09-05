@@ -203,3 +203,40 @@ export const requestIdentityContextSchema = z
   });
 
 export type RequestIdentityContext = z.infer<typeof requestIdentityContextSchema>;
+
+// Verrou local propriétaire ------------------------------------------------
+//
+// Ces contrats ne créent ni compte cloud ni Device Linking. La passphrase ne
+// quitte le corps de setup/unlock que pour être dérivée côté serveur et ne doit
+// jamais apparaître dans une réponse, un log ou une mémoire.
+export const localPassphraseSchema = z.string().min(15).max(1_024);
+
+export const localAuthCredentialRequestSchema = z
+  .object({
+    passphrase: localPassphraseSchema,
+  })
+  .strict();
+
+export type LocalAuthCredentialRequest = z.infer<typeof localAuthCredentialRequestSchema>;
+
+export const localAuthStateValues = ["UNINITIALIZED", "LOCKED", "UNLOCKED"] as const;
+export const localAuthStateSchema = z.enum(localAuthStateValues);
+export type LocalAuthState = z.infer<typeof localAuthStateSchema>;
+
+export const localAuthStatusSchema = z
+  .object({
+    mode: z.literal("LOCAL_LOCK"),
+    state: localAuthStateSchema,
+    sessionExpiresAt: identityTimestampSchema.optional(),
+  })
+  .strict();
+
+export type LocalAuthStatus = z.infer<typeof localAuthStatusSchema>;
+
+export const localAuthStatusResponseSchema = z
+  .object({
+    data: localAuthStatusSchema,
+  })
+  .strict();
+
+export type LocalAuthStatusResponse = z.infer<typeof localAuthStatusResponseSchema>;

@@ -63,6 +63,35 @@ export type RequestIdentityProfile = {
   membershipStatus: RequestIdentityContext["membership"]["status"];
 };
 
+export type LocalOwnerCredential = {
+  userId: string;
+  algorithm: "SCRYPT_V1";
+  salt: string;
+  verifier: string;
+  cost: number;
+  blockSize: number;
+  parallelization: number;
+  keyLength: number;
+  failedAttempts: number;
+  retryAfter: string | null;
+};
+
+export type LocalAuthSessionCreate = {
+  sessionId: string;
+  userId: string;
+  workspaceId: string;
+  clientInstanceId: string;
+  tokenDigest: string;
+  issuedAt: string;
+  expiresAt: string;
+  idleExpiresAt: string;
+};
+
+export type LocalAuthSessionResolution = {
+  identity: RequestIdentityContext;
+  expiresAt: string;
+};
+
 export type ArtistProfile = {
   id: string;
   projectId: string;
@@ -1042,6 +1071,371 @@ export class DemoDatabase {
       membershipRole: membershipRoleSchema.parse(row.membershipRole),
       membershipStatus: membershipStatusSchema.parse(row.membershipStatus),
     };
+  }
+
+  async hasLocalOwnerCredential(userId: string): Promise<boolean> {
+    const result = await this.pglite.query<{ present: boolean }>(
+      `SELECT EXISTS(SELECT 1 FROM local_owner_credentials WHERE user_id = $1) AS present`,
+      [userId],
+    );
+
+    return result.rows[0]?.present === true;
+  }
+
+  async getLocalOwnerCredential(userId: string): Promise<LocalOwnerCredential | null> {
+    const result = await this.pglite.query<ScalarRow>(
+      `
+        SELECT
+          user_id AS "userId",
+          algorithm,
+          salt,
+          verifier,
+          cost_n AS cost,
+          block_size AS "blockSize",
+          parallelization,
+          key_length AS "keyLength",
+          failed_attempts AS "failedAttempts",
+          retry_after AS "retryAfter"
+        FROM local_owner_credentials
+        WHERE user_id = $1
+        LIMIT 1
+      `,
+      [userId],
+    );
+    const row = result.rows[0];
+
+    if (!row) {
+      return null;
+    }
+
+    const algorithm = asString(row.algorithm);
+
+    if (algorithm !== "SCRYPT_V1") {
+      throw new Error("Le format du credential local n'est pas pris en charge.");
+    }
+
+    return {
+      userId: asString(row.userId),
+      algorithm,
+      salt: asString(row.salt),
+      verifier: asString(row.verifier),
+      cost: asNumber(row.cost),
+      blockSize: asNumber(row.blockSize),
+      parallelization: asNumber(row.parallelization),
+      keyLength: asNumber(row.keyLength),
+      failedAttempts: asNumber(row.failedAttempts),
+      retryAfter: asTimestamp(row.retryAfter),
+    };
+  }
+
+  async createLocalOwnerCredential(
+    credential: Omit<LocalOwnerCredential, "failedAttempts" | "retryAfter">,
+    createdAt: string,
+  ): Promise<boolean> {
+    return this.pglite.transaction(async (transaction) => {
+      const inserted = await transaction.query<ScalarRow>(
+        `
+          INSERT INTO local_owner_credentials (
+            user_id, algorithm, salt, verifier, cost_n, block_size,
+            parallelization, key_length, created_at, updated_at
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)
+          ON CONFLICT (user_id) DO NOTHING
+          RETURNING user_id AS "userId"
+        `,
+        [
+          credential.userId,
+          credential.algorithm,
+          credential.salt,
+          credential.verifier,
+          credential.cost,
+          credential.blockSize,
+          credential.parallelization,
+          credential.keyLength,
+          createdAt,
+        ],
+      );
+
+      if (!inserted.rows[0]) {
+        return false;
+      }
+
+      await transaction.query(
+        `
+          INSERT INTO identity_security_events (
+            id, user_id, client_instance_id, event_type, outcome, created_at
+          )
+          VALUES ($1, $2, NULL, 'LOCAL_CREDENTIAL_CREATED', 'SUCCEEDED', $3)
+        `,
+        [`ise_${randomUUID().replaceAll("-", "")}`, credential.userId, createdAt],
+      );
+
+      return true;
+    });
+  }
+
+  async recordLocalUnlockFailure(userId: string, failedAt: string): Promise<void> {
+    await this.pglite.transaction(async (transaction) => {
+      const current = await transaction.query<ScalarRow>(
+        `
+          SELECT failed_attempts AS "failedAttempts"
+          FROM local_owner_credentials
+          WHERE user_id = $1
+          FOR UPDATE
+        `,
+        [userId],
+      );
+
+      if (!current.rows[0]) {
+        return;
+      }
+
+      const failedAttempts = Math.min(20, asNumber(current.rows[0].failedAttempts) + 1);
+      const delayMs = Math.min(5 * 60 * 1_000, 500 * 2 ** Math.min(failedAttempts - 1, 10));
+      const retryAfter = new Date(Date.parse(failedAt) + delayMs).toISOString();
+
+      await transaction.query(
+        `
+          UPDATE local_owner_credentials
+          SET failed_attempts = $2, retry_after = $3, updated_at = $4
+          WHERE user_id = $1
+        `,
+        [userId, failedAttempts, retryAfter, failedAt],
+      );
+      await transaction.query(
+        `
+          INSERT INTO identity_security_events (
+            id, user_id, client_instance_id, event_type, outcome, created_at
+          )
+          VALUES ($1, $2, NULL, 'LOCAL_UNLOCK', 'DENIED', $3)
+        `,
+        [`ise_${randomUUID().replaceAll("-", "")}`, userId, failedAt],
+      );
+    });
+  }
+
+  async createLocalAuthSession(input: LocalAuthSessionCreate): Promise<boolean> {
+    return this.pglite.transaction(async (transaction) => {
+      await transaction.query(
+        `
+          UPDATE identity_sessions
+          SET status = 'REVOKED', revoked_at = $3
+          WHERE user_id = $1
+            AND client_instance_id = $2
+            AND status = 'ACTIVE'
+            AND id IN (SELECT session_id FROM local_auth_sessions WHERE status = 'ACTIVE')
+        `,
+        [input.userId, input.clientInstanceId, input.issuedAt],
+      );
+      await transaction.query(
+        `
+          UPDATE local_auth_sessions
+          SET status = 'REVOKED', revoked_at = $3
+          WHERE status = 'ACTIVE'
+            AND session_id IN (
+              SELECT id FROM identity_sessions WHERE user_id = $1 AND client_instance_id = $2
+            )
+        `,
+        [input.userId, input.clientInstanceId, input.issuedAt],
+      );
+      const insertedSession = await transaction.query<ScalarRow>(
+        `
+          INSERT INTO identity_sessions (
+            id, user_id, client_instance_id, status, issued_at, expires_at
+          )
+          SELECT $1, ida_user.id, client.id, 'ACTIVE', $5, $6
+          FROM users ida_user
+          INNER JOIN client_instances client
+            ON client.user_id = ida_user.id
+            AND client.id = $3
+            AND client.status = 'ACTIVE'
+          INNER JOIN memberships membership
+            ON membership.user_id = ida_user.id
+            AND membership.workspace_id = $4
+            AND membership.status = 'ACTIVE'
+          INNER JOIN client_workspace_grants client_grant
+            ON client_grant.user_id = ida_user.id
+            AND client_grant.client_instance_id = client.id
+            AND client_grant.workspace_id = membership.workspace_id
+            AND client_grant.status = 'ACTIVE'
+          WHERE ida_user.id = $2
+            AND ida_user.status = 'ACTIVE'
+          RETURNING id
+        `,
+        [input.sessionId, input.userId, input.clientInstanceId, input.workspaceId, input.issuedAt, input.expiresAt],
+      );
+
+      if (!insertedSession.rows[0]) {
+        await transaction.query(
+          `
+            INSERT INTO identity_security_events (
+              id, user_id, client_instance_id, event_type, outcome, created_at
+            )
+            VALUES ($1, $2, NULL, 'LOCAL_UNLOCK', 'DENIED', $3)
+          `,
+          [`ise_${randomUUID().replaceAll("-", "")}`, input.userId, input.issuedAt],
+        );
+        return false;
+      }
+
+      await transaction.query(
+        `
+          INSERT INTO local_auth_sessions (
+            session_id, token_digest, status, idle_expires_at, last_seen_at, created_at
+          )
+          VALUES ($1, $2, 'ACTIVE', $3, $4, $4)
+        `,
+        [input.sessionId, input.tokenDigest, input.idleExpiresAt, input.issuedAt],
+      );
+      await transaction.query(
+        `
+          UPDATE local_owner_credentials
+          SET failed_attempts = 0, retry_after = NULL, updated_at = $2
+          WHERE user_id = $1
+        `,
+        [input.userId, input.issuedAt],
+      );
+      await transaction.query(
+        `
+          INSERT INTO identity_security_events (
+            id, user_id, client_instance_id, event_type, outcome, created_at
+          )
+          VALUES ($1, $2, $3, 'LOCAL_UNLOCK', 'SUCCEEDED', $4)
+        `,
+        [`ise_${randomUUID().replaceAll("-", "")}`, input.userId, input.clientInstanceId, input.issuedAt],
+      );
+
+      return true;
+    });
+  }
+
+  async resolveLocalAuthSession(
+    tokenDigest: string,
+    userId: string,
+    clientInstanceId: string,
+    workspaceId: string,
+    resolvedAt: string,
+    idleLifetimeMs: number,
+    refreshIdle: boolean,
+  ): Promise<LocalAuthSessionResolution | null> {
+    const session = await this.pglite.transaction(async (transaction) => {
+      const result = await transaction.query<ScalarRow>(
+        `
+          SELECT
+            local_session.session_id AS "sessionId",
+            identity_session.expires_at AS "expiresAt",
+            local_session.idle_expires_at AS "idleExpiresAt"
+          FROM local_auth_sessions local_session
+          INNER JOIN identity_sessions identity_session
+            ON identity_session.id = local_session.session_id
+          WHERE local_session.token_digest = $1
+            AND local_session.status = 'ACTIVE'
+            AND identity_session.status = 'ACTIVE'
+            AND identity_session.user_id = $2
+            AND identity_session.client_instance_id = $3
+          LIMIT 1
+          FOR UPDATE
+        `,
+        [tokenDigest, userId, clientInstanceId],
+      );
+      const row = result.rows[0];
+
+      if (!row) {
+        return null;
+      }
+
+      const nowMs = Date.parse(resolvedAt);
+      const expiresAt = asTimestamp(row.expiresAt);
+      const idleExpiresAt = asTimestamp(row.idleExpiresAt);
+
+      if (!expiresAt || !idleExpiresAt || Date.parse(expiresAt) <= nowMs || Date.parse(idleExpiresAt) <= nowMs) {
+        await transaction.query(
+          `UPDATE identity_sessions SET status = 'REVOKED', revoked_at = $2 WHERE id = $1 AND status = 'ACTIVE'`,
+          [asString(row.sessionId), resolvedAt],
+        );
+        await transaction.query(
+          `UPDATE local_auth_sessions SET status = 'REVOKED', revoked_at = $2 WHERE session_id = $1 AND status = 'ACTIVE'`,
+          [asString(row.sessionId), resolvedAt],
+        );
+        await transaction.query(
+          `
+            INSERT INTO identity_security_events (
+              id, user_id, client_instance_id, event_type, outcome, created_at
+            )
+            VALUES ($1, $2, $3, 'LOCAL_SESSION_EXPIRED', 'DENIED', $4)
+          `,
+          [`ise_${randomUUID().replaceAll("-", "")}`, userId, clientInstanceId, resolvedAt],
+        );
+        return null;
+      }
+
+      if (refreshIdle) {
+        const nextIdleExpiresAt = new Date(Math.min(Date.parse(expiresAt), nowMs + idleLifetimeMs)).toISOString();
+        await transaction.query(
+          `
+            UPDATE local_auth_sessions
+            SET last_seen_at = $2, idle_expires_at = $3
+            WHERE session_id = $1 AND status = 'ACTIVE'
+          `,
+          [asString(row.sessionId), resolvedAt, nextIdleExpiresAt],
+        );
+      }
+
+      return { sessionId: asString(row.sessionId), expiresAt };
+    });
+
+    if (!session) {
+      return null;
+    }
+
+    const identity = await this.resolveRequestIdentityContext(session.sessionId, workspaceId);
+    return identity ? { identity, expiresAt: session.expiresAt } : null;
+  }
+
+  async revokeLocalAuthSession(tokenDigest: string, revokedAt: string): Promise<boolean> {
+    return this.pglite.transaction(async (transaction) => {
+      const result = await transaction.query<ScalarRow>(
+        `
+          SELECT
+            local_session.session_id AS "sessionId",
+            identity_session.user_id AS "userId",
+            identity_session.client_instance_id AS "clientInstanceId"
+          FROM local_auth_sessions local_session
+          INNER JOIN identity_sessions identity_session ON identity_session.id = local_session.session_id
+          WHERE local_session.token_digest = $1
+            AND local_session.status = 'ACTIVE'
+            AND identity_session.status = 'ACTIVE'
+          LIMIT 1
+          FOR UPDATE
+        `,
+        [tokenDigest],
+      );
+      const row = result.rows[0];
+
+      if (!row) {
+        return false;
+      }
+
+      await transaction.query(
+        `UPDATE identity_sessions SET status = 'REVOKED', revoked_at = $2 WHERE id = $1 AND status = 'ACTIVE'`,
+        [asString(row.sessionId), revokedAt],
+      );
+      await transaction.query(
+        `UPDATE local_auth_sessions SET status = 'REVOKED', revoked_at = $2 WHERE session_id = $1 AND status = 'ACTIVE'`,
+        [asString(row.sessionId), revokedAt],
+      );
+      await transaction.query(
+        `
+          INSERT INTO identity_security_events (
+            id, user_id, client_instance_id, event_type, outcome, created_at
+          )
+          VALUES ($1, $2, $3, 'LOCAL_SESSION_REVOKED', 'SUCCEEDED', $4)
+        `,
+        [`ise_${randomUUID().replaceAll("-", "")}`, asString(row.userId), asString(row.clientInstanceId), revokedAt],
+      );
+
+      return true;
+    });
   }
 
   async getArtistProfile(workspaceId: string): Promise<ArtistProfile | null> {
@@ -4034,6 +4428,66 @@ export class DemoDatabase {
         )
       );
 
+      -- Credential du verrou local propriétaire. Le secret brut n'est jamais
+      -- persisté : seul le résultat scrypt salé et ses paramètres versionnés
+      -- sont conservés. Cette table ne sert pas au Device Linking futur.
+      CREATE TABLE IF NOT EXISTS local_owner_credentials (
+        user_id TEXT PRIMARY KEY REFERENCES users(id),
+        algorithm TEXT NOT NULL,
+        salt TEXT NOT NULL,
+        verifier TEXT NOT NULL,
+        cost_n INTEGER NOT NULL,
+        block_size INTEGER NOT NULL,
+        parallelization INTEGER NOT NULL,
+        key_length INTEGER NOT NULL,
+        failed_attempts INTEGER NOT NULL DEFAULT 0,
+        retry_after TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL,
+        CONSTRAINT local_owner_credentials_algorithm_check CHECK (algorithm = 'SCRYPT_V1'),
+        CONSTRAINT local_owner_credentials_parameters_check CHECK (
+          cost_n = 131072 AND block_size = 8 AND parallelization = 1 AND key_length = 32
+        ),
+        CONSTRAINT local_owner_credentials_failure_check CHECK (failed_attempts BETWEEN 0 AND 20)
+      );
+
+      -- Le navigateur ne reçoit que le token opaque. Son SHA-256 est l'unique
+      -- valeur persistée et pointe vers la session Identity révocable.
+      CREATE TABLE IF NOT EXISTS local_auth_sessions (
+        session_id TEXT PRIMARY KEY REFERENCES identity_sessions(id),
+        token_digest TEXT NOT NULL UNIQUE,
+        status TEXT NOT NULL DEFAULT 'ACTIVE',
+        idle_expires_at TIMESTAMPTZ NOT NULL,
+        last_seen_at TIMESTAMPTZ NOT NULL,
+        revoked_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL,
+        CONSTRAINT local_auth_sessions_digest_check CHECK (token_digest ~ '^[a-f0-9]{64}$'),
+        CONSTRAINT local_auth_sessions_status_check CHECK (status IN ('ACTIVE', 'REVOKED')),
+        CONSTRAINT local_auth_sessions_revocation_check CHECK (
+          (status = 'REVOKED' AND revoked_at IS NOT NULL)
+          OR (status = 'ACTIVE' AND revoked_at IS NULL)
+        ),
+        CONSTRAINT local_auth_sessions_idle_check CHECK (idle_expires_at >= last_seen_at)
+      );
+
+      -- Audit de sécurité volontairement sans payload libre, adresse IP,
+      -- user-agent, token ou dérivé de passphrase.
+      CREATE TABLE IF NOT EXISTS identity_security_events (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id),
+        client_instance_id TEXT REFERENCES client_instances(id),
+        event_type TEXT NOT NULL,
+        outcome TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL,
+        CONSTRAINT identity_security_events_type_check CHECK (
+          event_type IN (
+            'LOCAL_CREDENTIAL_CREATED', 'LOCAL_UNLOCK',
+            'LOCAL_SESSION_EXPIRED', 'LOCAL_SESSION_REVOKED'
+          )
+        ),
+        CONSTRAINT identity_security_events_outcome_check CHECK (outcome IN ('SUCCEEDED', 'DENIED'))
+      );
+
       CREATE TABLE IF NOT EXISTS artist_projects (
         id TEXT PRIMARY KEY,
         workspace_id TEXT NOT NULL REFERENCES workspaces(id),
@@ -4343,6 +4797,10 @@ export class DemoDatabase {
         ON client_instances (user_id, status, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_identity_sessions_client_status_expiry
         ON identity_sessions (client_instance_id, status, expires_at);
+      CREATE INDEX IF NOT EXISTS idx_local_auth_sessions_status_idle
+        ON local_auth_sessions (status, idle_expires_at);
+      CREATE INDEX IF NOT EXISTS idx_identity_security_events_user_created
+        ON identity_security_events (user_id, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_client_workspace_grants_workspace_status
         ON client_workspace_grants (workspace_id, status, client_instance_id);
       CREATE INDEX IF NOT EXISTS idx_campaigns_workspace_status_created

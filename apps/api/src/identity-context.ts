@@ -4,6 +4,7 @@ import type { FastifyRequest } from "fastify";
 
 import type { DemoDatabase } from "./database.js";
 import { demoContext, demoIdentity } from "./demo-context.js";
+import type { LocalAuthService } from "./local-auth.js";
 
 // Le contexte vit hors de l'objet Fastify : une route, un plugin ou un hook
 // tardif ne peut donc ni le remplacer ni lui substituer un scope fourni par le
@@ -103,6 +104,46 @@ export class LocalDemoIdentityContextResolver {
     const decision = this.policy.evaluate({ context, permission: "READ", now: this.now() });
 
     if (!decision.allowed) {
+      throw new LocalDemoAuthenticationError();
+    }
+
+    return freezeRequestIdentityContext(decision.context);
+  }
+}
+
+/**
+ * Adaptateur du verrou local vers le même RequestIdentityContext que le mode
+ * de démonstration. Le token opaque ne quitte jamais ce bord HTTP/service et
+ * n'est transmis ni aux routes métier, ni au Core, ni aux outils.
+ */
+export class LocalLockIdentityContextResolver {
+  private readonly policy = new IdentityAccessPolicy();
+
+  constructor(
+    private readonly localAuth: LocalAuthService,
+    private readonly now: () => Date,
+  ) {}
+
+  async resolve(token: string): Promise<RequestIdentityContext> {
+    const resolution = await this.localAuth.resolve(token);
+    const context = resolution?.identity;
+
+    if (
+      !context ||
+      context.userId !== demoContext.userId ||
+      context.workspaceId !== demoContext.workspaceId ||
+      context.clientInstance.id !== demoIdentity.clientInstanceId ||
+      context.clientInstance.kind !== demoIdentity.kind ||
+      context.clientInstance.platform !== demoIdentity.platform
+    ) {
+      await this.localAuth.lock(token);
+      throw new LocalDemoAuthenticationError();
+    }
+
+    const decision = this.policy.evaluate({ context, permission: "READ", now: this.now() });
+
+    if (!decision.allowed) {
+      await this.localAuth.lock(token);
       throw new LocalDemoAuthenticationError();
     }
 

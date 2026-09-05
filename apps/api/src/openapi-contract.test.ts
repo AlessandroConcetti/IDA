@@ -6,6 +6,11 @@ const openApiPath = fileURLToPath(new URL("../../../docs/openapi/phase1-local.ya
 const appSourcePath = fileURLToPath(new URL("./app.ts", import.meta.url));
 
 const httpMethods = new Set(["get", "post", "patch", "put", "delete"]);
+const publicOperationsWithoutAuthenticationFailure = new Set([
+  "GET /v1/auth/status",
+  "POST /v1/auth/setup",
+  "POST /v1/auth/lock",
+]);
 
 function normalizeFastifyPath(path: string): string {
   return path.replace(/:([A-Za-z][A-Za-z0-9_]*)/gu, "{$1}");
@@ -70,7 +75,7 @@ describe("Contrat OpenAPI de la frontière Identity", () => {
     expect(new Set(documented.keys())).toEqual(implemented);
 
     for (const [operation, statuses] of documented) {
-      if (operation.includes(" /v1/")) {
+      if (operation.includes(" /v1/") && !publicOperationsWithoutAuthenticationFailure.has(operation)) {
         expect(statuses, `${operation} doit documenter AUTHENTICATION_REQUIRED`).toContain("401");
       }
     }

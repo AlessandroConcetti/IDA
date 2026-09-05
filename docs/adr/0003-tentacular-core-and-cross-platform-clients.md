@@ -106,7 +106,7 @@ Chaque domaine obtient son propre modèle de données, ses outils, permissions, 
 
 ## Non-objectifs immédiats
 
-Cette ADR n'autorise ni application native, synchronisation cloud, endpoint ou credential Identity réel, provider IA réel, exécution depuis SSD, contrôle gestuel, caméra au démarrage, mode fond d'écran, module Finance/Courses/Santé/Maison/Legal, action domotique, acte juridique ou internationalisation immédiate. La poursuite validée d'Identity a ajouté uniquement des tables locales additives, un résolveur de session technique et la propagation de son contexte immuable aux routes/Core après les contrats et policies ; elle n'autorise toujours ni login ni exposition réseau. Le futur verrou local transitoire est désormais borné séparément par l'ADR 0004. Cette ADR fixe les frontières à respecter lorsque les autres travaux seront explicitement planifiés.
+Cette ADR n'autorise ni application native, synchronisation cloud, identité réseau, provider IA réel, exécution depuis SSD, contrôle gestuel, caméra au démarrage, mode fond d'écran, module Finance/Courses/Santé/Maison/Legal, action domotique, acte juridique ou internationalisation immédiate. La poursuite validée d'Identity a ajouté les tables locales additives, la propagation du contexte immuable aux routes/Core et le verrou propriétaire `LOCAL_LOCK` strictement loopback et opt-in borné par l'ADR 0004 ; elle n'autorise toujours ni compte distant, ni Device Linking, ni exposition réseau. Cette ADR fixe les frontières à respecter lorsque les autres travaux seront explicitement planifiés.
 
 ## Documents associés
 
