@@ -1,0 +1,739 @@
+/* IDA AURORA — palette commune, sans dépendance au Core ni capteur. */
+:root {
+  --ida-text: #253139;
+  --ida-muted: #59656b;
+  --ida-accent: #385e73;
+  --ida-success: #29674f;
+  --ida-warning: #835319;
+  --ida-danger: #923e43;
+  --ida-background: #eeeae3;
+  --ida-glass: rgba(255, 255, 255, 0.56);
+  --ida-glass-border: rgba(255, 255, 255, 0.82);
+  --ida-focus: #345c71;
+  color-scheme: light;
+  color: var(--ida-text);
+  background: var(--ida-background);
+  font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+}
+html {
+  background: var(--ida-background);
+}
+body {
+  background: #f2f0ec;
+}
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--ida-focus);
+  outline-offset: 5px;
+}
+.aurora-home {
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  background:
+    linear-gradient(110deg, #f7f4ee18, #ffffff28),
+    url("/design/aurora-atrium.png") center center / cover;
+  color: var(--ida-text);
+}
+.aurora-home[data-surface="solid"] {
+  --ida-glass: #f8f7f3;
+}
+.aurora-topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 30px 3.2%;
+}
+.aurora-corner-wordmark {
+  font-size: 1.75rem;
+  letter-spacing: 0.12em;
+  font-weight: 300;
+}
+.aurora-access-actions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.aurora-local-status {
+  font-size: 0.75rem;
+  color: #53606a;
+  letter-spacing: 0.035em;
+}
+.aurora-icon-button {
+  width: 52px;
+  height: 52px;
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--ida-glass-border);
+  border-radius: 19px;
+  background: var(--ida-glass);
+  color: #4b585d;
+  box-shadow:
+    inset 0 1px 2px #fff9,
+    0 5px 25px #383d4810;
+  backdrop-filter: blur(15px);
+}
+.aurora-icon-button svg {
+  width: 24px;
+  height: 26px;
+}
+.aurora-welcome {
+  width: 100%;
+  max-width: 1360px;
+  margin: auto;
+  padding: 16px 38px 12px;
+  text-align: center;
+}
+.aurora-signature {
+  padding-bottom: 32px;
+}
+.aurora-signature h1 {
+  font-size: clamp(3.8rem, 6.2vw, 5.5rem);
+  font-weight: 200;
+  letter-spacing: 0.33em;
+  text-indent: 0.33em;
+  line-height: 1.15;
+  margin: 0 0 10px;
+  color: #494c4b;
+}
+.aurora-signature p {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.48em;
+  font-size: 0.75rem;
+  color: #3d4549;
+}
+.aurora-greeting {
+  margin: 4px 0 26px;
+  font-size: 1.05rem;
+  font-weight: 350;
+  color: #515858;
+  letter-spacing: 0.015em;
+}
+.aurora-command {
+  display: flex;
+  align-items: center;
+  max-width: 650px;
+  margin: 0 auto;
+  padding: 8px 12px 8px 27px;
+  border: 1px solid var(--ida-glass-border);
+  border-radius: 999px;
+  min-height: 66px;
+  background: var(--ida-glass);
+  box-shadow:
+    inset 0 1px 3px white,
+    0 5px 30px #695c4620;
+  backdrop-filter: blur(18px);
+}
+.aurora-command:focus-within {
+  border-color: #6d8c9c;
+  box-shadow: 0 0 0 3px #8fabb328;
+}
+.aurora-command textarea {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: var(--ida-text);
+  font-size: 1rem;
+  line-height: 1.5;
+  padding: 9px 0;
+  height: 44px;
+  resize: none;
+}
+.aurora-command textarea::placeholder {
+  color: #63696b;
+  opacity: 1;
+}
+.aurora-command textarea:focus-visible {
+  outline: none;
+}
+.aurora-command button {
+  border: 0;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #354e5c;
+  background: #ffffff54;
+}
+.aurora-command button:disabled {
+  color: #788080;
+  background: transparent;
+}
+.aurora-command svg {
+  width: 24px;
+  height: 24px;
+}
+.aurora-spaces {
+  margin: 40px auto 26px;
+  max-width: 1160px;
+}
+.aurora-spaces h2 {
+  font-weight: 500;
+  color: #333d42;
+  font-size: 0.75rem;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  margin: 0 0 22px;
+}
+.aurora-agent-rail {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 17px;
+  padding: 5px 4px 16px;
+}
+.aurora-agent-card {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  padding: 25px 23px 18px;
+  min-height: 213px;
+  border: 1px solid var(--ida-glass-border);
+  border-radius: 28px;
+  background: var(--ida-glass);
+  backdrop-filter: blur(15px);
+  color: var(--ida-text);
+  box-shadow:
+    inset 0 1px 2px #fff9,
+    0 8px 25px #5d615d08;
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    background-color 180ms ease;
+}
+.aurora-agent-card:hover {
+  background: #fffffff2;
+  transform: translateY(-5px);
+  box-shadow: 0 12px 32px #67635119;
+}
+.aurora-agent-icon {
+  width: 58px;
+  height: 58px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  margin-bottom: 20px;
+  box-shadow:
+    inset 3px 3px 5px #fff,
+    inset -3px -4px 8px #5c758c1c,
+    0 7px 16px #536d7e0d;
+}
+.aurora-agent-icon.blue {
+  background: linear-gradient(135deg, #eaf1f2 5%, #bad0dc 70%, #a6becd);
+  color: #3b6274;
+}
+.aurora-agent-icon.sand {
+  background: linear-gradient(135deg, #faf8f1, #e2dbc9);
+  color: #635f52;
+}
+.aurora-agent-icon.pearl {
+  background: linear-gradient(135deg, white, #dbdcd8);
+  color: #62676a;
+}
+.aurora-agent-icon svg {
+  width: 27px;
+  height: 29px;
+}
+.aurora-agent-name {
+  font-weight: 550;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  margin-bottom: 11px;
+}
+.aurora-agent-description {
+  font-size: 0.875rem;
+  line-height: 1.65;
+  color: #435059;
+}
+.aurora-agent-open {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding-top: 18px;
+  margin-top: auto;
+  font-size: 0.75rem;
+  color: #536a75;
+}
+.aurora-agent-open svg {
+  width: 14px;
+  height: 14px;
+}
+.aurora-carousel-controls {
+  display: none;
+}
+.aurora-icon-button:disabled {
+  opacity: 0.4;
+}
+.aurora-mobile-navigation {
+  display: none;
+}
+.aurora-explore {
+  width: min(650px, 100%);
+  min-height: 70px;
+  padding: 12px 22px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  margin: 0 auto;
+  border: 1px solid var(--ida-glass-border);
+  border-radius: 28px;
+  background: var(--ida-glass);
+  backdrop-filter: blur(18px);
+  color: #39474d;
+  font-size: 0.875rem;
+  box-shadow:
+    inset 0 1px 2px #fff8,
+    0 6px 30px #57504a12;
+}
+.aurora-explore > span {
+  font-size: 1.35rem;
+  color: #827d73;
+}
+.aurora-more-spaces {
+  width: min(650px, 100%);
+  margin: 14px auto 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 9px;
+}
+.aurora-more-spaces button {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  background: #fffe;
+  color: #354d59;
+  border: 1px solid white;
+  padding: 14px;
+  border-radius: 16px;
+  font-size: 0.875rem;
+}
+.aurora-more-spaces svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+.aurora-day-context {
+  min-height: 20px;
+  margin: 20px 0 10px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+  color: #4d5c60;
+  font-size: 0.75rem;
+}
+.aurora-presence-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #457660;
+}
+.aurora-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+  padding: 20px 3.2% 30px;
+}
+.aurora-footer p {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: min(800px, 80%);
+  margin: 0;
+  padding: 16px 25px;
+  border: 1px solid #ffffffa1;
+  border-radius: 30px;
+  background: #ffffff34;
+  color: #4c575a;
+  font-size: 0.75rem;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  line-height: 1.75;
+}
+.aurora-footer p > span {
+  font-size: 1.35rem;
+  color: #fff;
+  line-height: 1;
+}
+.aurora-arrow-back {
+  transform: rotate(180deg);
+  display: flex;
+}
+
+/* Les espaces de travail existants gardent leur composition et leurs états. */
+.app-shell {
+  background: linear-gradient(140deg, #f6f3eb, #edf2f3);
+}
+.sidebar {
+  background: #f8f7f2c9;
+}
+.brand-lockup {
+  color: var(--ida-text);
+  border: 0;
+  background: none;
+  font-weight: 350;
+}
+.brand-symbol {
+  box-shadow: none;
+  border-color: #8a9da680;
+  color: #547082;
+}
+.workspace-avatar,
+.profile-button {
+  background: #dbe6e9;
+  color: #354f5c;
+}
+.navigation-item.is-active {
+  background: #dbe5e9a8;
+  box-shadow: inset 3px 0 0 #66899b;
+  border-color: #89a0aa3b;
+}
+.navigation-item:hover {
+  background: #ffffffa1;
+}
+.navigation-glyph {
+  color: #647f8f;
+}
+.eyebrow {
+  color: #586d77;
+  font-weight: 550;
+  font-size: 0.75rem;
+}
+.navigation-item {
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+}
+.sidebar-footer .status-dot {
+  box-shadow: none;
+}
+.command-card,
+.panel {
+  background: #ffffffb3;
+  border-color: #ffffffd4;
+  box-shadow: 0 8px 32px #34494c06;
+}
+.command-glow {
+  display: none;
+}
+.command-card {
+  border-radius: 25px;
+}
+.assistant-mark {
+  background: #d5e1e6;
+  border-color: #d7e3e6;
+  box-shadow: none;
+}
+.assistant-mark span {
+  background: #557b8d;
+  box-shadow: none;
+}
+.send-button {
+  background: #d8e5eb;
+  color: #2e4b5a;
+  border-color: #bacbd2;
+  box-shadow: none;
+}
+.send-button:hover:not(:disabled) {
+  background: #c6d9e2;
+}
+.message-avatar {
+  background: #e6e9e7;
+  color: #577079;
+}
+.message.assistant,
+.message.user {
+  background: #f7f8f6;
+}
+.mobile-bottom-bar,
+.mobile-more-sheet {
+  background: #f7f7f2f2;
+  border-color: #d4dcda;
+}
+.mobile-more-sheet h2 {
+  color: var(--ida-text);
+}
+.local-lock-button {
+  color: #3d5a67;
+  border-color: #bccbd0;
+  background: #ffffffb3;
+}
+.local-demo-label {
+  color: var(--ida-muted);
+}
+.media-thumbnail span {
+  color: #fff;
+  background: #14212dd9;
+  padding: 4px 8px;
+  border-radius: 8px;
+}
+
+/* Le verrou partage l'ambiance Aurora, jamais la logique métier. */
+.access-shell {
+  background:
+    linear-gradient(#fff4, #fff7),
+    url("/design/aurora-atrium.png") center / cover;
+}
+.access-brand {
+  color: #414b4e;
+  font-weight: 250;
+}
+.access-brand span,
+.access-intro,
+.access-help,
+.access-footnote,
+.access-recovery,
+.access-local-note {
+  color: #556168;
+}
+.access-card {
+  background: #ffffffb3;
+  border-color: #ffffffde;
+  backdrop-filter: blur(22px);
+  box-shadow: 0 22px 80px #5351471a;
+}
+.access-card h1 {
+  color: #2d3c43;
+}
+.access-orb {
+  color: #607e8a;
+  border-color: #ffffffdc;
+  background: linear-gradient(140deg, white, #d7e2e4);
+}
+.access-form label,
+.access-notice {
+  color: #3b4e57;
+}
+.access-form input {
+  background: #fffc;
+  border-color: #aebdbb;
+  color: var(--ida-text);
+}
+.access-reveal,
+.access-secondary {
+  color: #365a70;
+}
+.access-primary {
+  background: #d6e4e9;
+  color: #294552;
+  border-color: #aec6d0;
+}
+.access-primary:hover:not(:disabled) {
+  background: #c5dce5;
+}
+.access-notice,
+.access-help,
+.access-footnote,
+.access-recovery,
+.access-form label,
+.access-secondary {
+  font-size: 0.875rem;
+}
+
+@media (max-width: 1000px) {
+  .aurora-agent-rail {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: 6px;
+    scrollbar-width: thin;
+    scrollbar-color: #8ca2aa55 transparent;
+    padding-bottom: 18px;
+  }
+  .aurora-agent-card {
+    flex: 0 0 210px;
+    scroll-snap-align: start;
+  }
+  .aurora-carousel-controls {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 20px;
+    margin-top: 10px;
+  }
+  .aurora-carousel-controls .aurora-icon-button {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+  }
+  .aurora-carousel-controls > span {
+    font-size: 0.75rem;
+    color: #526269;
+  }
+}
+@media (max-width: 600px) {
+  .aurora-home {
+    background-position: 47% top;
+    padding-bottom: 82px;
+  }
+  .aurora-topbar {
+    padding: 22px 23px;
+  }
+  .aurora-corner-wordmark {
+    font-size: 1.5rem;
+  }
+  .aurora-local-status {
+    font-size: 0.75rem;
+  }
+  .aurora-welcome {
+    padding: 27px 0 0;
+  }
+  .aurora-signature {
+    padding: 0 22px 35px;
+  }
+  .aurora-signature h1 {
+    font-size: 4.25rem;
+  }
+  .aurora-signature p {
+    font-size: 0.75rem;
+    letter-spacing: 0.24em;
+    line-height: 1.9;
+  }
+  .aurora-greeting {
+    margin: 0 24px 27px;
+    line-height: 1.9;
+    font-size: 1rem;
+  }
+  .aurora-greeting span {
+    display: block;
+  }
+  .aurora-command {
+    margin: 0 23px;
+    padding-left: 19px;
+    min-height: 77px;
+  }
+  .aurora-command textarea {
+    font-size: 1rem;
+    height: 62px;
+    padding: 7px 0;
+  }
+  .aurora-spaces {
+    margin: 39px 0 26px;
+  }
+  .aurora-spaces h2 {
+    font-size: 0.75rem;
+    margin-bottom: 20px;
+  }
+  .aurora-agent-rail {
+    padding: 7px 23px 20px;
+    gap: 13px;
+    scroll-padding-inline: 23px;
+  }
+  .aurora-agent-card {
+    flex-basis: 175px;
+    min-height: 276px;
+    padding: 25px 19px 20px;
+    align-items: center;
+    text-align: center;
+  }
+  .aurora-agent-icon {
+    width: 60px;
+    height: 60px;
+    margin-bottom: 23px;
+  }
+  .aurora-agent-name {
+    font-size: 1rem;
+    font-weight: 550;
+  }
+  .aurora-agent-description {
+    font-size: 0.875rem;
+    line-height: 1.7;
+  }
+  .aurora-agent-open {
+    padding-top: 18px;
+  }
+  .aurora-explore {
+    width: calc(100% - 46px);
+    min-height: 83px;
+    border-radius: 30px;
+  }
+  .aurora-more-spaces {
+    width: calc(100% - 46px);
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .aurora-day-context {
+    margin: 21px 22px 0;
+    font-size: 0.75rem;
+  }
+  .aurora-footer {
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 34px 23px 30px;
+  }
+  .aurora-footer p {
+    order: -1;
+    width: 100%;
+    min-height: 100px;
+    border-radius: 35px;
+    letter-spacing: 0.22em;
+    font-size: 0.75rem;
+  }
+  .aurora-icon-button {
+    width: 48px;
+    height: 48px;
+    border-radius: 18px;
+  }
+  .aurora-mobile-navigation {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 10;
+    display: flex;
+    padding: 8px 7px max(10px, env(safe-area-inset-bottom));
+    background: #f8f8f4f5;
+    backdrop-filter: blur(18px);
+    border-top: 1px solid white;
+  }
+  .aurora-mobile-navigation button,
+  .aurora-mobile-navigation a {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    padding: 4px 0;
+    font-size: 0.75rem;
+    line-height: 1.4;
+    background: none;
+    border: 0;
+    color: #50616b;
+    text-decoration: none;
+    border-radius: 10px;
+  }
+  .aurora-mobile-navigation [aria-current="page"] {
+    background: #dfe8eaa1;
+    color: #2e5162;
+  }
+  .aurora-mobile-navigation span {
+    font-size: 1.2rem;
+    line-height: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .aurora-home *,
+  .app-shell * {
+    /* biome-ignore lint/complexity/noImportantStyles: La préférence d’accessibilité doit primer sur les états interactifs. */
+    animation: none !important;
+    /* biome-ignore lint/complexity/noImportantStyles: La préférence d’accessibilité doit primer sur les états interactifs. */
+    transition: none !important;
+    /* biome-ignore lint/complexity/noImportantStyles: Aucun défilement animé lorsque le mouvement est réduit. */
+    scroll-behavior: auto !important;
+  }
+}

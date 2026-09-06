@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import { LocalAccessGate } from "./LocalAccessGate";
 import "./styles.css";
+import "./aurora.css";
 
 const rootElement = document.getElementById("root");
 

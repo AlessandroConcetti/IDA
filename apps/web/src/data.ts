@@ -61,17 +61,17 @@ export interface MediaAsset {
 }
 
 export const navigation: NavigationItem[] = [
-  { id: "home", label: "HOME", glyph: "⌂" },
+  { id: "home", label: "Accueil", glyph: "⌂" },
   { id: "ida", label: "IDA", glyph: "✦" },
-  { id: "music", label: "MUSIC", glyph: "♫" },
-  { id: "content", label: "CONTENT", glyph: "◇" },
-  { id: "social", label: "SOCIAL", glyph: "◌" },
-  { id: "calendar", label: "CALENDAR", glyph: "□" },
-  { id: "campaigns", label: "CAMPAIGNS", glyph: "◎" },
-  { id: "analytics", label: "ANALYTICS", glyph: "↗" },
-  { id: "tasks", label: "TASKS", glyph: "✓" },
-  { id: "memory", label: "MEMORY", glyph: "◒" },
-  { id: "system", label: "SYSTEM", glyph: "◉" },
+  { id: "music", label: "Musique", glyph: "♫" },
+  { id: "content", label: "Contenus", glyph: "◇" },
+  { id: "social", label: "Réseaux", glyph: "◌" },
+  { id: "calendar", label: "Calendrier", glyph: "□" },
+  { id: "campaigns", label: "Campagnes", glyph: "◎" },
+  { id: "analytics", label: "Statistiques", glyph: "↗" },
+  { id: "tasks", label: "Tâches", glyph: "✓" },
+  { id: "memory", label: "Mémoire", glyph: "◒" },
+  { id: "system", label: "Système", glyph: "◉" },
 ];
 
 export const mobilePrimaryNavigation: NavigationId[] = ["home", "ida", "content", "calendar"];
@@ -91,57 +91,57 @@ export const artistBrain: ArtistBrain = {
 export const sectionCopy: Record<NavigationId, { eyebrow: string; title: string; description: string }> = {
   home: {
     eyebrow: "IDA COMMAND CENTER",
-    title: "Good afternoon.",
+    title: "Votre journée, en perspective.",
     description: "Ton univers artistique, en un seul endroit.",
   },
   ida: {
     eyebrow: "CONVERSATION",
-    title: "Talk to IDA.",
+    title: "Parlons de votre univers.",
     description: "Demande, cherche, organise ou prépare une prochaine action.",
   },
   music: {
     eyebrow: "MUSIC BRAIN",
-    title: "Your sound, in context.",
-    description: "Tracks, releases et métadonnées reliés à ton workflow.",
+    title: "Votre musique prend sa place.",
+    description: "Morceaux, releases et métadonnées dans un même catalogue.",
   },
   content: {
     eyebrow: "CONTENT LIBRARY",
-    title: "Ready when you are.",
+    title: "Vos contenus, à portée de main.",
     description: "Des médias retrouvables, frais et prêts à être proposés.",
   },
   social: {
-    eyebrow: "SOCIAL CAPABILITIES",
-    title: "Connected by design.",
+    eyebrow: "SOCIAL BRAIN",
+    title: "Vos réseaux, en toute clarté.",
     description: "Les capacités réelles sont visibles avant toute intégration.",
   },
   calendar: {
-    eyebrow: "EDITORIAL CALENDAR",
-    title: "A clear next move.",
+    eyebrow: "CALENDRIER ÉDITORIAL",
+    title: "Un rythme qui vous ressemble.",
     description: "Ton rythme éditorial, sans surcharge ni répétition.",
   },
   campaigns: {
-    eyebrow: "CAMPAIGNS",
-    title: "Shape the story.",
+    eyebrow: "CAMPAGNES",
+    title: "Donnez forme à votre histoire.",
     description: "Pose un brief créatif clair avant de relier les contenus et la release.",
   },
   analytics: {
-    eyebrow: "ANALYTICS",
-    title: "See what resonates.",
+    eyebrow: "STATISTIQUES",
+    title: "Comprendre ce qui résonne.",
     description: "Les recommandations resteront fondées sur des données traçables.",
   },
   tasks: {
-    eyebrow: "TASKS",
-    title: "Keep momentum.",
+    eyebrow: "TÂCHES",
+    title: "Gardez votre élan.",
     description: "Les priorités créatives et opérationnelles restent visibles.",
   },
   memory: {
     eyebrow: "ARTIST BRAIN",
-    title: "A memory you control.",
+    title: "Une mémoire sous votre contrôle.",
     description: "Ton identité artistique et tes préférences, modifiables à tout moment.",
   },
   system: {
-    eyebrow: "IDA SYSTEM",
-    title: "Calm, observable, reliable.",
+    eyebrow: "IDA SYSTÈME",
+    title: "Un état clair, à chaque instant.",
     description: "Chaque intégration garde un état compréhensible.",
   },
 };

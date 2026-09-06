@@ -2,7 +2,13 @@
 
 ## Statut
 
-Architecture visuelle cible. Le Command Center actuel reste l'interface active ; aucun thème cinématique, vortex ou fond d'écran natif n'est annoncé comme livré.
+Première tranche `IDA_AURORA` livrée le 5 septembre 2026 : accueil clair inspiré des deux références desktop/mobile, décor d’atrium local sans texte, typographie fine, verre dépoli, cinq cartes vers les espaces existants et accès aux six autres modules. Le champ de commande appelle le même IDA Core. Le Command Center opérationnel reste accessible depuis sa carte ; aucun module n’est supprimé.
+
+Le verrou local et les espaces internes partagent une palette claire à travers les variables CSS `--ida-*`. Le bouton soleil de l’accueil réduit sa transparence pour la visite courante ; ce réglage n’est pas encore persistant ni synchronisé. Les cartes désignent des espaces, pas des agents prétendument actifs. Les compteurs proviennent du résumé API et restent indisponibles en cas d’échec.
+
+Cette tranche n’implémente pas encore de `ThemeProvider`, de manifeste appliqué, de thème Cosmos, de vortex, de caméra, de geste ou de fond d’écran natif. Le reste de ce document décrit ces étapes futures.
+
+Fichiers : `apps/web/src/AuroraHome.tsx`, `aurora.css`, tokens partagés dans `styles.css` et raccordement dans `App.tsx`. Le décor généré est livré localement mais exclu de Git conformément à la règle sur les médias ; provenance, prompt et chemin dans [Aurora — ressource graphique](docs/AURORA_ASSET.md). Sans ce fichier, le fond ivoire de repli conserve une interface fonctionnelle.
 
 ## Direction artistique commune
 
@@ -110,9 +116,9 @@ iOS et Android n'exposeront pas cette fonction desktop. Une éventuelle expérie
 
 ## Ordre de livraison
 
-1. Stabiliser les tokens du thème actuel.
-2. Ajouter un `ThemeProvider` et une préférence locale sans nouvelle animation.
-3. Livrer `IDA_AURORA` comme manifeste de référence.
+1. Stabiliser les tokens Aurora et terminer la recette visuelle/accessibilité des modules ; la première composition d’accueil est livrée.
+2. Ajouter un `ThemeProvider` et une préférence persistante sans nouvelle animation.
+3. Formaliser `IDA_AURORA` comme manifeste de référence, sans reconstruire les composants livrés.
 4. Prototyper `IDA_COSMOS` derrière un flag utilisateur.
 5. Mesurer puis ajouter l'intro cinématique optionnelle.
 6. Étudier `AMBIENT_DESKTOP` seulement après le client desktop natif.

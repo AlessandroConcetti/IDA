@@ -1,4 +1,5 @@
 import { type DragEvent, type FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { AuroraHome } from "./AuroraHome";
 import {
   type ActivityLogRecord,
   type AgentManifestRecord,
@@ -189,11 +190,11 @@ function CommandComposer({
         </div>
         <div>
           <p className="eyebrow">IDA CORE</p>
-          <h2 id="ask-ida-title">Ask IDA anything…</h2>
+          <h2 id="ask-ida-title">Que souhaitez-vous faire ?</h2>
         </div>
         <span className={`api-pill ${apiMode === "connected" ? "is-connected" : "is-fallback"}`}>
           <span aria-hidden="true" />
-          {apiMode === "connected" ? "API connected" : "Local preview"}
+          {apiMode === "connected" ? "API disponible" : "API en attente"}
         </span>
       </div>
 
@@ -212,7 +213,7 @@ function CommandComposer({
         <div className="command-actions">
           <p>IDA utilisera uniquement les données et outils autorisés.</p>
           <button className="send-button" type="submit" disabled={isSubmitting || command.trim().length === 0}>
-            {isSubmitting ? "IDA réfléchit…" : "Ask IDA"}
+            {isSubmitting ? "IDA réfléchit…" : "Demander à IDA"}
             <span aria-hidden="true">↗</span>
           </button>
         </div>
@@ -273,7 +274,7 @@ function formatDashboardDate(summary: CommandCenterSummary | undefined, source: 
     return "DATE API";
   }
 
-  const parts = new Intl.DateTimeFormat("en-GB", {
+  const parts = new Intl.DateTimeFormat("fr-FR", {
     day: "2-digit",
     month: "short",
     timeZone: "UTC",
@@ -4258,9 +4259,10 @@ function SectionContent({
 
 function App({ onLock }: { onLock?: (() => void) | undefined }) {
   const [activeId, setActiveId] = useState<NavigationId>("home");
+  const [isOverviewOpen, setIsOverviewOpen] = useState(false);
   const [messages, setMessages] = useState<ConversationMessage[]>(initialMessages);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [apiMode, setApiMode] = useState<"connected" | "fallback">(isApiConfigured ? "connected" : "fallback");
+  const [apiMode, setApiMode] = useState<"connected" | "fallback">("fallback");
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const [dashboard, setDashboard] = useState<DashboardSnapshot>(localDashboard);
   const [dashboardSource, setDashboardSource] = useState<DashboardSource>(isApiConfigured ? "loading" : "local");
@@ -4270,6 +4272,17 @@ function App({ onLock }: { onLock?: (() => void) | undefined }) {
 
   const section = sectionCopy[activeId];
   const moreItems = useMemo(() => navigation.filter((item) => !mobilePrimaryNavigation.includes(item.id)), []);
+  const screenId = `${activeId}:${isOverviewOpen ? "overview" : "space"}`;
+  const previousScreen = useRef(screenId);
+
+  useEffect(() => {
+    if (previousScreen.current === screenId) return;
+    previousScreen.current = screenId;
+    // Une carte située plus bas dans l'accueil ne doit pas ouvrir un module
+    // déjà défilé. Le titre devient aussi le repère clavier/lecteur d'écran.
+    document.querySelector<HTMLElement>("main h1")?.focus({ preventScroll: true });
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+  }, [screenId]);
 
   useEffect(() => {
     let isCurrent = true;
@@ -4288,6 +4301,7 @@ function App({ onLock }: { onLock?: (() => void) | undefined }) {
 
         setDashboard(snapshot);
         setDashboardSource("api");
+        setApiMode("connected");
         setDashboardNotice("Données API synchronisées : résumé, système, tracks et médias.");
       })
       .catch((error: unknown) => {
@@ -4298,6 +4312,7 @@ function App({ onLock }: { onLock?: (() => void) | undefined }) {
         const reason = error instanceof IdaApiError ? error.message : "IDA API est indisponible.";
         setDashboard(localDashboard);
         setDashboardSource("local");
+        setApiMode("fallback");
         setDashboardNotice(`Aperçu local : ${reason}`);
       });
 
@@ -4339,6 +4354,7 @@ function App({ onLock }: { onLock?: (() => void) | undefined }) {
 
   function navigateTo(id: NavigationId) {
     setActiveId(id);
+    setIsOverviewOpen(false);
     setIsMoreOpen(false);
   }
 
@@ -4415,30 +4431,54 @@ function App({ onLock }: { onLock?: (() => void) | undefined }) {
     }
   }
 
+  if (activeId === "home" && !isOverviewOpen) {
+    return (
+      <AuroraHome
+        onNavigate={(id) => {
+          if (id === "home") setIsOverviewOpen(true);
+          else navigateTo(id);
+        }}
+        onCommand={(command) => {
+          navigateTo("ida");
+          void handleCommand(command);
+        }}
+        onLock={onLock}
+        isSubmitting={isSubmitting}
+        summary={dashboard.summary}
+        source={dashboardSource}
+      />
+    );
+  }
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <div className="brand-lockup">
+        <button
+          className="brand-lockup"
+          type="button"
+          onClick={() => navigateTo("home")}
+          aria-label="Revenir à l’accueil IDA"
+        >
           <span className="brand-symbol" aria-hidden="true">
             ◒
           </span>
           <span>IDA</span>
-        </div>
+        </button>
         <div className="workspace-chip">
           <span className="workspace-avatar" aria-hidden="true">
             A
           </span>
           <div>
-            <strong>Artist workspace</strong>
-            <small>Personal command center</small>
+            <strong>Espace artistique</strong>
+            <small>Votre Command Center</small>
           </div>
         </div>
         <NavigationControl activeId={activeId} onNavigate={navigateTo} />
         <div className="sidebar-footer">
-          <span className={`status-dot ${apiMode === "connected" ? "online" : "warning"}`} aria-hidden="true" />
+          <span className={`status-dot ${dashboardSource === "api" ? "online" : "warning"}`} aria-hidden="true" />
           <div>
-            <strong>{apiMode === "connected" ? "IDA online" : "Local preview"}</strong>
-            <small>{apiMode === "connected" ? "API command channel ready" : "Configure VITE_IDA_API_URL"}</small>
+            <strong>{dashboardSource === "api" ? "IDA disponible" : "Connexion en attente"}</strong>
+            <small>{dashboardSource === "api" ? "Votre univers est synchronisé" : "Vérifiez le serveur local"}</small>
           </div>
         </div>
       </aside>
@@ -4447,7 +4487,7 @@ function App({ onLock }: { onLock?: (() => void) | undefined }) {
         <header className="topbar">
           <div>
             <p className="eyebrow">{section.eyebrow}</p>
-            <h1>{section.title}</h1>
+            <h1 tabIndex={-1}>{section.title}</h1>
             <p className="page-description">{section.description}</p>
           </div>
           <div className="topbar-actions">
@@ -4499,7 +4539,7 @@ function App({ onLock }: { onLock?: (() => void) | undefined }) {
           <span aria-hidden="true" className="navigation-glyph">
             •••
           </span>
-          <span>MORE</span>
+          <span>Plus</span>
         </button>
       </div>
 
@@ -4514,8 +4554,8 @@ function App({ onLock }: { onLock?: (() => void) | undefined }) {
           <section className="mobile-more-sheet" id="mobile-more-menu" aria-label="Autres sections">
             <div className="sheet-handle" aria-hidden="true" />
             <div className="sheet-heading">
-              <p className="eyebrow">MORE</p>
-              <h2>More of IDA.</h2>
+              <p className="eyebrow">VOTRE UNIVERS</p>
+              <h2>Les autres espaces.</h2>
             </div>
             <div className="more-navigation">
               {moreItems.map((item) => (

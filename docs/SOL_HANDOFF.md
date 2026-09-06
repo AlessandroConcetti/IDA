@@ -35,4 +35,14 @@ OAuth/publication réels, IA générative générale, voix, banque/budget, cours
 
 Estimation communiquée : **environ 75 % de la démo locale testable et fonctionnelle**, appréciation du périmètre et non mesure automatique. Ne pas l’augmenter au seul nombre de tests. La recette navigateur et le scénario complet restent nécessaires ; ce pourcentage ne concerne ni l’IDA finale ni les intégrations sociales, l’IA générale ou le déploiement multi-appareils.
 
-La passe Astra n’a pas effectué de recette visuelle dans le navigateur. Ne pas présenter la démo comme homologuée, déployée ou prête pour des données personnelles réelles.
+La passe sécurité ci-dessus n’avait pas effectué de recette visuelle dans le navigateur. Ne pas présenter la démo comme homologuée, déployée ou prête pour des données personnelles réelles.
+
+## Tranche Aurora — 5–6 septembre 2026
+
+L’utilisateur a rappelé que le frontend de la démo doit reprendre ses deux visuels. L’accueil `AuroraHome` est livré : décor architectural généré autonome, cinq cartes vers les espaces existants, six modules supplémentaires dans l’explorateur, champ de commande relié au Core, compteurs issus de l’API, contraste de transparence temporaire et navigation mobile classique. Les espaces internes et le verrou partagent la palette claire ; aucun changement de sécurité, de schéma ou de permission n’en dépend.
+
+Validation : **138 tests / 13 fichiers**, types web, lint global et build web réussis. Aucun ajout de dépendance. Les builds contrats/domain/API avaient également été vérifiés avant cette passe purement cliente. Contrôles navigateur ciblés sur données fictives en mémoire : accueil desktop, viewport mobile de 390 × 844, carrousel, exploration des autres espaces, ouverture Music Brain/Contenus, commande « aujourd’hui » réellement traitée par le Core, focus de titre et remise en haut à la navigation. Aucun débordement horizontal de page observé sur ce viewport mobile ; aucun avertissement/erreur dans les logs navigateur consultés. Cela ne couvre pas Safari/iPhone ou Android physiques, le parcours métier intégral ni le cycle du verrou en navigateur.
+
+Le décor est livré dans le workspace mais ignoré par Git suivant la règle sur les médias : [provenance, prompt et installation](AURORA_ASSET.md). [Guide de démonstration](DEMO_GUIDE.md) ajouté. L’accueil et les principales entrées de navigation sont français ; la consolidation des libellés anglais internes reste à faire, sans lancer l’internationalisation.
+
+Suite bornée pour Sol : suivre le scénario du guide, compléter la recette du verrou sur une base de test dédiée avec intervention humaine pour la saisie d’un nouveau credential, puis vérifier les messages/états et terminer les libellés français. Préserver les onze modules, le décor local, la frontière d’accès et le Core. Ne pas activer Cosmos, caméra, gestes, banque ou publication réelle pour cette recette.

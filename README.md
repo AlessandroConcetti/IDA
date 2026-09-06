@@ -21,6 +21,7 @@ Une propriété fail-safe complète ce fonctionnement : dès que le credential l
 
 ## Documentation
 
+- [Guide de démonstration locale](docs/DEMO_GUIDE.md)
 - [Architecture](ARCHITECTURE.md)
 - [Base de données](DATABASE.md)
 - [API](API.md)
@@ -52,5 +53,7 @@ Le web est alors disponible sur `http://127.0.0.1:5173` et l’API locale sur `h
 Le verrou local peut être évalué explicitement avec `IDA_IDENTITY_MODE=LOCAL_LOCK`. Il expose alors `GET /v1/auth/status`, `POST /v1/auth/setup`, `POST /v1/auth/unlock` et `POST /v1/auth/lock`, puis protège les autres routes `/v1` par un cookie de session opaque `HttpOnly` et `SameSite=Strict`. Après `setup`, le verrou devient persistant et ne peut pas être rétrogradé par configuration. Ce mode reste strictement lié à la boucle locale ; le premier parcours UI de setup/unlock/lock est livré, mais sa recette navigateur et la récupération restent à terminer, et ce mécanisme ne doit pas servir à protéger des données réelles ni à exposer IDA sur le LAN ou Internet.
 
 ## Prochain jalon
+
+L’accueil Aurora reprend maintenant les références lumineuses desktop/mobile : cinq cartes fonctionnelles, commande vers le même Core, navigation classique, palette claire partagée et contraste de transparence temporaire. Le décor est une ressource locale non versionnée : [fichier et provenance](docs/AURORA_ASSET.md). Aucun agent, thème cinématique ou capteur n’est activé par cet accueil. La recette visuelle responsive ne vaut pas validation sur appareils physiques ni achèvement du parcours métier complet.
 
 Les décisions d'Identity/Device Linking sont validées. Contrats, politique d'accès, tables locales additives et résolution fail-closed de la session avant chaque route `/v1` sont livrés. Le contexte profondément gelé, conservé hors de l'objet Fastify, est désormais l'unique source de l'acteur, du workspace, du rôle et du grant dans les routes et IDA Core ; les permissions sont recoupées avant chaque outil et `/v1/me` expose les capacités effectives sans exposer la preuve de session. Le verrou transitoire défini par l’ADR 0004 est livré avec un premier écran en mode `LOCAL_LOCK` opt-in ; `LOCAL_DEMO` reste le défaut tant que son expérience de setup/unlock, sa récupération et sa revue produit ne sont pas consolidées. Aucun compte réseau, passkey, association d’appareil ou accès multi-appareils réel n’est actif, et le runtime ne doit pas être exposé hors boucle locale. La démo reste française ; l'anglais est différé après sa consolidation. Les connexions sociales restent une Phase 3 contrôlée par `SOCIAL_APIS.md`, tandis que thèmes cinématiques, gestes et agents de gouvernance futurs ne retardent pas ce jalon.

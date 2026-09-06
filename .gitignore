@@ -18,6 +18,8 @@ apps/api/.storage/
 storage/
 uploads/
 tmp/
+# Décor généré livré localement ; médias non versionnés selon AGENTS.md.
+apps/web/public/design/aurora-atrium.png
 
 # Editor and OS files
 .DS_Store

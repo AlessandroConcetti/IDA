@@ -57,6 +57,8 @@ Transformer la vision en cadre de travail précis, sans développer de fonctionn
 
 Point de reprise local : [relais de consolidation pour Sol](docs/SOL_HANDOFF.md). La passe sécurité du cycle d’accès est livrée ; la recette navigateur et le parcours de démonstration complet sont les prochaines priorités, sans déclencher de phase future.
 
+Tranche visuelle du 5 septembre 2026 : accueil Aurora inspiré des deux références approuvées, cartes reliées aux modules existants, commandes vers le Core partagé, navigation mobile, palette claire des espaces et du verrou, réduction temporaire de transparence et respect de la réduction de mouvement. Aucun thème cinématique ni `ThemeProvider` complet n’est livré. Le [guide local](docs/DEMO_GUIDE.md) distingue ces fonctions de la recette métier/verrou encore à compléter ; la distribution multi-appareils reste conditionnée au jalon sécurité.
+
 ### Objectif
 
 Créer le premier produit réellement utilisable : un Command Center responsive où l'utilisateur peut centraliser son univers artistique et interroger IDA par écrit.
