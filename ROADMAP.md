@@ -6,7 +6,11 @@ IDA sera construit par petites étapes testables. Une phase ne démarre réellem
 
 La roadmap décrit une séquence de capacité, pas une promesse de date. Elle privilégie un socle fiable plutôt qu'un grand nombre de fonctions incomplètes.
 
-L'évolution Tentacular validée conserve ce séquencement. Windows, macOS, le Web/PWA, iOS, Android et de futurs clients TV partageront un seul Core. Sur téléphone, le navigateur Web/PWA restera disponible en parallèle de l'application native iOS ou Android ; chaque instance cliente aura une session révocable séparément. Les thèmes personnalisables, gestes et surfaces desktop restent des capacités clientes ultérieures et ne retardent pas les phases prioritaires.
+L'évolution Tentacular validée conserve ce séquencement. Windows, macOS, le Web/PWA, iOS, Android et de futurs clients TV partageront un seul Core. Sur téléphone, le navigateur Web/PWA restera disponible en parallèle de l'application native iOS ou Android ; chaque instance cliente aura une session révocable séparément. La Roue des Mondes et le choix d’accueil Classic / Sci-Fi sont désormais une tranche cliente prioritaire validée. Le moteur complet de personnalisation, les gestes et les surfaces desktop restent ultérieurs.
+
+## Roue des Mondes et évolution validée
+
+La [tranche Roue des Mondes](docs/WORLDS_AND_THEMES.md) relie les espaces actuels de Music Studio, Content Studio, Social Hub et Workspace, sans ajouter de capacités au Core. Les autres mondes sont affichés « À venir ». Une première vidéo utilisateur est disponible à la demande dans Music Studio ; les suivantes attendent leurs fichiers. Le thème Sci-Fi couvre l’accueil et ces environnements ; les modules métier restent clairs. Les dépendances, limites et critères de sortie de la suite sont décrits dans ce document, sans dates arbitraires ni agents fictivement actifs.
 
 ## Vue d'ensemble
 

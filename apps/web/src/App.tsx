@@ -76,6 +76,7 @@ import {
 } from "./data";
 import { statusLabelFr } from "./labels.fr";
 import { SnapshotReader } from "./snapshot-reader";
+import type { HomeTheme } from "./worlds";
 
 interface ConversationMessage {
   id: string;
@@ -4269,6 +4270,7 @@ function SectionContent({
 }
 
 function App({ onLock }: { onLock?: (() => void) | undefined }) {
+  const [homeTheme, setHomeTheme] = useState<HomeTheme>("classic");
   const [activeId, setActiveId] = useState<NavigationId>("home");
   const [isOverviewOpen, setIsOverviewOpen] = useState(false);
   const [messages, setMessages] = useState<ConversationMessage[]>(initialMessages);
@@ -4434,6 +4436,8 @@ function App({ onLock }: { onLock?: (() => void) | undefined }) {
         isSubmitting={isSubmitting}
         summary={dashboard.summary}
         source={dashboardSource}
+        theme={homeTheme}
+        onThemeChange={setHomeTheme}
       />
     );
   }

@@ -1,5 +1,17 @@
 # IDA — Relais de consolidation pour Sol
 
+## Dernière tranche — Roue des Mondes — 6 septembre 2026
+
+Voir [périmètre, composants et médias](WORLDS_AND_THEMES.md). Accueil : roue en perspective, grille alternative, sélection clavier/tactile/trackpad, environnement et retour avec focus. Music Studio → Artist Brain/Music Brain ; Content Studio → DAM ; Social Hub → capacités sociales/Approval Center/calendrier/campagnes/statistiques ; Workspace → Command Center/conversation/tâches/mémoire/système. Les huit mondes futurs sont inertes. Tous les anciens modules restent directement accessibles.
+
+Classic/Sci-Fi est un état de présentation éphémère dans `App`, uniquement pour l’accueil/environnements ; aucun changement Identity/Core/API/base/permission. La vidéo utilisateur de Music Studio (4,78125 s, portrait 480 × 832) démarre uniquement au clic, muette ; changement de thème, sortie, masquage, hors-écran et préférences restrictives l’arrêtent. Aucun capteur, fournisseur, dépendance ou génération. Les médias de décor sont copiés localement et exclus de Git ; les autres clips restent à fournir.
+
+Vérification finale : **185 tests / 18 fichiers, 137,20 s**, types web/API/contracts/domain, lint global et build web réussis. Recette dans l’aperçu existant : sélection clavier bornée, focus/Échap, grille/roue et recentrage, ouverture Music Brain et Social Brain, accès réel aux validations depuis Social Hub, onze raccourcis directs, aucune vidéo avant demande, lecture effective muette puis démontage au changement de thème. Logs navigateur consultés sans erreur/avertissement. Aucune écriture métier pendant cette recette.
+
+Limites : les captures restent tronquées par l’aperçu ; aucune nouvelle recette physique iPhone/Android ni validation réseau revendiquée. Le lecteur respecte les préférences restrictives par contrat/test de policy ; leur changement système n’a pas été simulé dans le navigateur. Les modules métier restent clairs ; l’immersion vidéo dans toutes les cartes et le vortex attendent les assets et une tranche dédiée. Continuer ensuite la consolidation calendrier/verrou décrite plus bas, sans nouveaux pouvoirs.
+
+Les serveurs d’aperçu précédents restent actifs à la demande utilisateur, sans doublon, sans exposition LAN et sans changer la base de démo. La couche Sites a guidé la conservation du projet et de son aperçu local ; aucun déploiement cloud.
+
 ## Périmètre de la passe Astra — 5 septembre 2026
 
 À la demande de l’utilisateur, cette passe se limite aux invariants sensibles du cycle Identity local et aux tests adversariaux. Pas de nouvelle phase métier, dépendance, intégration, modèle ou service cloud.

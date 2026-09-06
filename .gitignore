@@ -20,6 +20,8 @@ uploads/
 tmp/
 # Décor généré livré localement ; médias non versionnés selon AGENTS.md.
 apps/web/public/design/aurora-atrium.png
+apps/web/public/design/world-reference-v1.mp4
+apps/web/public/design/scifi-observatory.png
 
 # Editor and OS files
 .DS_Store

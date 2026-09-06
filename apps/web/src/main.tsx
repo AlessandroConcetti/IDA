@@ -4,6 +4,7 @@ import App from "./App";
 import { LocalAccessGate } from "./LocalAccessGate";
 import "./styles.css";
 import "./aurora.css";
+import "./worlds.css";
 
 const rootElement = document.getElementById("root");
 

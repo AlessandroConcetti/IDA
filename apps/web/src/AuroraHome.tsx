@@ -1,6 +1,8 @@
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import type { CommandCenterSummary } from "./api";
 import type { NavigationId } from "./data";
+import { WorldWheel } from "./WorldWheel";
+import type { HomeTheme } from "./worlds";
 
 export type AuroraIconName = "layers" | "brain" | "music" | "content" | "social" | "arrow" | "sun" | "chat" | "lock";
 
@@ -33,45 +35,12 @@ export function AuroraIcon({ name }: { name: AuroraIconName }) {
   );
 }
 
-const featuredSpaces: { title: string; detail: string; target: NavigationId; icon: AuroraIconName; tone: string }[] = [
-  {
-    title: "Command Center",
-    detail: "Votre journée, vos priorités et l’ensemble de votre univers.",
-    target: "home",
-    icon: "layers",
-    tone: "blue",
-  },
-  {
-    title: "Artist Brain",
-    detail: "Votre identité artistique, vos inspirations et votre direction.",
-    target: "memory",
-    icon: "brain",
-    tone: "sand",
-  },
-  {
-    title: "Music Brain",
-    detail: "Vos morceaux, vos releases et tout ce qui fait votre son.",
-    target: "music",
-    icon: "music",
-    tone: "blue",
-  },
-  {
-    title: "Content Library",
-    detail: "Vos images, sons et vidéos, dans une bibliothèque partagée.",
-    target: "content",
-    icon: "content",
-    tone: "pearl",
-  },
-  {
-    title: "Social Brain",
-    detail: "Vos plateformes et leurs possibilités, en toute clarté.",
-    target: "social",
-    icon: "social",
-    tone: "blue",
-  },
-];
-
 const moreSpaces: { title: string; target: NavigationId }[] = [
+  { title: "Command Center", target: "home" },
+  { title: "Conversation IDA", target: "ida" },
+  { title: "Music Brain", target: "music" },
+  { title: "Content Library", target: "content" },
+  { title: "Social Brain", target: "social" },
   { title: "Calendrier", target: "calendar" },
   { title: "Campagnes", target: "campaigns" },
   { title: "Statistiques", target: "analytics" },
@@ -87,6 +56,8 @@ export function AuroraHome({
   isSubmitting,
   summary,
   source,
+  theme = "classic",
+  onThemeChange,
 }: {
   onNavigate: (id: NavigationId) => void;
   onCommand: (command: string) => void;
@@ -94,13 +65,12 @@ export function AuroraHome({
   isSubmitting: boolean;
   summary?: CommandCenterSummary | undefined;
   source: "loading" | "api" | "local";
+  theme?: HomeTheme;
+  onThemeChange?: (theme: HomeTheme) => void;
 }) {
   const [command, setCommand] = useState("");
   const [expanded, setExpanded] = useState(false);
   const [solid, setSolid] = useState(false);
-  const [railStart, setRailStart] = useState(true);
-  const [railEnd, setRailEnd] = useState(false);
-  const rail = useRef<HTMLDivElement>(null);
   const more = useRef<HTMLElement>(null);
   useEffect(() => {
     if (expanded) more.current?.scrollIntoView({ block: "nearest", behavior: "auto" });
@@ -109,14 +79,22 @@ export function AuroraHome({
     event.preventDefault();
     if (command.trim() && !isSubmitting) onCommand(command.trim());
   }
-  function scrollCards(direction: number) {
-    if (rail.current) rail.current.scrollBy({ left: direction * rail.current.clientWidth * 0.7, behavior: "auto" });
-  }
   return (
-    <div className="aurora-home" data-surface={solid ? "solid" : "glass"}>
+    <div className="aurora-home" data-theme={theme} data-surface={solid ? "solid" : "glass"}>
       <header className="aurora-topbar">
         <span className="aurora-corner-wordmark">IDA</span>
         <div className="aurora-access-actions">
+          {onThemeChange ? (
+            <fieldset className="home-theme-picker">
+              <legend className="sr-only">Thème de l’accueil</legend>
+              <button type="button" aria-pressed={theme === "classic"} onClick={() => onThemeChange("classic")}>
+                Classic
+              </button>
+              <button type="button" aria-pressed={theme === "scifi"} onClick={() => onThemeChange("scifi")}>
+                Sci-Fi
+              </button>
+            </fieldset>
+          ) : null}
           <span className="aurora-local-status">{onLock ? "Espace local privé" : "Démo locale"}</span>
           {onLock ? (
             <button
@@ -137,7 +115,7 @@ export function AuroraHome({
           <h1 id="aurora-start" tabIndex={-1}>
             IDA
           </h1>
-          <p>Intelligent Digital Assistant</p>
+          <p>Intelligent Digital Agent</p>
         </div>
         <p className="aurora-greeting">
           Bienvenue. <span>Comment puis-je vous assister aujourd’hui ?</span>
@@ -152,7 +130,7 @@ export function AuroraHome({
             enterKeyHint="send"
             value={command}
             onChange={(event) => setCommand(event.target.value)}
-            placeholder="Décrivez votre demande ou choisissez un espace"
+            placeholder="Décrivez votre demande ou choisissez un environnement"
             maxLength={2000}
             autoComplete="off"
             disabled={isSubmitting}
@@ -168,59 +146,7 @@ export function AuroraHome({
           </button>
         </form>
 
-        <section className="aurora-spaces" aria-labelledby="aurora-spaces-title">
-          <h2 id="aurora-spaces-title">Votre univers IDA</h2>
-          <div
-            className="aurora-agent-rail"
-            ref={rail}
-            onScroll={(event) => {
-              const current = event.currentTarget;
-              setRailStart(current.scrollLeft <= 2);
-              setRailEnd(current.scrollLeft + current.clientWidth >= current.scrollWidth - 2);
-            }}
-          >
-            {featuredSpaces.map((space) => (
-              <button
-                className="aurora-agent-card"
-                key={space.title}
-                type="button"
-                onClick={() => onNavigate(space.target)}
-              >
-                <span className={`aurora-agent-icon ${space.tone}`}>
-                  <AuroraIcon name={space.icon} />
-                </span>
-                <span className="aurora-agent-name">{space.title}</span>
-                <span className="aurora-agent-description">{space.detail}</span>
-                <span className="aurora-agent-open" aria-hidden="true">
-                  Explorer <AuroraIcon name="arrow" />
-                </span>
-              </button>
-            ))}
-          </div>
-          <div className="aurora-carousel-controls">
-            <button
-              className="aurora-icon-button"
-              type="button"
-              onClick={() => scrollCards(-1)}
-              aria-label="Espaces précédents"
-              disabled={railStart}
-            >
-              <span className="aurora-arrow-back">
-                <AuroraIcon name="arrow" />
-              </span>
-            </button>
-            <span>Vos cinq espaces principaux</span>
-            <button
-              className="aurora-icon-button"
-              type="button"
-              onClick={() => scrollCards(1)}
-              aria-label="Espaces suivants"
-              disabled={railEnd}
-            >
-              <AuroraIcon name="arrow" />
-            </button>
-          </div>
-        </section>
+        <WorldWheel onNavigate={onNavigate} theme={theme} />
 
         <button
           className="aurora-explore"

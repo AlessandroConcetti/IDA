@@ -24,14 +24,16 @@ function render(source: "api" | "loading" | "local", onLock?: () => void) {
   return html;
 }
 describe("Accueil Aurora : présentation sans nouveaux pouvoirs", () => {
-  it("présente les cinq espaces existants et les entrées classiques sans agent actif implicite", () => {
+  it("présente les mondes, le Music Brain et les entrées classiques sans agent actif implicite", () => {
     const html = render("api");
     for (const title of [
-      "Command Center",
+      "La Roue des Mondes",
+      "Workspace",
+      "Music Studio",
       "Artist Brain",
       "Music Brain",
-      "Content Library",
-      "Social Brain",
+      "Content Studio",
+      "Social Hub",
       "Explorer tous les espaces",
       "Navigation mobile",
       "Votre demande à IDA",

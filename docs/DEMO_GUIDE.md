@@ -13,7 +13,9 @@ Utiliser seulement des données fictives. Aucun compte social, publication publi
 
 ## Parcours conseillé
 
-1. Accueil Aurora : ouvrir les cinq cartes ; « Explorer tous les espaces » donne accès au calendrier, campagnes, statistiques, tâches, mémoire et système. Le soleil réduit temporairement la transparence.
+Pour tester la vidéo : entrer dans **Music Studio**, puis « Lire l’ambiance vidéo ». Elle est muette et se boucle ; « Arrêter » ou changer de thème la démonte. Aucun lancement au retour dans le monde. En mode mouvement réduit ou économie de données, la lecture reste désactivée. Les [décors locaux supplémentaires](WORLDS_AND_THEMES.md) doivent être présents ; les autres vidéos attendent les fichiers utilisateur.
+
+1. Accueil Aurora : choisir Classic ou Sci-Fi, sélectionner un monde dans la roue puis « Entrer ». Music Studio contient Artist Brain et Music Brain ; Social Hub relie réseaux, Approval Center, calendrier, campagnes et statistiques. « Explorer tous les environnements » ouvre la grille ; « Explorer tous les espaces » garde un accès direct aux onze modules. Le soleil réduit temporairement la transparence. Les mondes « À venir » n’activent rien.
 2. Artist Brain : consulter/modifier le profil artistique. Music Brain : créer une release, puis un morceau et choisir cette release explicitement.
 3. Content Library : importer un petit média fictif (25 MiB maximum), choisir les liens musicaux, rechercher et prévisualiser. Les médias de seed sans fichier ne promettent pas d’aperçu réel.
 4. Campagnes : créer un brief `DRAFT`, puis choisir explicitement une release et un morceau. Aucun planning n’est généré automatiquement.

@@ -1,5 +1,7 @@
 # IDA — Architecture de référence
 
+Extension cliente du 6 septembre 2026 : voir [Roue des Mondes et thèmes](docs/WORLDS_AND_THEMES.md). Le catalogue monde/environnement/espace ne remplace ni l’Agent Registry ni le Tool Gateway. Il projette les modules existants vers l’accueil, sans nouveau Core, pouvoir, endpoint ou schéma.
+
 ## 1. Objet et périmètre
 
 IDA (Intelligent Digital Assistant) est conçu comme un **AI Command Center personnel**. Son premier domaine est l'écosystème musical et éditorial de son propriétaire : catalogue, médias, releases, contenu social, campagnes, calendrier, tâches, statistiques et mémoire artistique.
