@@ -46,3 +46,17 @@ Validation : **138 tests / 13 fichiers**, types web, lint global et build web r�
 Le décor est livré dans le workspace mais ignoré par Git suivant la règle sur les médias : [provenance, prompt et installation](AURORA_ASSET.md). [Guide de démonstration](DEMO_GUIDE.md) ajouté. L’accueil et les principales entrées de navigation sont français ; la consolidation des libellés anglais internes reste à faire, sans lancer l’internationalisation.
 
 Suite bornée pour Sol : suivre le scénario du guide, compléter la recette du verrou sur une base de test dédiée avec intervention humaine pour la saisie d’un nouveau credential, puis vérifier les messages/états et terminer les libellés français. Préserver les onze modules, le décor local, la frontière d’accès et le Core. Ne pas activer Cosmos, caméra, gestes, banque ou publication réelle pour cette recette.
+
+## Consolidation française et données honnêtes — 6 septembre 2026
+
+Principaux titres, actions et statuts francisés ; `labels.fr.ts` traduit uniquement la présentation et préserve les codes, classes et valeurs de formulaires. Aucun sélecteur de langue ni système i18n n’est activé. Les noms métier et techniques ne sont pas traduits arbitrairement.
+
+Suppression des réponses de secours qui annonçaient un agenda/campagne fictifs, du score Analytics `86` et du fallback du dashboard vers des médias/morceaux/services factices. Les données de démonstration du serveur restent identifiées comme telles. Le formulaire Artist Brain part vide, n’affiche pas de faux profil et ne permet pas de sauvegarde avant une lecture API réussie ; une erreur réseau d’enregistrement n’est plus présentée comme la certitude d’une absence d’écriture. Ce sont des gardes UX, jamais un remplacement des contrôles serveur.
+
+Le nouveau scénario d’`app.test.ts` réutilise les fixtures isolées et enchaîne profil → release/morceau → média/recherche → campagne versionnée → proposition seed/approbation → planification interne → tâche → préférence consentie → commande/historique. Il vérifie les liens, états et projections sans publication ni clé de stockage. Une proposition seed reste distincte de la campagne nouvellement créée : le futur planner n’est pas simulé. Huit nouveaux cas dans `demo-presentation.test.ts` couvrent les fallbacks honnêtes, le profil initial bloqué et les libellés.
+
+Premier lancement global : huit dépassements de 5 s, sans échec d’assertion, dans les migrations/redémarrages PGlite et le verrou. `vitest.config.ts` limite désormais le parallélisme à deux workers et borne tests/hooks à 15 s, sans retrait de scénario ni retry automatique. Cette limite d’infrastructure de test n’est pas un objectif de latence produit.
+
+Vérification finale : **147 tests réussis / 14 fichiers en 151,98 s**, types web/API/contrats/domain, lint global et build web réussis. La suite entière a été relancée après réglage ; aucune assertion n’a été supprimée. Aucun ajout de dépendance, changement d’API ou de base de données n’a été nécessaire.
+
+Suite : recette navigateur complète (dont erreurs/rechargement), actualisation du résumé à la sortie des mutations, vérification sur appareils physiques et finalisation du verrou. Ne pas augmenter artificiellement l’estimation de démo au nombre de traductions ou de tests ; ni validation mobile réelle, ni nouvelle barrière de sécurité ne sont revendiquées par cette tranche.

@@ -206,20 +206,6 @@ export const systemServices: SystemService[] = [
   { name: "Social accounts", state: "DISCONNECTED", detail: "Connexions prévues en phase 3" },
 ];
 
-export function getLocalIdaResponse(command: string): string {
-  const normalized = command.toLocaleLowerCase("fr-FR");
-
-  if (normalized.includes("aujourd") || normalized.includes("today")) {
-    return "Aujourd’hui, tu as trois propositions à valider, cinq moments déjà planifiés et une campagne active à finaliser.";
-  }
-
-  if (normalized.includes("inutil") || normalized.includes("unused") || normalized.includes("média")) {
-    return "Je ne peux pas vérifier les médias réellement disponibles sans IDA API. Ouvre Content Rotation une fois le hub connecté.";
-  }
-
-  if (normalized.includes("release") || normalized.includes("campagne")) {
-    return "Je préparerais une campagne autour d’Afterimage avec un hook studio, un visuel éditorial et un rappel de release. Cette proposition est locale tant que l’API n’est pas connectée.";
-  }
-
-  return "Je suis en mode aperçu local. Configure VITE_IDA_API_URL pour que cette commande consulte le vrai IDA Core et ton workspace.";
+export function getLocalIdaResponse(_command: string): string {
+  return "Je ne peux pas confirmer le résultat de cette demande : IDA API est indisponible. Vérifie la connexion au serveur local, puis consulte l’historique avant de réessayer. Aucune demande n’est relancée automatiquement.";
 }

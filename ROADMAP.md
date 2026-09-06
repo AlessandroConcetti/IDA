@@ -59,6 +59,8 @@ Point de reprise local : [relais de consolidation pour Sol](docs/SOL_HANDOFF.md)
 
 Tranche visuelle du 5 septembre 2026 : accueil Aurora inspiré des deux références approuvées, cartes reliées aux modules existants, commandes vers le Core partagé, navigation mobile, palette claire des espaces et du verrou, réduction temporaire de transparence et respect de la réduction de mouvement. Aucun thème cinématique ni `ThemeProvider` complet n’est livré. Le [guide local](docs/DEMO_GUIDE.md) distingue ces fonctions de la recette métier/verrou encore à compléter ; la distribution multi-appareils reste conditionnée au jalon sécurité.
 
+Consolidation du 6 septembre : principaux titres, boutons et statuts en français ; test de parcours HTTP sur données fictives de bout en bout, sans prétendre relier automatiquement campagne et proposition ; suppression des réponses/metrics de secours inventées et formulaire de profil désactivé avant sa lecture. Pas de nouvelle API ni de fournisseur. Restent notamment le scénario navigateur, les résultats rafraîchis après mutations, le cycle de verrou et la recette sur appareils physiques.
+
 ### Objectif
 
 Créer le premier produit réellement utilisable : un Command Center responsive où l'utilisateur peut centraliser son univers artistique et interroger IDA par écrit.

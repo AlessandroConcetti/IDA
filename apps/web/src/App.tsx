@@ -64,10 +64,6 @@ import {
 import {
   type ArtistBrain,
   getLocalIdaResponse,
-  artistBrain as localArtistBrain,
-  mediaAssets as localMediaAssets,
-  systemServices as localSystemServices,
-  tracks as localTracks,
   type MediaAsset,
   mobilePrimaryNavigation,
   type NavigationId,
@@ -77,6 +73,7 @@ import {
   sectionCopy,
   type Track,
 } from "./data";
+import { statusLabelFr } from "./labels.fr";
 
 interface ConversationMessage {
   id: string;
@@ -98,7 +95,7 @@ const initialMessages: ConversationMessage[] = [
     id: "welcome",
     role: "assistant",
     content:
-      "Je suis prête. Demande-moi de préparer ta journée, de retrouver un média ou de mettre une release en contexte.",
+      "Je peux consulter ta journée, retrouver des médias inutilisés et expliquer l’état du système. Les autres demandes ne sont pas encore prises en charge dans cette démo.",
     meta: "IDA · command center",
   },
 ];
@@ -109,7 +106,7 @@ function commandRunsToMessages(commandRuns: IdaCommandRunRecord[]): Conversation
       id: `command-${commandRun.id}-user`,
       role: "user" as const,
       content: commandRun.message,
-      meta: "You",
+      meta: "Vous",
     },
     {
       id: `command-${commandRun.id}-assistant`,
@@ -121,9 +118,21 @@ function commandRunsToMessages(commandRuns: IdaCommandRunRecord[]): Conversation
 }
 
 const localDashboard: DashboardSnapshot = {
-  systemServices: localSystemServices,
-  tracks: localTracks,
-  mediaAssets: localMediaAssets,
+  systemServices: [],
+  tracks: [],
+  mediaAssets: [],
+};
+
+const emptyArtistBrain: ArtistBrain = {
+  identity: "",
+  genres: [],
+  influences: [],
+  tone: "",
+  preferredVocabulary: [],
+  forbiddenVocabulary: [],
+  goals: [],
+  audience: "",
+  platformPreferences: {},
 };
 
 type DashboardSource = "loading" | "api" | "local";
@@ -206,7 +215,7 @@ function CommandComposer({
           id="ida-command"
           value={command}
           onChange={(event) => setCommand(event.target.value)}
-          placeholder="Prépare mes publications de demain…"
+          placeholder="Qu’est-ce que j’ai aujourd’hui ?"
           rows={2}
           disabled={isSubmitting}
         />
@@ -237,7 +246,7 @@ function ConversationPanel({
     <section className="panel conversation-panel" aria-labelledby="conversation-title">
       <div className="panel-heading">
         <div>
-          <p className="eyebrow">LIVE CONTEXT</p>
+          <p className="eyebrow">CONTEXTE DE CONVERSATION</p>
           <h2 id="conversation-title">Conversation</h2>
         </div>
         <span className="quiet-label">{contextLabel}</span>
@@ -294,39 +303,40 @@ function PriorityGrid({ summary, source }: { summary?: CommandCenterSummary; sou
     value: number | undefined;
     detail: string;
     accent: "violet" | "blue" | "amber" | "mint";
-  }> = summary
-    ? [
-        {
-          label: "Approvals",
-          value: summary.pendingApprovals,
-          detail: "propositions à valider",
-          accent: "violet",
-        },
-        {
-          label: "Plans",
-          value: summary.activeInternalSchedules,
-          detail: "planifications internes actives",
-          accent: "blue",
-        },
-        {
-          label: "Campaigns",
-          value: summary.activeCampaigns,
-          detail: "campagnes actives",
-          accent: "amber",
-        },
-        {
-          label: "Releases",
-          value: summary.upcomingReleases,
-          detail: "releases à venir",
-          accent: "mint",
-        },
-      ]
-    : [
-        { label: "Approvals", value: undefined, detail: unavailableDetail, accent: "violet" },
-        { label: "Plans", value: undefined, detail: unavailableDetail, accent: "blue" },
-        { label: "Campaigns", value: undefined, detail: unavailableDetail, accent: "amber" },
-        { label: "Releases", value: undefined, detail: unavailableDetail, accent: "mint" },
-      ];
+  }> =
+    summary && source === "api"
+      ? [
+          {
+            label: "Validations",
+            value: summary.pendingApprovals,
+            detail: "propositions à valider",
+            accent: "violet",
+          },
+          {
+            label: "Planning",
+            value: summary.activeInternalSchedules,
+            detail: "planifications internes actives",
+            accent: "blue",
+          },
+          {
+            label: "Campagnes",
+            value: summary.activeCampaigns,
+            detail: "campagnes actives",
+            accent: "amber",
+          },
+          {
+            label: "Sorties",
+            value: summary.upcomingReleases,
+            detail: "releases à venir",
+            accent: "mint",
+          },
+        ]
+      : [
+          { label: "Validations", value: undefined, detail: unavailableDetail, accent: "violet" },
+          { label: "Planning", value: undefined, detail: unavailableDetail, accent: "blue" },
+          { label: "Campagnes", value: undefined, detail: unavailableDetail, accent: "amber" },
+          { label: "Sorties", value: undefined, detail: unavailableDetail, accent: "mint" },
+        ];
 
   return (
     <section className="priority-grid" aria-label="Priorités du jour">
@@ -344,9 +354,9 @@ function PriorityGrid({ summary, source }: { summary?: CommandCenterSummary; sou
 type EditorialCalendarSource = "loading" | "api" | "unavailable";
 
 const editorialCalendarViews: Array<{ id: EditorialCalendarView; label: string }> = [
-  { id: "DAY", label: "DAY" },
-  { id: "WEEK", label: "WEEK" },
-  { id: "MONTH", label: "MONTH" },
+  { id: "DAY", label: "Jour" },
+  { id: "WEEK", label: "Semaine" },
+  { id: "MONTH", label: "Mois" },
 ];
 
 function editorialCalendarPlatform(platform: string): string {
@@ -458,8 +468,8 @@ function CalendarPanel({ onOpenCalendar }: { onOpenCalendar: () => void }) {
     <section className="panel calendar-panel" aria-labelledby="today-title">
       <div className="panel-heading">
         <div>
-          <p className="eyebrow">EDITORIAL CALENDAR</p>
-          <h2 id="today-title">The next approved moves.</h2>
+          <p className="eyebrow">CALENDRIER ÉDITORIAL</p>
+          <h2 id="today-title">Les prochains créneaux approuvés.</h2>
         </div>
         <button className="text-button" type="button" onClick={onOpenCalendar}>
           Open calendar <span aria-hidden="true">→</span>
@@ -481,7 +491,7 @@ function CalendarPanel({ onOpenCalendar }: { onOpenCalendar: () => void }) {
               <p>{editorialCalendarPlatform(item.platform)}</p>
             </div>
             <span className={`status-tag ${item.state === "SCHEDULED_INTERNAL" ? "scheduled" : "approval"}`}>
-              {item.state === "SCHEDULED_INTERNAL" ? "INTERNAL" : "READY"}
+              {item.state === "SCHEDULED_INTERNAL" ? "INTERNE" : "PRÊT"}
             </span>
           </article>
         ))}
@@ -496,9 +506,9 @@ function TrackPanel({ items, source }: { items: Track[]; source: DashboardSource
       <div className="panel-heading">
         <div>
           <p className="eyebrow">MUSIC BRAIN</p>
-          <h2 id="tracks-title">Tracks in focus.</h2>
+          <h2 id="tracks-title">Votre catalogue musical.</h2>
         </div>
-        <span className="quiet-label">{source === "api" ? "API data" : "Local preview"}</span>
+        <span className="quiet-label">{source === "api" ? "Données IDA" : "Données indisponibles"}</span>
       </div>
       <div className="track-list">
         {items.map((track, index) => (
@@ -511,7 +521,9 @@ function TrackPanel({ items, source }: { items: Track[]; source: DashboardSource
               </p>
             </div>
             <div className="track-status">
-              <span className={`status-tag ${track.status.toLocaleLowerCase("en-US")}`}>{track.status}</span>
+              <span className={`status-tag ${track.status.toLocaleLowerCase("en-US")}`}>
+                {statusLabelFr(track.status)}
+              </span>
               <small>{track.freshness}</small>
             </div>
           </article>
@@ -598,7 +610,9 @@ function MediaGrid({ assets, detailed = false }: { assets: MediaAsset[]; detaile
           <div className="media-copy">
             <div className="media-title-line">
               <h3>{asset.filename}</h3>
-              <span className={`status-tag ${asset.status.toLocaleLowerCase("en-US")}`}>{asset.status}</span>
+              <span className={`status-tag ${asset.status.toLocaleLowerCase("en-US")}`}>
+                {statusLabelFr(asset.status)}
+              </span>
             </div>
             <p>{asset.detail}</p>
             {detailed ? (
@@ -644,10 +658,10 @@ function SystemPanel({
     <section className="panel system-panel" aria-labelledby="system-title">
       <div className="panel-heading">
         <div>
-          <p className="eyebrow">SYSTEM</p>
-          <h2 id="system-title">Signal is clear.</h2>
+          <p className="eyebrow">SYSTÈME</p>
+          <h2 id="system-title">L’état de vos services.</h2>
         </div>
-        <span className="quiet-label">{source === "api" ? "Live API status" : "Local preview"}</span>
+        <span className="quiet-label">{source === "api" ? "États fournis par l’API" : "Données indisponibles"}</span>
       </div>
       <div className="system-list">
         {services.map((service) => (
@@ -657,7 +671,7 @@ function SystemPanel({
               <h3>{service.name}</h3>
               <p>{service.detail}</p>
             </div>
-            <span className={`system-state ${stateClass(service.state)}`}>{service.state}</span>
+            <span className={`system-state ${stateClass(service.state)}`}>{statusLabelFr(service.state)}</span>
           </article>
         ))}
       </div>
@@ -731,10 +745,10 @@ function AgentRegistryPanel() {
     <section className="panel agent-registry" aria-labelledby="agent-registry-title">
       <div className="panel-heading">
         <div>
-          <p className="eyebrow">AGENT REGISTRY</p>
-          <h2 id="agent-registry-title">Built to grow, kept in bounds.</h2>
+          <p className="eyebrow">REGISTRE DES AGENTS</p>
+          <h2 id="agent-registry-title">Les agents prévus pour IDA.</h2>
         </div>
-        <span className="quiet-label">{source === "api" ? "DECLARATIVE" : "NO EXECUTION"}</span>
+        <span className="quiet-label">{source === "api" ? "DÉCLARATIF" : "SANS EXÉCUTION"}</span>
       </div>
       <p className="agent-registry-intro">
         Chaque futur spécialiste arrive avec un contrat, des outils limités, des sources de contexte définies et une
@@ -759,7 +773,7 @@ function AgentRegistryPanel() {
                       {agent.domain} · {formatAgentExecutionMode(agent.executionMode)} · v{agent.version}
                     </p>
                   </div>
-                  <span className="status-tag planned">{agent.status}</span>
+                  <span className="status-tag planned">{statusLabelFr(agent.status)}</span>
                 </div>
                 <p className="agent-registry-lock">
                   {agent.allowedTools.length} outil{agent.allowedTools.length === 1 ? "" : "s"} déclaré
@@ -879,11 +893,11 @@ function ActivityTimeline() {
     <section className="panel activity-timeline" aria-labelledby="activity-timeline-title">
       <div className="panel-heading">
         <div>
-          <p className="eyebrow">ACTIVITY</p>
-          <h2 id="activity-timeline-title">What IDA has recorded.</h2>
+          <p className="eyebrow">ACTIVITÉ</p>
+          <h2 id="activity-timeline-title">L’activité enregistrée.</h2>
         </div>
         <span className="quiet-label">
-          {source === "api" ? `${items.length} récent${items.length === 1 ? "" : "s"}` : "READ ONLY"}
+          {source === "api" ? `${items.length} récent${items.length === 1 ? "" : "s"}` : "LECTURE SEULE"}
         </span>
       </div>
       <p className="activity-timeline-intro">
@@ -1004,10 +1018,10 @@ function SocialView({ dashboard, source }: { dashboard: DashboardSnapshot; sourc
       <section className="panel wide-panel">
         <div className="panel-heading">
           <div>
-            <p className="eyebrow">ADAPTER MATRIX</p>
+            <p className="eyebrow">CAPACITÉS DES PLATEFORMES</p>
             <h2>Capacités déclarées, sans supposition.</h2>
           </div>
-          <span className="quiet-label">{matrixSource === "api" ? "API READ ONLY" : "READ ONLY"}</span>
+          <span className="quiet-label">{matrixSource === "api" ? "API EN LECTURE SEULE" : "LECTURE SEULE"}</span>
         </div>
         <p className="panel-intro">
           Cette matrice provient du contrat partagé d’IDA. Elle ne représente ni un compte connecté, ni un token, ni une
@@ -1032,7 +1046,7 @@ function SocialView({ dashboard, source }: { dashboard: DashboardSnapshot; sourc
                         {platform.apiVersion} · vérifié le {formatSocialCapabilityDate(platform.verifiedAt)}
                       </p>
                     </div>
-                    <span className="status-tag warning">DECLARED ONLY</span>
+                    <span className="status-tag warning">DÉCLARATIF UNIQUEMENT</span>
                   </div>
                   <ul>
                     {socialCapabilityItems(platform).map((capability) => (
@@ -1237,10 +1251,10 @@ function MusicView({
       <section className="panel music-entry-card" aria-labelledby="music-entry-title">
         <div className="panel-heading">
           <div>
-            <p className="eyebrow">CATALOGUE ENTRY</p>
-            <h2 id="music-entry-title">Add a track.</h2>
+            <p className="eyebrow">CATALOGUE MUSICAL</p>
+            <h2 id="music-entry-title">Ajouter un morceau.</h2>
           </div>
-          <span className="status-tag demo">LOCAL ONLY</span>
+          <span className="status-tag demo">LOCAL UNIQUEMENT</span>
         </div>
         <p className="music-entry-intro">
           Crée une fiche de morceau contrôlée. Tu peux choisir une release locale, sans lier de média, de lien externe
@@ -1281,7 +1295,7 @@ function MusicView({
               >
                 {musicTrackStatuses.map((status) => (
                   <option key={status} value={status}>
-                    {status}
+                    {statusLabelFr(status)}
                   </option>
                 ))}
               </select>
@@ -1377,7 +1391,7 @@ function MusicView({
               restent absents de cette action.
             </p>
             <button className="send-button" type="submit" disabled={isSaving}>
-              {isSaving ? "Ajout…" : "Add track"}
+              {isSaving ? "Ajout…" : "Ajouter le morceau"}
               <span aria-hidden="true">↗</span>
             </button>
           </div>
@@ -1491,10 +1505,10 @@ function ReleaseRegistry({ onReleaseCreated }: { onReleaseCreated: (release: Rel
     <section className="panel release-registry-card" aria-labelledby="release-registry-title">
       <div className="panel-heading">
         <div>
-          <p className="eyebrow">RELEASE REGISTRY</p>
-          <h2 id="release-registry-title">Release context, kept local.</h2>
+          <p className="eyebrow">REGISTRE DES SORTIES</p>
+          <h2 id="release-registry-title">Vos sorties musicales.</h2>
         </div>
-        <span className="status-tag demo">LOCAL ONLY</span>
+        <span className="status-tag demo">LOCAL UNIQUEMENT</span>
       </div>
       <p className="music-entry-intro">
         Une release pose le contexte de ta sortie. Elle peut être choisie explicitement lors de l’ajout d’un morceau ;
@@ -1519,7 +1533,9 @@ function ReleaseRegistry({ onReleaseCreated }: { onReleaseCreated: (release: Rel
                   </div>
                 ) : null}
               </div>
-              <span className={`status-tag ${release.status.toLocaleLowerCase("en-US")}`}>{release.status}</span>
+              <span className={`status-tag ${release.status.toLocaleLowerCase("en-US")}`}>
+                {statusLabelFr(release.status)}
+              </span>
             </article>
           ))}
         </div>
@@ -1559,7 +1575,7 @@ function ReleaseRegistry({ onReleaseCreated }: { onReleaseCreated: (release: Rel
             >
               {musicReleaseStatuses.map((status) => (
                 <option key={status} value={status}>
-                  {status}
+                  {statusLabelFr(status)}
                 </option>
               ))}
             </select>
@@ -1608,7 +1624,7 @@ function ReleaseRegistry({ onReleaseCreated }: { onReleaseCreated: (release: Rel
             morceaux restent des liens internes explicitement contrôlés.
           </p>
           <button className="send-button" type="submit" disabled={isSaving || source === "unavailable"}>
-            {isSaving ? "Ajout…" : "Add release"}
+            {isSaving ? "Ajout…" : "Ajouter la release"}
             <span aria-hidden="true">↗</span>
           </button>
         </div>
@@ -1695,12 +1711,12 @@ function ContentRotationPanel({ refreshVersion }: { refreshVersion: number }) {
   );
   const title =
     source === "loading"
-      ? "Checking availability."
+      ? "Vérification des disponibilités."
       : source === "unavailable"
-        ? "Availability unavailable."
+        ? "Disponibilités indisponibles."
         : candidates.length > 0
-          ? "Available assets."
-          : "Nothing free yet.";
+          ? "Médias disponibles."
+          : "Aucun média libre pour le moment.";
 
   useEffect(() => {
     let isCurrent = true;
@@ -1744,7 +1760,7 @@ function ContentRotationPanel({ refreshVersion }: { refreshVersion: number }) {
 
   return (
     <section className="panel freshness-card content-rotation-card" aria-labelledby="content-rotation-title">
-      <p className="eyebrow">CONTENT ROTATION</p>
+      <p className="eyebrow">DISPONIBILITÉ DES CONTENUS</p>
       <strong>{source === "api" ? candidates.length : "—"}</strong>
       <h2 id="content-rotation-title">{title}</h2>
       <p>{notice}</p>
@@ -1958,12 +1974,12 @@ function ContentView({ onMediaAssetCreated }: { onMediaAssetCreated: (asset: Med
         <div className="panel-heading">
           <div>
             <p className="eyebrow">CONTENT LIBRARY</p>
-            <h2 id="content-library-title">Find the right asset, safely.</h2>
+            <h2 id="content-library-title">Retrouver un média.</h2>
           </div>
           <span className="quiet-label">
             {searchState === "ready"
               ? `${searchResults.length} RESULT${searchResults.length === 1 ? "" : "S"}`
-              : "PRIVATE SEARCH"}
+              : "RECHERCHE PRIVÉE"}
           </span>
         </div>
         <p className="content-library-intro">
@@ -1989,11 +2005,11 @@ function ContentView({ onMediaAssetCreated }: { onMediaAssetCreated: (asset: Med
               onChange={(event) => updateSearchField("status", event.target.value)}
             >
               <option value="">Tous</option>
-              <option value="UNUSED">Unused</option>
-              <option value="USED">Used</option>
-              <option value="SCHEDULED">Scheduled</option>
-              <option value="PUBLISHED">Published</option>
-              <option value="ARCHIVED">Archived</option>
+              <option value="UNUSED">Inutilisé</option>
+              <option value="USED">Utilisé</option>
+              <option value="SCHEDULED">Planifié</option>
+              <option value="PUBLISHED">Publié</option>
+              <option value="ARCHIVED">Archivé</option>
             </select>
           </label>
           <label className="content-library-filter" htmlFor="content-search-type">
@@ -2004,11 +2020,11 @@ function ContentView({ onMediaAssetCreated }: { onMediaAssetCreated: (asset: Med
               onChange={(event) => updateSearchField("type", event.target.value)}
             >
               <option value="">Tous</option>
-              <option value="VIDEO">Video</option>
+              <option value="VIDEO">Vidéo</option>
               <option value="IMAGE">Image</option>
               <option value="AUDIO">Audio</option>
               <option value="DOCUMENT">Document</option>
-              <option value="OTHER">Other</option>
+              <option value="OTHER">Autre</option>
             </select>
           </label>
           <label className="content-library-filter" htmlFor="content-search-tag">
@@ -2059,7 +2075,7 @@ function ContentView({ onMediaAssetCreated }: { onMediaAssetCreated: (asset: Med
           </label>
           <div className="content-library-search-actions">
             <button className="send-button" type="submit" disabled={searchState === "loading"}>
-              {searchState === "loading" ? "Recherche…" : "Search"}
+              {searchState === "loading" ? "Recherche…" : "Rechercher"}
               <span aria-hidden="true">↗</span>
             </button>
             <button
@@ -2068,7 +2084,7 @@ function ContentView({ onMediaAssetCreated }: { onMediaAssetCreated: (asset: Med
               onClick={resetSearch}
               disabled={searchState === "loading"}
             >
-              Reset
+              Réinitialiser
             </button>
           </div>
         </form>
@@ -2094,10 +2110,10 @@ function ContentView({ onMediaAssetCreated }: { onMediaAssetCreated: (asset: Med
       <section className="panel content-import-card" aria-labelledby="content-import-title">
         <div className="panel-heading">
           <div>
-            <p className="eyebrow">LOCAL IMPORT</p>
-            <h2 id="content-import-title">Add one media asset.</h2>
+            <p className="eyebrow">IMPORT LOCAL</p>
+            <h2 id="content-import-title">Importer un média.</h2>
           </div>
-          <span className="status-tag demo">PRIVATE</span>
+          <span className="status-tag demo">PRIVÉ</span>
         </div>
         <p className="content-import-intro">
           Import local uniquement : une release ou un morceau local peut être choisi, sans post, brouillon public ou
@@ -2138,7 +2154,7 @@ function ContentView({ onMediaAssetCreated }: { onMediaAssetCreated: (asset: Med
               {file ? "✓" : "↑"}
             </span>
             <span className="content-dropzone-copy">
-              <strong>{file ? file.name : "Drop a media file here"}</strong>
+              <strong>{file ? file.name : "Dépose un média ici"}</strong>
               <small id="media-upload-hint">
                 {file
                   ? `${displayFileSize(file.size)} · Click to replace`
@@ -2210,7 +2226,7 @@ function ContentView({ onMediaAssetCreated }: { onMediaAssetCreated: (asset: Med
               disponibles. Les médias existants ne sont pas modifiés ici.
             </p>
             <button className="send-button" type="submit" disabled={isUploading || !file}>
-              {isUploading ? "Importation…" : "Add media"}
+              {isUploading ? "Importation…" : "Importer le média"}
               <span aria-hidden="true">↗</span>
             </button>
           </div>
@@ -2283,7 +2299,7 @@ function approvalQueueHeading(source: "loading" | "api" | "unavailable", count: 
     return "File indisponible.";
   }
 
-  return count ? `${count} à décider` : "Nothing waiting.";
+  return count ? `${count} à décider` : "Aucune proposition en attente.";
 }
 
 function ApprovalCenter() {
@@ -2391,9 +2407,9 @@ function ApprovalCenter() {
       <div className="panel-heading">
         <div>
           <p className="eyebrow">IDA APPROVAL CENTER</p>
-          <h2 id="approval-center-title">Review before anything moves.</h2>
+          <h2 id="approval-center-title">Valider les propositions.</h2>
         </div>
-        <span className="status-tag approval">HUMAN DECISION</span>
+        <span className="status-tag approval">DÉCISION HUMAINE</span>
       </div>
       <p className="approval-center-intro">
         IDA prépare les propositions ; tu décides. Cette étape ne publie et ne programme aucun contenu.
@@ -2407,10 +2423,10 @@ function ApprovalCenter() {
 
       <div className="approval-section-heading">
         <div>
-          <p className="eyebrow">REQUESTED APPROVALS</p>
+          <p className="eyebrow">PROPOSITIONS À VALIDER</p>
           <h3>{approvalQueueHeading(source, approvals.length)}</h3>
         </div>
-        <span className="quiet-label">No delivery configured</span>
+        <span className="quiet-label">Aucune publication configurée</span>
       </div>
 
       {source === "loading" ? <p className="approval-empty-state">Chargement des propositions…</p> : null}
@@ -2439,8 +2455,8 @@ function ApprovalCenter() {
                   <h3>{approval.postTitle}</h3>
                 </div>
                 <div className="approval-state-stack">
-                  <span className="approval-state-tag requested">{approval.approvalState}</span>
-                  <span className="approval-delivery-tag">{approval.deliveryState.replaceAll("_", " ")}</span>
+                  <span className="approval-state-tag requested">{statusLabelFr(approval.approvalState)}</span>
+                  <span className="approval-delivery-tag">{statusLabelFr(approval.deliveryState)}</span>
                 </div>
               </div>
 
@@ -2451,7 +2467,7 @@ function ApprovalCenter() {
 
               <div className="approval-detail-grid">
                 <div className="approval-detail approval-detail-wide">
-                  <span>MEDIA</span>
+                  <span>MÉDIA</span>
                   <div className="approval-media-names">
                     {approval.media.length > 0 ? (
                       approval.media.map((media, index) => <p key={`${media.filename}-${index}`}>{media.filename}</p>)
@@ -2461,7 +2477,7 @@ function ApprovalCenter() {
                   </div>
                 </div>
                 <div className="approval-detail approval-detail-wide">
-                  <span>CAPTION</span>
+                  <span>TEXTE</span>
                   <p className="approval-caption">{approval.caption}</p>
                 </div>
                 <div className="approval-detail">
@@ -2477,21 +2493,21 @@ function ApprovalCenter() {
                   )}
                 </div>
                 <div className="approval-detail">
-                  <span>CTA</span>
+                  <span>APPEL À L’ACTION</span>
                   <p>{approval.cta ?? "Non renseigné."}</p>
                 </div>
                 <div className="approval-detail">
-                  <span>OBJECTIVE</span>
+                  <span>OBJECTIF</span>
                   <p>{approval.objective}</p>
                 </div>
                 <div className="approval-detail">
-                  <span>AI REASONING</span>
-                  <p>{approval.rationale ?? "Rationale non renseignée."}</p>
+                  <span>POURQUOI CETTE PROPOSITION</span>
+                  <p>{approval.rationale ?? "Motif non renseigné."}</p>
                 </div>
               </div>
 
               <p className="approval-next-step">
-                EDIT et REGENERATE seront ajoutés dans une prochaine tranche contrôlée.
+                La modification et la régénération seront ajoutées dans une prochaine tranche contrôlée.
               </p>
 
               <div className="approval-actions">
@@ -2502,7 +2518,7 @@ function ApprovalCenter() {
                   disabled={!canDecide}
                   aria-label={`Approuver « ${approval.postTitle} » sans publier ni planifier`}
                 >
-                  {isActive ? "DECIDING…" : "APPROVE"}
+                  {isActive ? "Validation…" : "Approuver"}
                 </button>
                 <button
                   className="approval-action-button reject"
@@ -2511,7 +2527,7 @@ function ApprovalCenter() {
                   disabled={!canDecide}
                   aria-label={`Rejeter « ${approval.postTitle} » sans publier ni planifier`}
                 >
-                  {isActive ? "DECIDING…" : "REJECT"}
+                  {isActive ? "Validation…" : "Refuser"}
                 </button>
               </div>
             </article>
@@ -2587,10 +2603,10 @@ function CalendarView() {
       <section className="panel wide-panel editorial-calendar-card" aria-labelledby="editorial-calendar-title">
         <div className="panel-heading editorial-calendar-heading">
           <div>
-            <p className="eyebrow">EDITORIAL CALENDAR</p>
-            <h2 id="editorial-calendar-title">Plan the approved moment.</h2>
+            <p className="eyebrow">CALENDRIER ÉDITORIAL</p>
+            <h2 id="editorial-calendar-title">Planifier les contenus approuvés.</h2>
           </div>
-          <span className="status-tag approval">INTERNAL ONLY</span>
+          <span className="status-tag approval">INTERNE UNIQUEMENT</span>
         </div>
         <p className="editorial-calendar-intro">
           Une planification ici reste une intention interne à IDA. Elle n’active ni scheduler, ni compte social, ni
@@ -2692,14 +2708,16 @@ function CalendarView() {
       <section className="panel helper-panel editorial-calendar-observation">
         <p className="eyebrow">IDA OBSERVATION</p>
         <h2>
-          {readyCount ? `${readyCount} approved move${readyCount > 1 ? "s" : ""} ready.` : "No approved move waiting."}
+          {readyCount
+            ? `${readyCount} contenu${readyCount > 1 ? "s" : ""} approuvé${readyCount > 1 ? "s" : ""} à planifier.`
+            : "Aucun contenu approuvé en attente."}
         </h2>
         <p>
           {scheduledCount
             ? `${scheduledCount} planification${scheduledCount > 1 ? "s" : ""} interne${scheduledCount > 1 ? "s" : ""} visible${scheduledCount > 1 ? "s" : ""} dans cette période.`
             : "Aucune planification interne active dans cette période."}
         </p>
-        <span className="status-tag warning">NO EXTERNAL DELIVERY</span>
+        <span className="status-tag warning">AUCUNE PUBLICATION EXTERNE</span>
       </section>
     </div>
   );
@@ -3025,10 +3043,10 @@ function CampaignsView() {
       <section className="panel wide-panel campaign-registry-card" aria-labelledby="campaign-registry-title">
         <div className="panel-heading">
           <div>
-            <p className="eyebrow">CAMPAIGN BRIEFS</p>
-            <h2 id="campaign-registry-title">Plan before pushing.</h2>
+            <p className="eyebrow">BRIEFS DE CAMPAGNE</p>
+            <h2 id="campaign-registry-title">Vos briefs de campagne.</h2>
           </div>
-          <span className="status-tag demo">INTERNAL ONLY</span>
+          <span className="status-tag demo">INTERNE UNIQUEMENT</span>
         </div>
         <p className="campaign-registry-intro">
           Ces briefs organisent l’intention créative. Ils ne créent ni contenu, ni calendrier, ni tâche, ni action
@@ -3196,10 +3214,10 @@ function CampaignsView() {
       <section className="panel campaign-create-card" aria-labelledby="campaign-create-title">
         <div className="panel-heading">
           <div>
-            <p className="eyebrow">NEW BRIEF</p>
-            <h2 id="campaign-create-title">Start with intent.</h2>
+            <p className="eyebrow">NOUVEAU BRIEF</p>
+            <h2 id="campaign-create-title">Créer un brief.</h2>
           </div>
-          <span className="quiet-label">DRAFT ONLY</span>
+          <span className="quiet-label">BROUILLON UNIQUEMENT</span>
         </div>
         <p className="campaign-create-intro">
           IDA crée uniquement un brouillon local. Une release et un morceau existants peuvent ensuite être liés
@@ -3232,7 +3250,7 @@ function CampaignsView() {
           <div className="campaign-create-actions">
             <p>Le workspace, le projet et l’état initial sont imposés côté serveur.</p>
             <button className="send-button" type="submit" disabled={isSaving || source !== "api"}>
-              {isSaving ? "ENREGISTREMENT…" : "CREATE DRAFT"}
+              {isSaving ? "Enregistrement…" : "Créer le brouillon"}
               <span aria-hidden="true">↗</span>
             </button>
           </div>
@@ -3240,8 +3258,8 @@ function CampaignsView() {
       </section>
 
       <section className="panel helper-panel campaign-boundary-card">
-        <p className="eyebrow">NEXT BOUNDARY</p>
-        <h2>Structure before automation.</h2>
+        <p className="eyebrow">À VENIR</p>
+        <h2>Des briefs, sans automatisation.</h2>
         <p>
           Le Campaign Manager, les piliers et les recommandations IA restent désactivés tant que leurs contrats,
           permissions et validations ne sont pas définis.
@@ -3251,21 +3269,21 @@ function CampaignsView() {
   );
 }
 
-function AnalyticsView() {
+export function AnalyticsView() {
   const metrics = [
-    ["Reach", "—", "API required"],
-    ["Engagement", "—", "API required"],
-    ["Freshness", "86", "local preview"],
+    ["Portée", "—", "Connexion API nécessaire"],
+    ["Engagement", "—", "Connexion API nécessaire"],
+    ["Fraîcheur", "—", "Calcul non disponible"],
   ] as const;
 
   return (
     <section className="panel wide-panel analytics-card">
       <div className="panel-heading">
         <div>
-          <p className="eyebrow">ANALYTICS</p>
-          <h2>Recommendations need evidence.</h2>
+          <p className="eyebrow">STATISTIQUES</p>
+          <h2>Des statistiques vérifiables.</h2>
         </div>
-        <span className="quiet-label">No synthetic performance data</span>
+        <span className="quiet-label">Données non connectées</span>
       </div>
       <div className="metrics-grid">
         {metrics.map(([label, value, detail]) => (
@@ -3346,10 +3364,10 @@ function formatTaskDate(value: string | undefined, fallback: string): string {
 
 function taskStatusLabel(status: TaskRecord["status"]): string {
   const labels: Record<TaskRecord["status"], string> = {
-    TODO: "TODO",
-    IN_PROGRESS: "IN PROGRESS",
-    DONE: "DONE",
-    CANCELLED: "CANCELLED",
+    TODO: "À faire",
+    IN_PROGRESS: "En cours",
+    DONE: "Terminée",
+    CANCELLED: "Annulée",
   };
 
   return labels[status];
@@ -3491,10 +3509,12 @@ function TasksView() {
         <section className="panel task-card" aria-labelledby="open-tasks-title">
           <div className="panel-heading">
             <div>
-              <p className="eyebrow">TASKS</p>
-              <h2 id="open-tasks-title">What moves forward.</h2>
+              <p className="eyebrow">TÂCHES</p>
+              <h2 id="open-tasks-title">Vos tâches ouvertes.</h2>
             </div>
-            <span className="quiet-label">{source === "api" ? "Workspace data" : "API required"}</span>
+            <span className="quiet-label">
+              {source === "api" ? "Données du workspace" : "Connexion API nécessaire"}
+            </span>
           </div>
           <p className={`task-notice ${noticeState}`} role="status">
             <span aria-hidden="true" />
@@ -3528,7 +3548,7 @@ function TasksView() {
                     disabled={!canManage}
                     aria-label={`Marquer « ${task.title} » comme terminée`}
                   >
-                    {isActive ? "COMPLETING…" : "COMPLETE"}
+                    {isActive ? "Finalisation…" : "Terminer"}
                   </button>
                 </li>
               );
@@ -3539,10 +3559,10 @@ function TasksView() {
         <section className="panel task-create-card" aria-labelledby="task-create-title">
           <div className="panel-heading">
             <div>
-              <p className="eyebrow">NEW TASK</p>
-              <h2 id="task-create-title">Make it explicit.</h2>
+              <p className="eyebrow">NOUVELLE TÂCHE</p>
+              <h2 id="task-create-title">Ajouter une tâche.</h2>
             </div>
-            <span className="status-tag demo">NO AUTOMATION</span>
+            <span className="status-tag demo">SANS AUTOMATISATION</span>
           </div>
           <p className="task-create-intro">
             Crée une tâche interne. Une échéance organise le contexte ; elle ne programme ni notification ni action.
@@ -3582,7 +3602,7 @@ function TasksView() {
             <div className="task-create-actions">
               <p>La tâche est créée dans ton workspace actuel, jamais dans un calendrier externe.</p>
               <button className="send-button" type="submit" disabled={!canManage}>
-                {isCreating ? "Création…" : "Create task"}
+                {isCreating ? "Création…" : "Créer la tâche"}
                 <span aria-hidden="true">↗</span>
               </button>
             </div>
@@ -3593,10 +3613,10 @@ function TasksView() {
       <section className="panel wide-panel task-completed-card" aria-labelledby="completed-tasks-title">
         <div className="panel-heading">
           <div>
-            <p className="eyebrow">COMPLETED</p>
-            <h2 id="completed-tasks-title">Closed with intent.</h2>
+            <p className="eyebrow">TERMINÉES</p>
+            <h2 id="completed-tasks-title">Vos tâches terminées.</h2>
           </div>
-          <span className="quiet-label">{completedTasks.length} closed</span>
+          <span className="quiet-label">{completedTasks.length} terminée(s)</span>
         </div>
         {source === "api" && completedTasks.length === 0 ? (
           <p className="task-empty-state">Les tâches terminées apparaîtront ici.</p>
@@ -3681,12 +3701,12 @@ function formToArtistBrain(form: ArtistBrainForm, current: ArtistBrain): ArtistB
 
 function memoryCategoryLabel(category: MemoryRecord["category"]): string {
   const labels: Record<MemoryRecord["category"], string> = {
-    ARTIST_MEMORY: "Artist memory",
-    CONTENT_MEMORY: "Content memory",
-    CAMPAIGN_MEMORY: "Campaign memory",
-    SOCIAL_MEMORY: "Social memory",
-    PREFERENCE_MEMORY: "Preference",
-    SYSTEM_MEMORY: "System memory",
+    ARTIST_MEMORY: "Identité artistique",
+    CONTENT_MEMORY: "Contenus",
+    CAMPAIGN_MEMORY: "Campagnes",
+    SOCIAL_MEMORY: "Réseaux sociaux",
+    PREFERENCE_MEMORY: "Préférence",
+    SYSTEM_MEMORY: "Système",
   };
 
   return labels[category];
@@ -3694,9 +3714,9 @@ function memoryCategoryLabel(category: MemoryRecord["category"]): string {
 
 function memoryStateLabel(state: MemoryRecord["state"]): string {
   const labels: Record<MemoryRecord["state"], string> = {
-    PENDING: "PENDING",
-    CONFIRMED: "CONFIRMED",
-    REJECTED: "REJECTED",
+    PENDING: "En attente",
+    CONFIRMED: "Confirmée",
+    REJECTED: "Refusée",
   };
 
   return labels[state];
@@ -3841,10 +3861,10 @@ function MemoryConsentCenter() {
     <section className="panel wide-panel memory-consent-card" aria-labelledby="memory-consent-title">
       <div className="panel-heading">
         <div>
-          <p className="eyebrow">MEMORY CONSENT CENTER</p>
-          <h2 id="memory-consent-title">You decide what stays.</h2>
+          <p className="eyebrow">MÉMOIRE CONSENTIE</p>
+          <h2 id="memory-consent-title">Choisir ce qu’IDA mémorise.</h2>
         </div>
-        <span className="status-tag approval">EXPLICIT CONSENT</span>
+        <span className="status-tag approval">CONSENTEMENT EXPLICITE</span>
       </div>
       <p className="memory-consent-intro">
         Propose une préférence à IDA, puis confirme-la ou refuse-la. Une conversation ne devient jamais une mémoire
@@ -3869,9 +3889,9 @@ function MemoryConsentCenter() {
           />
         </label>
         <div className="memory-proposal-actions">
-          <p>IDA la place d’abord dans la file PENDING : aucune préférence confirmée n’est créée à cette étape.</p>
+          <p>IDA la place d’abord en attente : aucune préférence confirmée n’est créée à cette étape.</p>
           <button className="send-button" type="submit" disabled={!canManage}>
-            {isProposing ? "Proposition…" : "Propose to IDA"}
+            {isProposing ? "Proposition…" : "Proposer à IDA"}
             <span aria-hidden="true">↗</span>
           </button>
         </div>
@@ -3881,10 +3901,10 @@ function MemoryConsentCenter() {
 
       <div className="memory-consent-section-heading">
         <div>
-          <p className="eyebrow">PENDING PROPOSALS</p>
-          <h3>{pendingMemories.length ? `${pendingMemories.length} à décider` : "Nothing waiting."}</h3>
+          <p className="eyebrow">PROPOSITIONS EN ATTENTE</p>
+          <h3>{pendingMemories.length ? `${pendingMemories.length} à décider` : "Aucune proposition en attente."}</h3>
         </div>
-        <span className="quiet-label">Human decision required</span>
+        <span className="quiet-label">Votre décision est nécessaire</span>
       </div>
 
       {source === "loading" ? <p className="memory-empty-state">Chargement des propositions…</p> : null}
@@ -3912,7 +3932,7 @@ function MemoryConsentCenter() {
                   onClick={() => void handleMemoryAction(memory, "confirm")}
                   disabled={!canManage}
                 >
-                  {isActive ? "Updating…" : "APPROVE"}
+                  {isActive ? "Enregistrement…" : "Confirmer"}
                 </button>
                 <button
                   className="memory-action-button reject"
@@ -3920,7 +3940,7 @@ function MemoryConsentCenter() {
                   onClick={() => void handleMemoryAction(memory, "reject")}
                   disabled={!canManage}
                 >
-                  {isActive ? "Updating…" : "REJECT"}
+                  {isActive ? "Enregistrement…" : "Refuser"}
                 </button>
               </div>
             </article>
@@ -3930,8 +3950,8 @@ function MemoryConsentCenter() {
 
       <div className="memory-review-summary">
         <div className="memory-review-counts">
-          <span>{confirmedCount} confirmed</span>
-          <span>{rejectedCount} rejected</span>
+          <span>{confirmedCount} confirmée(s)</span>
+          <span>{rejectedCount} refusée(s)</span>
         </div>
         {reviewedMemories.length > 0 ? (
           <div className="memory-reviewed-list">
@@ -3952,12 +3972,12 @@ function MemoryConsentCenter() {
   );
 }
 
-function MemoryView() {
-  const [profile, setProfile] = useState<ArtistBrain>(localArtistBrain);
-  const [form, setForm] = useState<ArtistBrainForm>(() => artistBrainToForm(localArtistBrain));
+export function MemoryView() {
+  const [profile, setProfile] = useState<ArtistBrain>(emptyArtistBrain);
+  const [form, setForm] = useState<ArtistBrainForm>(() => artistBrainToForm(emptyArtistBrain));
   const [source, setSource] = useState<"loading" | "api" | "local">(isApiConfigured ? "loading" : "local");
   const [notice, setNotice] = useState(
-    isApiConfigured ? "Chargement de ton Artist Brain…" : "Aperçu local : API IDA indisponible.",
+    isApiConfigured ? "Chargement de ton Artist Brain…" : "Profil indisponible : API IDA inaccessible.",
   );
   const [isSaving, setIsSaving] = useState(false);
 
@@ -3988,7 +4008,7 @@ function MemoryView() {
 
         const reason = error instanceof IdaApiError ? error.message : "IDA API est indisponible.";
         setSource("local");
-        setNotice(`Aperçu local : ${reason}`);
+        setNotice(`Profil indisponible : ${reason}`);
       });
 
     return () => {
@@ -4003,6 +4023,8 @@ function MemoryView() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const nextProfile = formToArtistBrain(form, profile);
+
+    if (source !== "api" || isSaving) return;
 
     if (!nextProfile.identity || !nextProfile.tone || !nextProfile.audience) {
       setNotice("Identité, ton et audience sont nécessaires pour enregistrer ton Artist Brain.");
@@ -4019,14 +4041,14 @@ function MemoryView() {
       setNotice("Artist Brain mis à jour. IDA utilisera cette base pour ses futures propositions.");
     } catch (error: unknown) {
       const reason = error instanceof IdaApiError ? error.message : "IDA API est indisponible.";
-      setNotice(`Aucune modification n’a été enregistrée : ${reason}`);
+      setNotice(`Enregistrement non confirmé. Vérifie le profil avant de réessayer : ${reason}`);
     } finally {
       setIsSaving(false);
     }
   }
 
   const summaryCards = [
-    ["Tone", profile.tone],
+    ["Ton", profile.tone],
     ["Genres", profile.genres.join(" · ") || "À préciser"],
     ["Audience", profile.audience],
   ] as const;
@@ -4037,9 +4059,9 @@ function MemoryView() {
         <div className="panel-heading">
           <div>
             <p className="eyebrow">ARTIST BRAIN</p>
-            <h2>Memory under your control.</h2>
+            <h2>Votre identité artistique.</h2>
           </div>
-          <span className="quiet-label">{source === "api" ? "Editable workspace data" : "Local preview"}</span>
+          <span className="quiet-label">{source === "api" ? "Profil modifiable" : "Données indisponibles"}</span>
         </div>
         <p className={`data-source-notice ${source}`} role="status">
           <span aria-hidden="true" />
@@ -4049,12 +4071,13 @@ function MemoryView() {
           {summaryCards.map(([label, value]) => (
             <article key={label}>
               <p>{label}</p>
-              <strong>{value}</strong>
+              <strong>{source === "api" ? value : "—"}</strong>
             </article>
           ))}
         </div>
         <form className="artist-brain-form" onSubmit={handleSubmit}>
-          <div className="artist-brain-fields">
+          <fieldset className="artist-brain-fields" disabled={source !== "api" || isSaving}>
+            <legend className="sr-only">Profil artistique</legend>
             <label className="artist-brain-field artist-brain-field-wide">
               <span>Identité artistique</span>
               <textarea
@@ -4126,14 +4149,14 @@ function MemoryView() {
                 disabled={isSaving}
               />
             </label>
-          </div>
+          </fieldset>
           <div className="artist-brain-actions">
             <p>
               Les changements restent internes à IDA. Ils ne créent aucune publication ni mémoire conversationnelle
               implicite.
             </p>
-            <button className="send-button" type="submit" disabled={isSaving}>
-              {isSaving ? "Enregistrement…" : "Save Artist Brain"}
+            <button className="send-button" type="submit" disabled={source !== "api" || isSaving}>
+              {isSaving ? "Enregistrement…" : "Enregistrer le profil"}
               <span aria-hidden="true">↗</span>
             </button>
           </div>
@@ -4159,13 +4182,13 @@ function IdaView({ messages }: { messages: ConversationMessage[] }) {
     <div className="page-grid ida-view">
       <ConversationPanel messages={messages} limit={24} contextLabel="Historique privé" />
       <section className="panel helper-panel">
-        <p className="eyebrow">COMMAND POLICY</p>
-        <h2>Every action has a boundary.</h2>
+        <p className="eyebrow">RÈGLES D’EXÉCUTION</p>
+        <h2>Vous gardez le contrôle.</h2>
         <p>
           IDA peut chercher, proposer et organiser. Les actions externes attendront toujours les permissions et
           validations prévues.
         </p>
-        <span className="status-tag approval">HUMAN APPROVAL</span>
+        <span className="status-tag approval">VALIDATION HUMAINE</span>
       </section>
     </div>
   );
@@ -4197,9 +4220,9 @@ function HomeView({
         <div className="panel-heading">
           <div>
             <p className="eyebrow">CONTENT LIBRARY</p>
-            <h2>Media waiting for a moment.</h2>
+            <h2>Vos médias disponibles.</h2>
           </div>
-          <span className="quiet-label">{source === "api" ? "API data" : "Local preview"}</span>
+          <span className="quiet-label">{source === "api" ? "Données IDA" : "Données indisponibles"}</span>
         </div>
         <MediaGrid assets={dashboard.mediaAssets} />
       </section>
@@ -4267,7 +4290,7 @@ function App({ onLock }: { onLock?: (() => void) | undefined }) {
   const [dashboard, setDashboard] = useState<DashboardSnapshot>(localDashboard);
   const [dashboardSource, setDashboardSource] = useState<DashboardSource>(isApiConfigured ? "loading" : "local");
   const [dashboardNotice, setDashboardNotice] = useState(
-    isApiConfigured ? "Synchronisation des données IDA…" : "Aperçu local : VITE_IDA_API_URL n’est pas configurée.",
+    isApiConfigured ? "Synchronisation des données IDA…" : "Les données nécessitent une connexion à IDA API.",
   );
 
   const section = sectionCopy[activeId];
@@ -4313,7 +4336,7 @@ function App({ onLock }: { onLock?: (() => void) | undefined }) {
         setDashboard(localDashboard);
         setDashboardSource("local");
         setApiMode("fallback");
-        setDashboardNotice(`Aperçu local : ${reason}`);
+        setDashboardNotice(`Données indisponibles : ${reason}`);
       });
 
     return () => {
@@ -4382,7 +4405,7 @@ function App({ onLock }: { onLock?: (() => void) | undefined }) {
 
     setMessages((current) => [
       ...current,
-      { id: userMessageId, role: "user", content: command, meta: "You" },
+      { id: userMessageId, role: "user", content: command, meta: "Vous" },
       {
         id: pendingMessageId,
         role: "assistant",

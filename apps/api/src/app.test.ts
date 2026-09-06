@@ -58,6 +58,196 @@ describe("IDA API — première tranche Phase 1", () => {
     await rm(storageDir, { recursive: true, force: true });
   });
 
+  it("enchaîne le parcours de démonstration local sans publication externe", async () => {
+    const profile = await app.inject({
+      method: "PATCH",
+      url: "/v1/artist-profile",
+      payload: { tone: "Direct, sensible et précis.", goals: ["Préparer la sortie Démo Aurora"] },
+    });
+    expect(profile.statusCode).toBe(200);
+    expect(profile.json()).toMatchObject({
+      data: { workspaceId: "wsp_demo_aless", tone: "Direct, sensible et précis." },
+    });
+
+    const releaseResponse = await app.inject({
+      method: "POST",
+      url: "/v1/releases",
+      payload: {
+        title: "Démo Aurora",
+        releaseType: "SINGLE",
+        releaseDate: "2026-10-16",
+        status: "DRAFT",
+        tags: ["démo"],
+      },
+    });
+    expect(releaseResponse.statusCode).toBe(201);
+    const release = (releaseResponse.json() as { data: { id: string } }).data;
+
+    const trackResponse = await app.inject({
+      method: "POST",
+      url: "/v1/tracks",
+      payload: {
+        title: "Reflet Aurora",
+        artistCredit: "Aless",
+        status: "UNRELEASED",
+        releaseId: release.id,
+        tags: ["démo"],
+      },
+    });
+    expect(trackResponse.statusCode).toBe(201);
+    const track = (trackResponse.json() as { data: { id: string } }).data;
+    expect(trackResponse.json()).toMatchObject({
+      data: { releaseId: release.id, releaseTitle: "Démo Aurora", workspaceId: "wsp_demo_aless" },
+    });
+
+    // Pixel PNG fictif : aucun média de l’utilisateur n’est lu ni importé.
+    const bytes = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aF1sAAAAASUVORK5CYII=",
+      "base64",
+    );
+    const mediaResponse = await app.inject({
+      method: "POST",
+      url: "/v1/media",
+      ...multipartPayload([
+        { name: "file", filename: "aurora-demo.png", contentType: "image/png", value: bytes },
+        { name: "releaseId", value: release.id },
+        { name: "trackId", value: track.id },
+        { name: "description", value: "Visuel fictif de la démonstration locale." },
+        { name: "tags", value: "Aurora, Démo" },
+      ]),
+    });
+    expect(mediaResponse.statusCode).toBe(201);
+    const media = (mediaResponse.json() as { data: { id: string } }).data;
+    expect(mediaResponse.json()).toMatchObject({
+      data: {
+        releaseId: release.id,
+        trackId: track.id,
+        status: "UNUSED",
+        tags: ["aurora", "démo"],
+        workspaceId: "wsp_demo_aless",
+      },
+    });
+    expect(media).not.toHaveProperty("storageKey");
+
+    const search = await app.inject({
+      method: "GET",
+      url: `/v1/media?q=aurora&status=UNUSED&releaseId=${release.id}&trackId=${track.id}`,
+    });
+    expect(search.statusCode).toBe(200);
+    expect((search.json() as { data: Array<{ id: string }> }).data).toEqual([
+      expect.objectContaining({ id: media.id }),
+    ]);
+
+    const campaignResponse = await app.inject({
+      method: "POST",
+      url: "/v1/campaigns",
+      payload: { name: "Campagne Aurora", objective: "Valider le parcours local de bout en bout." },
+    });
+    expect(campaignResponse.statusCode).toBe(201);
+    const campaign = (campaignResponse.json() as { data: { id: string; version: number } }).data;
+    expect(campaign.version).toBe(1);
+    const releaseLink = await app.inject({
+      method: "PATCH",
+      url: `/v1/campaigns/${campaign.id}/release`,
+      payload: { releaseId: release.id, expectedVersion: campaign.version },
+    });
+    expect(releaseLink.statusCode).toBe(200);
+    expect(releaseLink.json()).toMatchObject({ data: { releaseId: release.id, version: 2 } });
+    const trackLink = await app.inject({
+      method: "PATCH",
+      url: `/v1/campaigns/${campaign.id}/track`,
+      payload: { trackId: track.id, expectedVersion: 2 },
+    });
+    expect(trackLink.statusCode).toBe(200);
+    expect(trackLink.json()).toMatchObject({
+      data: { releaseId: release.id, trackId: track.id, status: "DRAFT", version: 3 },
+    });
+
+    // Le MVP ne crée pas encore de proposition éditoriale depuis la campagne :
+    // on valide explicitement une proposition seed, sans inventer ce lien.
+    const queue = await app.inject({ method: "GET", url: "/v1/approvals/queue" });
+    expect(queue.statusCode).toBe(200);
+    const proposal = (
+      queue.json() as { data: Array<{ approvalId: string; variantId: string; payloadHash: string }> }
+    ).data.find((item) => item.variantId === "variant_lumiere_instagram");
+    if (!proposal) throw new Error("La proposition fictive attendue est absente.");
+    const decision = { approvalId: proposal.approvalId, expectedPayloadHash: proposal.payloadHash };
+    const approved = await app.inject({
+      method: "POST",
+      url: `/v1/post-variants/${proposal.variantId}/approve`,
+      payload: decision,
+    });
+    expect(approved.statusCode).toBe(200);
+    expect(approved.json()).toMatchObject({ data: { approvalState: "APPROVED", deliveryState: "NOT_CONFIGURED" } });
+    const scheduled = await app.inject({
+      method: "POST",
+      url: `/v1/post-variants/${proposal.variantId}/internal-schedules`,
+      payload: decision,
+    });
+    expect(scheduled.statusCode).toBe(201);
+    expect(scheduled.json()).toMatchObject({
+      data: { state: "SCHEDULED", deliveryState: "NOT_CONFIGURED", payloadHash: proposal.payloadHash },
+    });
+    expect((scheduled.json() as { data: Record<string, unknown> }).data).not.toHaveProperty("caption");
+
+    const taskResponse = await app.inject({
+      method: "POST",
+      url: "/v1/tasks",
+      payload: { title: "Clore la démonstration Aurora" },
+    });
+    expect(taskResponse.statusCode).toBe(201);
+    const task = (taskResponse.json() as { data: { id: string } }).data;
+    const completed = await app.inject({ method: "POST", url: `/v1/tasks/${task.id}/complete` });
+    expect(completed.statusCode).toBe(200);
+    expect(completed.json()).toMatchObject({ data: { id: task.id, status: "DONE", completedBy: "usr_demo_aless" } });
+
+    const memoryResponse = await app.inject({
+      method: "POST",
+      url: "/v1/memories/proposals",
+      payload: { content: "Préférence proposée : conserver un ton direct et précis." },
+    });
+    expect(memoryResponse.statusCode).toBe(201);
+    const memory = (memoryResponse.json() as { data: { id: string } }).data;
+    expect(memoryResponse.json()).toMatchObject({ data: { state: "PENDING" } });
+    const confirmed = await app.inject({ method: "POST", url: `/v1/memories/${memory.id}/confirm` });
+    expect(confirmed.statusCode).toBe(200);
+    expect(confirmed.json()).toMatchObject({
+      data: { id: memory.id, state: "CONFIRMED", confirmedBy: "usr_demo_aless" },
+    });
+
+    const command = await app.inject({
+      method: "POST",
+      url: "/v1/ida/commands",
+      payload: { message: "IDA, montre-moi mes contenus inutilisés." },
+    });
+    expect(command.statusCode).toBe(200);
+    const commandData = (
+      command.json() as { data: { commandRunId: string; kind: string; result: { items: Array<{ id: string }> } } }
+    ).data;
+    expect(commandData.kind).toBe("UNUSED_CONTENT");
+    expect(commandData.result.items.map((item) => item.id)).toContain(media.id);
+    const history = await app.inject({ method: "GET", url: "/v1/ida/command-runs?limit=12" });
+    expect(history.statusCode).toBe(200);
+    expect(history.json()).toMatchObject({
+      data: {
+        items: [
+          expect.objectContaining({
+            id: commandData.commandRunId,
+            intent: "LIST_UNUSED_CONTENT",
+            state: "COMPLETED",
+            requestedPermission: "READ",
+          }),
+        ],
+      },
+    });
+    const serialized = JSON.stringify({
+      approved: approved.json(),
+      scheduled: scheduled.json(),
+      history: history.json(),
+    });
+    expect(serialized).not.toMatch(/storageKey|accessToken|refreshToken|publishedAt/iu);
+  });
+
   it("expose un health check local explicite", async () => {
     const response = await app.inject({ method: "GET", url: "/health" });
 
