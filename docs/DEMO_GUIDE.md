@@ -18,7 +18,7 @@ Utiliser seulement des données fictives. Aucun compte social, publication publi
 3. Content Library : importer un petit média fictif (25 MiB maximum), choisir les liens musicaux, rechercher et prévisualiser. Les médias de seed sans fichier ne promettent pas d’aperçu réel.
 4. Campagnes : créer un brief `DRAFT`, puis choisir explicitement une release et un morceau. Aucun planning n’est généré automatiquement.
 5. Dans Contenus, Approval Center : « Approuver » une proposition préexistante. Cette décision ne publie rien. La campagne précédente ne crée pas encore sa propre proposition : ne pas simuler ce lien manquant.
-6. Calendrier : planifier la version approuvée uniquement dans IDA, puis éventuellement annuler ce snapshot interne. Aucun worker social ne s’exécute.
+6. Calendrier : planifier la version approuvée uniquement dans IDA, puis éventuellement annuler ce snapshot interne. Aucun worker social ne s’exécute. Si le créneau dépasse la semaine courante, choisir « Mois ». La navigation vers le mois suivant reste à ajouter ; les propositions sont toujours consultables dans Contenus, même hors de la période affichée.
 7. Tâches : créer et terminer une tâche fictive. Mémoire : proposer une préférence puis la confirmer ou la refuser.
 8. IDA : essayer une commande ci-dessous, retrouver sa réponse dans la conversation ; Système : consulter l’activité et les manifestes déclarés.
 
@@ -39,7 +39,23 @@ Les tests de présentation vérifient l’absence de réponse inventée en cas d
 
 Le résumé et ses catalogues se mettent à jour après création de release, morceau, média ou campagne, approbation/refus, planification interne ou annulation confirmés. Les lectures rapprochées sont regroupées ; une réponse antérieure à une nouvelle modification ne peut pas remplacer les données récentes. En cas d’erreur de lecture, les anciens chiffres sont masqués : revenir à l’accueil relance uniquement la lecture, jamais l’écriture. Ce mécanisme ne synchronise pas encore en temps réel plusieurs appareils ou onglets.
 
-Validation de cette tranche : **165 tests / 15 fichiers**, types des quatre apps/packages, lint et build web réussis. En navigateur, sur une base fictive en mémoire : une approbation a fait passer le compteur de 2 à 1 et un nouveau morceau est apparu dans le catalogue sans recharger la page. La planification d’une proposition datée du 1er septembre a été refusée le 6 septembre : ce garde fonctionne, mais les dates de seed nécessitent une correction dédiée pour terminer le parcours calendrier. Ne pas désactiver cette validation, modifier la base utilisateur ou reculer l’horloge réelle pour la démo.
+La tranche précédente a vérifié 165 tests / 15 fichiers et l’actualisation après approbation/ajout de morceau. Le refus des dates passées a été conservé. Désormais, les nouvelles bases ont deux propositions futures (J+2/J+4) et une release associée à J+19, calculées au premier amorçage. Rien n’est redaté dans les bases existantes. Ne pas modifier les dates utilisateur ou reculer l’horloge réelle pour la démo.
+
+Recette complémentaire du 6 septembre : sur une base de démonstration dédiée, approbation → calendrier « Mois » → planification du teaser du 8 septembre → compteur actif à 1 → annulation → compteur à 0. La validation reste acquise et le contenu redevient prêt à planifier ; aucune livraison externe n’a eu lieu. Le test de persistance contrôle en plus qu’un redémarrage ultérieur conserve dates, hashes et décisions, puis refuse de replanifier une date passée.
+
+Vérification finale : **173 tests / 17 fichiers**, types, lint et builds API/web réussis.
+
+### Aperçu réactivé à la demande
+
+L’aperçu actuellement lancé utilise `tmp/ida-preview-relative-dates/data` et `tmp/ida-preview-relative-dates/media`, dossiers privés locaux ignorés par Git, distincts de la base par défaut et du précédent aperçu `tmp/ida-preview-september-06`. Aucun de ces anciens dossiers n’a été supprimé ou redaté. Le serveur écoute seulement sur `127.0.0.1:8787` et l’interface sur `127.0.0.1:5173`. Les processus sont laissés actifs à la demande de l’utilisateur ; leur durée de vie dépend de la session et du PC, pas d’un service installé.
+
+`pnpm dev` relance la base de développement par défaut, pas cette base d’aperçu. Pour reprendre spécifiquement cet aperçu après arrêt, une fois le backend compilé, lancer depuis la racine (puis le frontend avec `pnpm --filter @ida/web dev`) :
+
+```sh
+node --input-type=module -e "import {createApp} from './apps/api/dist/app.js';const app=await createApp({dataDir:'./tmp/ida-preview-relative-dates/data',storageDir:'./tmp/ida-preview-relative-dates/media',identityMode:'LOCAL_DEMO'});for(const signal of ['SIGINT','SIGTERM'])process.once(signal,async()=>{await app.close();process.exit(0)});await app.listen({host:'127.0.0.1',port:8787});"
+```
+
+Ne pas lancer un second serveur sur les mêmes ports ou ouvrir deux processus sur la même base. Ne pas utiliser cet aperçu pour des données réelles sensibles.
 
 ## Limites à conserver visibles
 

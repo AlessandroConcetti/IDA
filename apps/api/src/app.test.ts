@@ -546,12 +546,13 @@ describe("IDA API — première tranche Phase 1", () => {
   it("inclut un snapshot interne valide dans la journée sans le présenter comme une publication", async () => {
     const dayStorageDir = await mkdtemp(join(tmpdir(), "ida-today-internal-schedule-"));
     let dayApp: Awaited<ReturnType<typeof createApp>> | undefined;
+    let currentNow = new Date("2026-08-30T09:00:00.000Z");
 
     try {
       dayApp = await createApp({
         dataDir: "memory://",
         storageDir: dayStorageDir,
-        now: () => new Date("2026-09-01T09:00:00.000Z"),
+        now: () => new Date(currentNow),
       });
       const queue = await dayApp.inject({ method: "GET", url: "/v1/approvals/queue" });
       const proposal = (
@@ -576,6 +577,7 @@ describe("IDA API — première tranche Phase 1", () => {
       expect(scheduled.statusCode).toBe(201);
       const scheduleId = (scheduled.json() as { data: { id: string } }).data.id;
 
+      currentNow = new Date("2026-09-01T09:00:00.000Z");
       const command = await dayApp.inject({
         method: "POST",
         url: "/v1/ida/commands",
@@ -3704,7 +3706,7 @@ describe("IDA API — première tranche Phase 1", () => {
     let conflictApp: Awaited<ReturnType<typeof createApp>> | undefined;
 
     try {
-      setupDatabase = await DemoDatabase.open({ dataDir });
+      setupDatabase = await DemoDatabase.open({ dataDir, now: () => new Date("2026-08-30T09:00:00.000Z") });
       // La seconde variante reste REQUESTED afin que la migration de hash au
       // redémarrage recalcule le snapshot canonique avec le même créneau et la
       // même plateforme. Aucun endpoint de production ne rend ces champs

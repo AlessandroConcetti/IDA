@@ -255,4 +255,10 @@ Le registre n’exécute jamais du code stocké en base. Les modules et agents s
 
 ## Évolution contrôlée
 
+### Dates des nouvelles données de démonstration
+
+L’amorçage reçoit l’horloge `DemoDatabaseOptions.now`, partagée avec `CreateAppOptions.now` et évaluée une seule fois pour le seed. `getDemoDates` calcule à partir du jour UTC de référence : teaser studio à J+2 18:00 UTC, hook à J+4 17:30 UTC et release/morceau associés à J+19. Les horaires sont stockés en UTC et présentés dans le fuseau du workspace ; ils ne garantissent pas une heure locale identique été/hiver. Les exemples historiques et les données d’isolation restent fixes.
+
+Les hashes sont calculés après ces dates. Tous les inserts concernés restent `ON CONFLICT DO NOTHING` : aucun post, approbation, snapshot, morceau ou release existant n’est redaté au redémarrage. Aucun rattrapage ni migration de données utilisateur n’est effectué. Les tests injectent leur horloge historique lorsque nécessaire et vérifient les changements de mois/année ainsi que le redémarrage avec des décisions persistées. Les anciennes bases conservent leurs anciennes dates, y compris leur refus de planification si elles sont passées.
+
 La future extension d’IDA doit ajouter un module métier, ses tables, ses outils, ses permissions et ses événements ; elle ne doit pas contourner le noyau. Les invariants qui restent constants sont : `workspace`, identité, politique d’autorisation, audit, mémoire consentie, contrats API et séparation entre proposition IA et effet externe.

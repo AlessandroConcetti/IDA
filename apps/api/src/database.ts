@@ -32,6 +32,7 @@ import {
 } from "@ida/contracts";
 
 import { demoContext, demoIdentity, demoWorkspace } from "./demo-context.js";
+import { getDemoDates } from "./demo-dates.js";
 
 export const mediaStatuses = ["UNUSED", "USED", "SCHEDULED", "PUBLISHED", "ARCHIVED"] as const;
 
@@ -47,6 +48,7 @@ const visibleActivityEntityTypesSql = activityLogEntityTypeValues.map((entityTyp
 export type DemoDatabaseOptions = {
   dataDir?: string;
   seed?: boolean;
+  now?: () => Date;
 };
 
 export type RequestIdentityProfile = {
@@ -940,7 +942,7 @@ export class DemoDatabase {
     await database.initialize();
 
     if (options.seed ?? true) {
-      await database.seed();
+      await database.seed(options.now?.() ?? new Date());
     }
 
     return database;
@@ -5453,7 +5455,8 @@ export class DemoDatabase {
     });
   }
 
-  private async seed(): Promise<void> {
+  private async seed(now: Date): Promise<void> {
+    const dates = getDemoDates(now);
     await this.pglite.transaction(async (transaction) => {
       await transaction.query(
         `
@@ -5572,12 +5575,12 @@ export class DemoDatabase {
             id, workspace_id, artist_project_id, title, release_type, release_date, label, status, description
           )
           VALUES
-            ('rel_lumiere_noire', $1, 'prj_demo_aless', 'Lumière Noire', 'SINGLE', '2026-09-18', 'Aural Motion', 'SCHEDULED', 'Single à venir, construit autour d''un lead nocturne et d''une montée club.'),
+            ('rel_lumiere_noire', $1, 'prj_demo_aless', 'Lumière Noire', 'SINGLE', $2, 'Aural Motion', 'SCHEDULED', 'Single à venir, construit autour d''un lead nocturne et d''une montée club.'),
             ('rel_afterimage', $1, 'prj_demo_aless', 'Afterimage', 'EP', '2026-06-06', 'Aural Motion', 'RELEASED', 'EP publié au début de l''été.'),
             ('rel_other_workspace', 'wsp_other', 'prj_other_workspace', 'Private Release', 'SINGLE', '2026-10-01', 'Other', 'UNRELEASED', 'Donnée hors workspace démo.')
           ON CONFLICT (id) DO NOTHING
         `,
-        [demoWorkspace.id],
+        [demoWorkspace.id, dates.upcomingReleaseDate],
       );
       await transaction.query(
         `
@@ -5606,13 +5609,13 @@ export class DemoDatabase {
             id, workspace_id, artist_project_id, release_id, title, artist_credit, genre, bpm, musical_key, release_date, status
           )
           VALUES
-            ('trk_lumiere_noire', $1, 'prj_demo_aless', 'rel_lumiere_noire', 'Lumière Noire', 'Aless', 'Melodic techno', 124, 'F minor', '2026-09-18', 'SCHEDULED'),
+            ('trk_lumiere_noire', $1, 'prj_demo_aless', 'rel_lumiere_noire', 'Lumière Noire', 'Aless', 'Melodic techno', 124, 'F minor', $2, 'SCHEDULED'),
             ('trk_afterimage', $1, 'prj_demo_aless', 'rel_afterimage', 'Afterimage', 'Aless', 'Progressive house', 122, 'A minor', '2026-06-06', 'RELEASED'),
             ('trk_orbit_demo', $1, 'prj_demo_aless', NULL, 'Orbit (Studio Demo)', 'Aless', 'Electronic', 126, 'D minor', NULL, 'DEMO'),
             ('trk_other_workspace', 'wsp_other', 'prj_other_workspace', 'rel_other_workspace', 'Private Track', 'Other Artist', 'Electronic', 120, 'C minor', NULL, 'UNRELEASED')
           ON CONFLICT (id) DO NOTHING
         `,
-        [demoWorkspace.id],
+        [demoWorkspace.id, dates.upcomingReleaseDate],
       );
       await transaction.query(
         `
@@ -5708,7 +5711,7 @@ export class DemoDatabase {
         caption: "Lumière Noire prend forme dans le studio. Pré-save disponible bientôt.",
         hashtags: ["#LumiereNoire", "#MelodicTechno", "#Studio"],
         cta: "Pré-save bientôt.",
-        plannedAt: "2026-09-01T18:00:00.000Z",
+        plannedAt: dates.studioPlannedAt,
         timezone: "Europe/Paris",
         media: [
           {
@@ -5727,7 +5730,7 @@ export class DemoDatabase {
         caption: "Le hook arrive juste avant le break. Tu le gardes pour le set ?",
         hashtags: ["#LumiereNoire", "#TechnoTok", "#ProducerLife"],
         cta: "Réponds en commentaire.",
-        plannedAt: "2026-09-03T17:30:00.000Z",
+        plannedAt: dates.hookPlannedAt,
         timezone: "Europe/Paris",
         media: [
           {

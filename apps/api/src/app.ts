@@ -113,7 +113,6 @@ import { resolveIdentityMode } from "./runtime-config.js";
 import { defaultCalendarRange, getWorkspaceDayRange, type ResolvedCalendarRange } from "./workspace-time.js";
 
 export type CreateAppOptions = DemoDatabaseOptions & {
-  now?: () => Date;
   storageDir?: string;
   identityMode?: LocalAuthMode;
   secureLocalAuthCookies?: boolean;
