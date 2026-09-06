@@ -60,3 +60,24 @@ Premier lancement global : huit dépassements de 5 s, sans échec d’assertion,
 Vérification finale : **147 tests réussis / 14 fichiers en 151,98 s**, types web/API/contrats/domain, lint global et build web réussis. La suite entière a été relancée après réglage ; aucune assertion n’a été supprimée. Aucun ajout de dépendance, changement d’API ou de base de données n’a été nécessaire.
 
 Suite : recette navigateur complète (dont erreurs/rechargement), actualisation du résumé à la sortie des mutations, vérification sur appareils physiques et finalisation du verrou. Ne pas augmenter artificiellement l’estimation de démo au nombre de traductions ou de tests ; ni validation mobile réelle, ni nouvelle barrière de sécurité ne sont revendiquées par cette tranche.
+
+## Actualisation fiable du dashboard — 6 septembre 2026
+
+`api-transport.ts` émet un signal sans payload après succès HTTP courant de huit familles de POST affectant le snapshot : releases, tracks, media, campaigns, approve, reject, internal-schedules et cancel. Pas de signal pour GET, auth/accessRequest, commande READ ni autres écritures sans effet sur ce snapshot. Les réponses d’une génération d’accès invalidée ne signalent rien. Un observateur défaillant ne transforme pas le succès métier en erreur et aucun replay n’est introduit.
+
+`snapshot-reader.ts` sérialise les lectures logiques, regroupe les invalidations en une relance et ignore succès/erreurs d’une révision périmée. Son état ne conserve plus les données lors d’une actualisation, panne ou déconnexion. Le remontage StrictMode reste compatible avec une ancienne lecture en attente. `App.tsx` utilise ce lecteur via `useSyncExternalStore`, se désabonne au démontage et relit au retour à l’accueil. Suppression des ajouts optimistes concurrents de morceaux/médias ; les notices de succès des formulaires restent locales. Aucun changement de contrat API, schéma, permission, dépendance ou style.
+
+Vérification : **165 tests / 15 fichiers en 160,47 s**, dont 18 nouveaux cas (signaux, exclusions, refus, verrouillage, observateur défaillant, regroupement, réponse/erreur obsolète, panne puis relecture, cache fermé, StrictMode, chaînage transport/lecteur). Types web/API/contracts/domain, lint global et build web réussis.
+
+Recette navigateur dans le même aperçu sur `memory://`, données fictives uniquement : proposition Instagram approuvée, compteur 2 → 1 au retour à l’accueil ; nouveau morceau visible dans Music Brain sans navigation ni rechargement. Aucune erreur/avertissement dans les logs navigateur consultés. Aucun changement de zoom ou viewport pendant cette passe. Les captures de l’aperçu restent tronquées dans cet environnement : cette tranche ne revendique pas de nouvelle validation visuelle desktop/mobile.
+
+Constats à reprendre par Sol :
+
+1. Les dates fixes des propositions seed (1er et 3 septembre) sont maintenant passées. La planification est correctement refusée par le serveur ; ne pas retirer ce garde. Préparer des fixtures isolées datées de façon reproductible pour les nouvelles bases de démo, sans modifier les données utilisateur existantes. Retester succès/annulation et les compteurs dans le navigateur.
+
+   Source à inspecter : `apps/api/src/database.ts`, données seed `plannedAt` autour des lignes 5711–5768, dates de release autour de 5575/5609 ; attentes couplées dans `apps/api/src/app.test.ts`. Pas de remplacement global des dates sans distinguer fixtures et assertions temporelles.
+2. Une release fictive a été créée, mais la saisie de date dans l’aperçu n’a pas été enregistrée comme attendu. Ne pas affirmer que le compteur de sorties a été validé en navigateur : reproduire la saisie classique et distinguer un problème d’automatisation de l’aperçu d’un problème de formulaire avant toute correction.
+3. Quelques libellés secondaires restent anglais (`Open calendar`, `RESULTS`, métadonnées de morceau sans BPM/tonalité). Les traiter dans une tranche française bornée, sans lancer l’i18n.
+4. Terminer la recette dédiée du verrou (saisie d’un nouveau credential par l’utilisateur), du calendrier et des parcours encore non testés en navigateur. Aucun appareil physique, accès LAN, publication ou synchronisation inter-appareils n’a été activé.
+
+Limites : un succès HTTP à réponse mal formée peut déclencher une relecture alors que le formulaire affiche une erreur de décodage ; une écriture à réponse perdue reste incertaine. Le retour à l’accueil permet de lire l’état serveur sans la rejouer. Les signaux sont locaux à l’instance cliente, pas un bus multi-appareils, ni une barrière de sécurité.

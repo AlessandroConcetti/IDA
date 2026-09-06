@@ -1,4 +1,4 @@
-import { type DragEvent, type FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type DragEvent, type FormEvent, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { AuroraHome } from "./AuroraHome";
 import {
   type ActivityLogRecord,
@@ -61,6 +61,7 @@ import {
   updateCampaignTrack,
   uploadMediaAsset,
 } from "./api";
+import { onWorkspaceMutation } from "./api-transport";
 import {
   type ArtistBrain,
   getLocalIdaResponse,
@@ -74,6 +75,7 @@ import {
   type Track,
 } from "./data";
 import { statusLabelFr } from "./labels.fr";
+import { SnapshotReader } from "./snapshot-reader";
 
 interface ConversationMessage {
   id: string;
@@ -1153,15 +1155,7 @@ function musicReleaseFormToInput(form: MusicReleaseForm): ReleaseCreateInput {
   };
 }
 
-function MusicView({
-  dashboard,
-  source,
-  onTrackCreated,
-}: {
-  dashboard: DashboardSnapshot;
-  source: DashboardSource;
-  onTrackCreated: (track: Track) => void;
-}) {
+function MusicView({ dashboard, source }: { dashboard: DashboardSnapshot; source: DashboardSource }) {
   const [form, setForm] = useState<MusicTrackForm>(emptyMusicTrackForm);
   const [releases, setReleases] = useState<ReleaseRecord[]>([]);
   const [releaseSource, setReleaseSource] = useState<"loading" | "api" | "unavailable">(
@@ -1228,7 +1222,6 @@ function MusicView({
 
     try {
       const track = await createTrack(musicTrackFormToInput(form));
-      onTrackCreated(track);
       setForm((current) => ({
         ...emptyMusicTrackForm,
         artistCredit: current.artistCredit,
@@ -1783,7 +1776,7 @@ function ContentRotationPanel({ refreshVersion }: { refreshVersion: number }) {
   );
 }
 
-function ContentView({ onMediaAssetCreated }: { onMediaAssetCreated: (asset: MediaAsset) => void }) {
+function ContentView() {
   const [form, setForm] = useState<MediaUploadForm>(emptyMediaUploadForm);
   const [releases, setReleases] = useState<ReleaseRecord[]>([]);
   const [tracks, setTracks] = useState<TrackReference[]>([]);
@@ -1946,7 +1939,6 @@ function ContentView({ onMediaAssetCreated }: { onMediaAssetCreated: (asset: Med
         description: optionalFormValue(form.description),
         tags: optionalFormValue(form.tags),
       });
-      onMediaAssetCreated(asset);
       void loadMedia(activeSearch);
       setRotationVersion((current) => current + 1);
       setForm(emptyMediaUploadForm);
@@ -4235,25 +4227,21 @@ function SectionContent({
   messages,
   dashboard,
   source,
-  onTrackCreated,
-  onMediaAssetCreated,
   onNavigate,
 }: {
   activeId: NavigationId;
   messages: ConversationMessage[];
   dashboard: DashboardSnapshot;
   source: DashboardSource;
-  onTrackCreated: (track: Track) => void;
-  onMediaAssetCreated: (asset: MediaAsset) => void;
   onNavigate: (id: NavigationId) => void;
 }) {
   switch (activeId) {
     case "ida":
       return <IdaView messages={messages} />;
     case "music":
-      return <MusicView dashboard={dashboard} source={source} onTrackCreated={onTrackCreated} />;
+      return <MusicView dashboard={dashboard} source={source} />;
     case "content":
-      return <ContentView onMediaAssetCreated={onMediaAssetCreated} />;
+      return <ContentView />;
     case "social":
       return <SocialView dashboard={dashboard} source={source} />;
     case "calendar":
@@ -4287,11 +4275,25 @@ function App({ onLock }: { onLock?: (() => void) | undefined }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [apiMode, setApiMode] = useState<"connected" | "fallback">("fallback");
   const [isMoreOpen, setIsMoreOpen] = useState(false);
-  const [dashboard, setDashboard] = useState<DashboardSnapshot>(localDashboard);
-  const [dashboardSource, setDashboardSource] = useState<DashboardSource>(isApiConfigured ? "loading" : "local");
-  const [dashboardNotice, setDashboardNotice] = useState(
-    isApiConfigured ? "Synchronisation des données IDA…" : "Les données nécessitent une connexion à IDA API.",
+  const [dashboardReader] = useState(() => new SnapshotReader(fetchDashboardSnapshot));
+  const dashboardState = useSyncExternalStore(
+    dashboardReader.subscribe,
+    dashboardReader.getSnapshot,
+    dashboardReader.getSnapshot,
   );
+  const dashboard = dashboardState.phase === "ready" ? dashboardState.data : localDashboard;
+  const dashboardSource: DashboardSource =
+    dashboardState.phase === "ready"
+      ? "api"
+      : isApiConfigured && (dashboardState.phase === "idle" || dashboardState.phase === "loading")
+        ? "loading"
+        : "local";
+  const dashboardNotice =
+    dashboardSource === "api"
+      ? "Données synchronisées : résumé, système, morceaux et médias."
+      : dashboardSource === "loading"
+        ? "Actualisation des données IDA…"
+        : "Données indisponibles. Reviens à l’accueil pour réessayer ; une action déjà effectuée ne doit pas être répétée.";
 
   const section = sectionCopy[activeId];
   const moreItems = useMemo(() => navigation.filter((item) => !mobilePrimaryNavigation.includes(item.id)), []);
@@ -4308,41 +4310,19 @@ function App({ onLock }: { onLock?: (() => void) | undefined }) {
   }, [screenId]);
 
   useEffect(() => {
-    let isCurrent = true;
-
-    if (!isApiConfigured) {
-      return () => {
-        isCurrent = false;
-      };
-    }
-
-    void fetchDashboardSnapshot()
-      .then((snapshot) => {
-        if (!isCurrent) {
-          return;
-        }
-
-        setDashboard(snapshot);
-        setDashboardSource("api");
-        setApiMode("connected");
-        setDashboardNotice("Données API synchronisées : résumé, système, tracks et médias.");
-      })
-      .catch((error: unknown) => {
-        if (!isCurrent) {
-          return;
-        }
-
-        const reason = error instanceof IdaApiError ? error.message : "IDA API est indisponible.";
-        setDashboard(localDashboard);
-        setDashboardSource("local");
-        setApiMode("fallback");
-        setDashboardNotice(`Données indisponibles : ${reason}`);
-      });
-
+    if (!isApiConfigured) return;
+    const disconnect = dashboardReader.connect();
+    const unsubscribe = onWorkspaceMutation(dashboardReader.refresh);
     return () => {
-      isCurrent = false;
+      unsubscribe();
+      disconnect();
     };
-  }, []);
+  }, [dashboardReader]);
+
+  useEffect(() => {
+    if (dashboardState.phase === "ready") setApiMode("connected");
+    if (dashboardState.phase === "unavailable") setApiMode("fallback");
+  }, [dashboardState]);
 
   useEffect(() => {
     let isCurrent = true;
@@ -4376,27 +4356,10 @@ function App({ onLock }: { onLock?: (() => void) | undefined }) {
   }, []);
 
   function navigateTo(id: NavigationId) {
+    if (id === "home") dashboardReader.refresh();
     setActiveId(id);
     setIsOverviewOpen(false);
     setIsMoreOpen(false);
-  }
-
-  function handleTrackCreated(track: Track) {
-    setDashboard((current) => ({
-      ...current,
-      tracks: [track, ...current.tracks],
-    }));
-    setDashboardSource("api");
-    setDashboardNotice(`Catalogue synchronisé : « ${track.title} » a été ajouté au Music Brain.`);
-  }
-
-  function handleMediaAssetCreated(asset: MediaAsset) {
-    setDashboard((current) => ({
-      ...current,
-      mediaAssets: [asset, ...current.mediaAssets],
-    }));
-    setDashboardSource("api");
-    setDashboardNotice(`Bibliothèque synchronisée : « ${asset.filename} » a été ajouté à la Content Library.`);
   }
 
   async function handleCommand(command: string) {
@@ -4458,8 +4421,10 @@ function App({ onLock }: { onLock?: (() => void) | undefined }) {
     return (
       <AuroraHome
         onNavigate={(id) => {
-          if (id === "home") setIsOverviewOpen(true);
-          else navigateTo(id);
+          if (id === "home") {
+            dashboardReader.refresh();
+            setIsOverviewOpen(true);
+          } else navigateTo(id);
         }}
         onCommand={(command) => {
           navigateTo("ida");
@@ -4543,8 +4508,6 @@ function App({ onLock }: { onLock?: (() => void) | undefined }) {
             messages={messages}
             dashboard={dashboard}
             source={dashboardSource}
-            onTrackCreated={handleTrackCreated}
-            onMediaAssetCreated={handleMediaAssetCreated}
             onNavigate={navigateTo}
           />
         </div>

@@ -55,7 +55,7 @@ Transformer la vision en cadre de travail précis, sans développer de fonctionn
 
 ## Phase 1 — IDA Core et hub musical
 
-Point de reprise local : [relais de consolidation pour Sol](docs/SOL_HANDOFF.md). La passe sécurité du cycle d’accès est livrée ; la recette navigateur et le parcours de démonstration complet sont les prochaines priorités, sans déclencher de phase future.
+Point de reprise local : [relais de consolidation pour Sol](docs/SOL_HANDOFF.md). La passe sécurité du cycle d’accès et l’actualisation événementielle du résumé/catalogue sont livrées. La recette navigateur a confirmé l’approbation et l’ajout d’un morceau sans rechargement. Prochaines priorités : rendre les dates des fixtures de démonstration utilisables à une date courante, terminer la recette du calendrier et du verrou sur une base dédiée, puis le parcours navigateur complet, sans déclencher de phase future.
 
 Tranche visuelle du 5 septembre 2026 : accueil Aurora inspiré des deux références approuvées, cartes reliées aux modules existants, commandes vers le Core partagé, navigation mobile, palette claire des espaces et du verrou, réduction temporaire de transparence et respect de la réduction de mouvement. Aucun thème cinématique ni `ThemeProvider` complet n’est livré. Le [guide local](docs/DEMO_GUIDE.md) distingue ces fonctions de la recette métier/verrou encore à compléter ; la distribution multi-appareils reste conditionnée au jalon sécurité.
 

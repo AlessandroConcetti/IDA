@@ -12,7 +12,24 @@ export class IdaApiError extends Error {
 export const apiBaseUrl = (import.meta.env.VITE_IDA_API_URL?.trim() ?? "").replace(/\/+$/, "");
 const pendingWorkspaceRequests = new Set<AbortController>();
 const authenticationListeners = new Set<() => void>();
+const workspaceMutationListeners = new Set<() => void>();
 let workspaceGeneration = 0;
+
+export function onWorkspaceMutation(listener: () => void): () => void {
+  workspaceMutationListeners.add(listener);
+  return () => workspaceMutationListeners.delete(listener);
+}
+
+// Seulement les écritures qui affectent le résumé ou ses catalogues.
+// Une commande READ reste une lecture, même transportée par POST.
+function affectsDashboard(path: string, method: string): boolean {
+  if (method !== "POST") return false;
+  return (
+    /^\/v1\/(releases|tracks|media|campaigns)$/.test(path) ||
+    /^\/v1\/post-variants\/[^/]+\/(approve|reject|internal-schedules)$/.test(path) ||
+    /^\/v1\/internal-post-schedules\/[^/]+\/cancel$/.test(path)
+  );
+}
 
 export function invalidateWorkspaceRequests(): void {
   workspaceGeneration += 1;
@@ -61,6 +78,16 @@ export async function requestApi(path: string, init: RequestInit = {}, accessReq
         }
       }
       throw new IdaApiError(message, response.status, retryAfter);
+    }
+    if (!accessRequest && affectsDashboard(path, (init.method ?? "GET").toUpperCase())) {
+      for (const listener of workspaceMutationListeners) {
+        try {
+          listener();
+        } catch {
+          // Une erreur d'affichage ne transforme jamais une écriture réussie
+          // en échec apparent et ne doit pas inciter à la rejouer.
+        }
+      }
     }
     return payload;
   } catch (error) {
