@@ -227,7 +227,7 @@ function assertLocalLockHttpBoundary(request: FastifyRequest): void {
 }
 
 function resolveCalendarRange(
-  query: { view?: CalendarView; from?: string; to?: string },
+  query: { view?: CalendarView; from?: string; to?: string; anchor?: string },
   now: Date,
   timezone: string,
 ): ResolvedCalendarRange {
@@ -235,7 +235,7 @@ function resolveCalendarRange(
 
   if (query.from === undefined || query.to === undefined) {
     try {
-      return defaultCalendarRange(now, timezone, view);
+      return defaultCalendarRange(query.anchor === undefined ? now : new Date(query.anchor), timezone, view);
     } catch {
       throw new CalendarQueryInputError();
     }

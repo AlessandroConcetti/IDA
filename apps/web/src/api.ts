@@ -1163,10 +1163,18 @@ function toEditorialCalendarSnapshot(payload: unknown): EditorialCalendarSnapsho
 
 export async function fetchEditorialCalendar(input: {
   view: EditorialCalendarView;
+  anchor?: string | undefined;
   from?: string;
   to?: string;
 }): Promise<EditorialCalendarSnapshot> {
   const query = new URLSearchParams({ view: input.view });
+
+  if (input.anchor !== undefined) {
+    if (input.from !== undefined || input.to !== undefined) {
+      throw new IdaApiError("L’ancre et les bornes du calendrier ne peuvent pas être combinées.");
+    }
+    query.set("anchor", input.anchor);
+  }
 
   if ((input.from === undefined) !== (input.to === undefined)) {
     throw new IdaApiError("Les bornes du calendrier doivent être fournies ensemble.");

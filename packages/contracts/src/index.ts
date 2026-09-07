@@ -753,12 +753,21 @@ export type CalendarView = z.infer<typeof calendarViewSchema>;
 export const calendarQuerySchema = z
   .object({
     view: calendarViewSchema.optional(),
+    anchor: timestampSchema
+      .refine((value) => {
+        const year = new Date(value).getUTCFullYear();
+        return year >= 1000 && year <= 9998;
+      }, "L’ancre doit être comprise entre les années 1000 et 9998.")
+      .optional(),
     from: timestampSchema.optional(),
     to: timestampSchema.optional(),
   })
   .strict()
   .refine((query) => (query.from === undefined) === (query.to === undefined), {
     message: "Les bornes from et to doivent être fournies ensemble.",
+  })
+  .refine((query) => query.anchor === undefined || (query.from === undefined && query.to === undefined), {
+    message: "L’ancre et les bornes explicites ne peuvent pas être combinées.",
   });
 
 export type CalendarQuery = z.infer<typeof calendarQuerySchema>;

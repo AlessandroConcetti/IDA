@@ -1,6 +1,20 @@
 # IDA — Relais de consolidation pour Sol
 
-## Dernière tranche — Roue des Mondes — 6 septembre 2026
+## Dernière tranche — Navigation du calendrier — 7 septembre 2026
+
+Le calendrier propose période précédente, période suivante et retour à aujourd’hui en vues jour, semaine et mois. Le nouveau paramètre facultatif `anchor` de `GET /v1/calendar` est exclusif avec `from`/`to` et borné aux années 1000 à 9998. Le serveur reste seul responsable du fuseau du workspace, des bornes civiles et des changements d’heure. La navigation utilise le début de la période suivante ou l’instant précédant la période courante, sans ajouter de durées fixes. Le changement de vue conserve l’ancre choisie, même lorsqu’une semaine chevauche deux mois ; aujourd’hui revient à l’horloge serveur. Les années sont affichées dans la plage.
+
+Un lecteur par requête empêche les anciennes réponses de remplacer la période sélectionnée. Plages, listes et compteurs précédents sont masqués pendant le chargement ou l’erreur ; une erreur permet de réessayer. La navigation est bloquée pendant une mutation en cours. Aucun changement des permissions, états de publication, données persistantes ou thèmes.
+
+Vérification : **213 tests / 21 fichiers, 140,67 s**, types web/API/contracts/domain, lint global et builds contrats/API/web réussis. Les tests couvrent DST 23/25 heures, semaines et mois de durées variables, année bissextile, changement d’année, paramètres invalides, limites, ancre conservée et réponses obsolètes. Recette dans l’aperçu existant : septembre → octobre, semaine du 28 septembre au 5 octobre → retour au mois d’octobre, période précédente, aujourd’hui et vue jour/semaine. Logs consultés sans erreur ni avertissement. Aucun scénario d’appareil physique ou de réseau distant revendiqué ; aucune écriture métier pendant cette recette.
+
+Fichiers : `calendar-navigation.ts` et tests côté web, `CalendarView`/`useEditorialCalendar` dans `App.tsx`, transport `api.ts`, schéma partagé, résolution API et tests HTTP/DST ; contrats documentés dans `API.md` et l’OpenAPI. Aucun ajout de dépendance ni migration.
+
+L’API d’aperçu a été reconstruite puis relancée proprement en loopback sur 8787 (session `66195`, remplace `90971`). Même base dédiée `tmp/ida-preview-relative-dates/data`, même stockage et mode `LOCAL_DEMO`, sans réinitialisation ni redatage. Le serveur web existant `72853` reste sur 5173 ; l’onglet d’origine est conservé. Aperçu laissé actif à la demande utilisateur. La démarche Sites conserve le design et l’aperçu local existants ; aucun hébergement cloud.
+
+Suite bornée : saisie des dates de release, scénario français restant, recette du verrou sur base dédiée avec saisie humaine du credential, puis appareils physiques. Les vidéos manquantes attendent toujours l’utilisateur ; aucune intégration sociale publique, caméra, voix, banque ou nouvelle phase activée.
+
+## Roue des Mondes — 6 septembre 2026
 
 Voir [périmètre, composants et médias](WORLDS_AND_THEMES.md). Accueil : roue en perspective, grille alternative, sélection clavier/tactile/trackpad, environnement et retour avec focus. Music Studio → Artist Brain/Music Brain ; Content Studio → DAM ; Social Hub → capacités sociales/Approval Center/calendrier/campagnes/statistiques ; Workspace → Command Center/conversation/tâches/mémoire/système. Les huit mondes futurs sont inertes. Tous les anciens modules restent directement accessibles.
 

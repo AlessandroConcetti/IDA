@@ -835,6 +835,9 @@ paths:
         variantes APPROVED prêtes à planifier. Les bornes from/to sont
         obligatoires ensemble, forment une plage [from, to) d'au plus 62 jours
         et sont dérivées dans le fuseau du workspace lorsqu'elles sont absentes.
+        L'ancre optionnelle anchor désigne la période civile souhaitée, dans
+        les années UTC 1000 à 9998, et ne peut pas être combinée avec from/to.
+        Sans ancre ni bornes, la période courante suit l'horloge serveur.
         Aucun payload éditorial, média, compte ou secret n'est exposé.
       parameters:
         - name: view
@@ -842,6 +845,11 @@ paths:
           required: false
           schema:
             $ref: '#/components/schemas/CalendarView'
+        - name: anchor
+          in: query
+          required: false
+          description: Instant focal (années UTC 1000–9998), exclusif de from/to.
+          schema: { type: string, format: date-time }
         - name: from
           in: query
           required: false

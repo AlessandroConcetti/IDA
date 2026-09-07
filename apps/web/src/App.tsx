@@ -19,7 +19,6 @@ import {
   createTrack,
   type DashboardSnapshot,
   type EditorialCalendarItem,
-  type EditorialCalendarSnapshot,
   type EditorialCalendarView,
   fetchActivityLogs,
   fetchAgentManifests,
@@ -28,7 +27,6 @@ import {
   fetchCampaigns,
   fetchContentRotationCandidates,
   fetchDashboardSnapshot,
-  fetchEditorialCalendar,
   fetchIdaCommandRuns,
   fetchMediaAssets,
   fetchMemories,
@@ -62,6 +60,7 @@ import {
   uploadMediaAsset,
 } from "./api";
 import { onWorkspaceMutation } from "./api-transport";
+import { adjacentCalendarAnchor, createCalendarReader } from "./calendar-navigation";
 import {
   type ArtistBrain,
   getLocalIdaResponse,
@@ -381,7 +380,7 @@ function formatEditorialCalendarDate(value: string, timezone: string, compact = 
   }
 
   const options: Intl.DateTimeFormatOptions = compact
-    ? { day: "numeric", hour: "2-digit", minute: "2-digit", month: "short", timeZone: timezone }
+    ? { day: "numeric", hour: "2-digit", minute: "2-digit", month: "short", year: "numeric", timeZone: timezone }
     : { day: "numeric", hour: "2-digit", minute: "2-digit", month: "long", timeZone: timezone, weekday: "long" };
 
   try {
@@ -409,58 +408,23 @@ function editorialCalendarStateLabel(state: EditorialCalendarItem["state"]): str
   return state === "SCHEDULED_INTERNAL" ? "PLANIFIÉ DANS IDA" : "PRÊTE À PLANIFIER";
 }
 
-function useEditorialCalendar(view: EditorialCalendarView) {
-  const [snapshot, setSnapshot] = useState<EditorialCalendarSnapshot | null>(null);
-  const [source, setSource] = useState<EditorialCalendarSource>(isApiConfigured ? "loading" : "unavailable");
-  const [notice, setNotice] = useState(
-    isApiConfigured ? "Chargement du calendrier éditorial…" : "Le calendrier nécessite la connexion à IDA API.",
-  );
-  const [revision, setRevision] = useState(0);
-
+function useEditorialCalendar(view: EditorialCalendarView, anchor?: string) {
+  const reader = useMemo(() => createCalendarReader({ view, anchor }), [view, anchor]);
+  const state = useSyncExternalStore(reader.subscribe, reader.getSnapshot, reader.getSnapshot);
   useEffect(() => {
-    let isCurrent = true;
-
-    if (!isApiConfigured) {
-      return () => {
-        isCurrent = false;
-      };
-    }
-
-    setSource("loading");
-    // Le serveur calcule la fenêtre dans le fuseau du workspace. Le client ne
-    // force donc pas une minuit UTC qui décalerait l'affichage local.
-    void fetchEditorialCalendar({ view })
-      .then((nextSnapshot) => {
-        if (!isCurrent) {
-          return;
-        }
-
-        setSnapshot(nextSnapshot);
-        setSource("api");
-        setNotice("Le calendrier affiche uniquement des décisions approuvées et des planifications internes.");
-      })
-      .catch((error: unknown) => {
-        if (!isCurrent) {
-          return;
-        }
-
-        const reason = error instanceof IdaApiError ? error.message : "IDA API est indisponible.";
-        setSnapshot(null);
-        setSource("unavailable");
-        setNotice(`Le calendrier est indisponible : ${reason}`);
-      });
-
-    return () => {
-      isCurrent = false;
-    };
-  }, [revision, view]);
-
-  return {
-    snapshot,
-    source,
-    notice,
-    refresh: () => setRevision((current) => current + 1),
-  };
+    if (!isApiConfigured) return;
+    return reader.connect();
+  }, [reader]);
+  const source: EditorialCalendarSource =
+    !isApiConfigured || state.phase === "unavailable" ? "unavailable" : state.phase === "ready" ? "api" : "loading";
+  const snapshot = state.phase === "ready" && source === "api" ? state.data : null;
+  const notice =
+    source === "api"
+      ? "Le calendrier affiche uniquement des décisions approuvées et des planifications internes."
+      : source === "loading"
+        ? "Chargement du calendrier éditorial…"
+        : "Calendrier indisponible. Réessaie pour recharger cette période.";
+  return { snapshot, source, notice, refresh: reader.refresh };
 }
 
 function CalendarPanel({ onOpenCalendar }: { onOpenCalendar: () => void }) {
@@ -475,7 +439,7 @@ function CalendarPanel({ onOpenCalendar }: { onOpenCalendar: () => void }) {
           <h2 id="today-title">Les prochains créneaux approuvés.</h2>
         </div>
         <button className="text-button" type="button" onClick={onOpenCalendar}>
-          Open calendar <span aria-hidden="true">→</span>
+          Ouvrir le calendrier <span aria-hidden="true">→</span>
         </button>
       </div>
       <div className="schedule-list">
@@ -2533,7 +2497,10 @@ function ApprovalCenter() {
 
 function CalendarView() {
   const [view, setView] = useState<EditorialCalendarView>("WEEK");
-  const { snapshot, source, notice, refresh } = useEditorialCalendar(view);
+  const [anchor, setAnchor] = useState<string | undefined>(undefined);
+  const { snapshot, source, notice, refresh } = useEditorialCalendar(view, anchor);
+  const previousAnchor = snapshot ? adjacentCalendarAnchor(snapshot.range, -1) : undefined;
+  const nextAnchor = snapshot ? adjacentCalendarAnchor(snapshot.range, 1) : undefined;
   const [decisionNotice, setDecisionNotice] = useState<string | null>(null);
   const [decisionState, setDecisionState] = useState<"default" | "success" | "error">("default");
   const [activeScheduleId, setActiveScheduleId] = useState<string | null>(null);
@@ -2542,7 +2509,7 @@ function CalendarView() {
   const scheduledCount = items.filter((item) => item.state === "SCHEDULED_INTERNAL").length;
 
   async function handleSchedule(item: EditorialCalendarItem) {
-    if (item.state !== "READY_TO_SCHEDULE" || activeScheduleId) {
+    if (source !== "api" || item.state !== "READY_TO_SCHEDULE" || activeScheduleId) {
       return;
     }
 
@@ -2567,7 +2534,7 @@ function CalendarView() {
   }
 
   async function handleCancel(item: EditorialCalendarItem) {
-    if (item.state !== "SCHEDULED_INTERNAL" || activeScheduleId) {
+    if (source !== "api" || item.state !== "SCHEDULED_INTERNAL" || activeScheduleId) {
       return;
     }
 
@@ -2606,14 +2573,15 @@ function CalendarView() {
           publication.
         </p>
         <div className="editorial-calendar-toolbar">
-          <div className="editorial-calendar-tabs" role="tablist" aria-label="Période du calendrier">
+          <fieldset className="editorial-calendar-tabs">
+            <legend className="sr-only">Vue du calendrier</legend>
             {editorialCalendarViews.map((option) => (
               <button
                 className={option.id === view ? "is-active" : ""}
                 type="button"
                 key={option.id}
-                role="tab"
-                aria-selected={option.id === view}
+                aria-pressed={option.id === view}
+                disabled={activeScheduleId !== null}
                 onClick={() => {
                   setView(option.id);
                   setDecisionNotice(null);
@@ -2623,11 +2591,53 @@ function CalendarView() {
                 {option.label}
               </button>
             ))}
-          </div>
-          <span className="editorial-calendar-range">
+          </fieldset>
+          <nav className="editorial-calendar-navigation" aria-label="Navigation des périodes">
+            <button
+              type="button"
+              aria-label="Période précédente"
+              disabled={!previousAnchor || activeScheduleId !== null}
+              onClick={() => {
+                if (!previousAnchor) return;
+                setAnchor(previousAnchor);
+                setDecisionNotice(null);
+                setDecisionState("default");
+              }}
+            >
+              ←
+            </button>
+            <button
+              type="button"
+              disabled={activeScheduleId !== null}
+              onClick={() => {
+                if (anchor === undefined) refresh();
+                else setAnchor(undefined);
+                setDecisionNotice(null);
+                setDecisionState("default");
+              }}
+            >
+              Aujourd’hui
+            </button>
+            <button
+              type="button"
+              aria-label="Période suivante"
+              disabled={!nextAnchor || activeScheduleId !== null}
+              onClick={() => {
+                if (!nextAnchor) return;
+                setAnchor(nextAnchor);
+                setDecisionNotice(null);
+                setDecisionState("default");
+              }}
+            >
+              →
+            </button>
+          </nav>
+          <span className="editorial-calendar-range" aria-live="polite">
             {snapshot
               ? `${formatEditorialCalendarDate(snapshot.range.from, snapshot.range.timezone, true)} → ${formatEditorialCalendarDate(snapshot.range.to, snapshot.range.timezone, true)}`
-              : "Plage en cours de chargement"}
+              : source === "loading"
+                ? "Plage en cours de chargement"
+                : "Plage indisponible"}
           </span>
         </div>
         <p
@@ -2642,6 +2652,9 @@ function CalendarView() {
         {source === "unavailable" ? (
           <p className="editorial-calendar-empty">
             La projection calendrier réapparaîtra dès que l’API IDA est disponible.
+            <button type="button" className="text-button" onClick={refresh}>
+              Réessayer cette période
+            </button>
           </p>
         ) : null}
         {source === "api" && items.length === 0 ? (
@@ -2701,14 +2714,18 @@ function CalendarView() {
       <section className="panel helper-panel editorial-calendar-observation">
         <p className="eyebrow">IDA OBSERVATION</p>
         <h2>
-          {readyCount
-            ? `${readyCount} contenu${readyCount > 1 ? "s" : ""} approuvé${readyCount > 1 ? "s" : ""} à planifier.`
-            : "Aucun contenu approuvé en attente."}
+          {source !== "api"
+            ? "Données de la période indisponibles."
+            : readyCount
+              ? `${readyCount} contenu${readyCount > 1 ? "s" : ""} approuvé${readyCount > 1 ? "s" : ""} à planifier.`
+              : "Aucun contenu approuvé en attente."}
         </h2>
         <p>
-          {scheduledCount
-            ? `${scheduledCount} planification${scheduledCount > 1 ? "s" : ""} interne${scheduledCount > 1 ? "s" : ""} visible${scheduledCount > 1 ? "s" : ""} dans cette période.`
-            : "Aucune planification interne active dans cette période."}
+          {source !== "api"
+            ? "Les compteurs réapparaîtront après le chargement."
+            : scheduledCount
+              ? `${scheduledCount} planification${scheduledCount > 1 ? "s" : ""} interne${scheduledCount > 1 ? "s" : ""} visible${scheduledCount > 1 ? "s" : ""} dans cette période.`
+              : "Aucune planification interne active dans cette période."}
         </p>
         <span className="status-tag warning">AUCUNE PUBLICATION EXTERNE</span>
       </section>

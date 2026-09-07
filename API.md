@@ -218,7 +218,9 @@ Cette projection ne consulte ni `usage_count`, ni `last_used_at`, ni une program
 
 ### Calendrier éditorial et planification interne
 
-`GET /v1/calendar` accepte uniquement la query stricte `view?: DAY|WEEK|MONTH`, `from?: ISO-8601` et `to?: ISO-8601`. Les deux bornes doivent être fournies ensemble, décrivent une plage demi-ouverte `[from, to)` d’au plus 62 jours et sont toujours renvoyées normalisées avec la vue et le fuseau du workspace :
+`GET /v1/calendar` accepte uniquement la query stricte `view?: DAY|WEEK|MONTH`, `anchor?: ISO-8601`, `from?: ISO-8601` et `to?: ISO-8601`. `anchor` est un instant compris dans la période souhaitée (années UTC 1000–9998) : le serveur en déduit le jour, la semaine lundi–lundi ou le mois civil dans le fuseau du workspace. Elle est exclusive de `from/to`. Sans ancre ni bornes, l’horloge serveur détermine la période actuelle. Les deux bornes explicites doivent être fournies ensemble, décrivent une plage demi-ouverte `[from, to)` d’au plus 62 jours et sont toujours renvoyées normalisées avec la vue et le fuseau du workspace :
+
+La navigation cliente envoie `range.to` pour avancer, ou la milliseconde précédant `range.from` pour reculer. Changer de vue conserve le même instant focal ; « Aujourd’hui » retire l’ancre. Aucun calcul de durée civile n’est dupliqué côté navigateur, aucune modification de date approuvée n’en résulte. Les directions hors des limites d’ancre sont désactivées ; l’API reste l’autorité de validation. Une nouvelle lecture masque immédiatement les anciens créneaux/compteurs, ignore les réponses périmées et permet un réessai en cas d’erreur.
 
 ```json
 {

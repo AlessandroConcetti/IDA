@@ -3391,6 +3391,7 @@ h3 {
 
 .editorial-calendar-toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
@@ -3401,6 +3402,8 @@ h3 {
 }
 
 .editorial-calendar-tabs {
+  margin: 0;
+  min-width: 0;
   display: inline-flex;
   gap: 5px;
   padding: 4px;
@@ -3410,13 +3413,13 @@ h3 {
 }
 
 .editorial-calendar-tabs button {
-  min-height: 28px;
+  min-height: 44px;
   padding: 0 10px;
   color: var(--ida-muted);
   border: 0;
   border-radius: 7px;
   background: transparent;
-  font-size: 0.61rem;
+  font-size: 0.875rem;
   font-weight: 760;
   letter-spacing: 0.075em;
 }
@@ -3429,9 +3432,31 @@ h3 {
 
 .editorial-calendar-range {
   color: var(--ida-muted);
-  font-size: 0.69rem;
+  font-size: 0.875rem;
   line-height: 1.4;
   text-align: right;
+}
+.editorial-calendar-navigation {
+  display: flex;
+  gap: 6px;
+}
+.editorial-calendar-navigation button {
+  min-width: 44px;
+  min-height: 44px;
+  border: 1px solid #bccbd0;
+  border-radius: 10px;
+  background: #ffffffb3;
+  color: var(--ida-text);
+  padding: 8px 12px;
+  font-size: 0.875rem;
+}
+.editorial-calendar-navigation button:disabled {
+  opacity: 0.45;
+}
+.editorial-calendar-empty .text-button {
+  display: block;
+  min-height: 44px;
+  margin-top: 10px;
 }
 
 .editorial-calendar-notice {

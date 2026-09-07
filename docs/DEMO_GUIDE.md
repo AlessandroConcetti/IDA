@@ -13,6 +13,8 @@ Utiliser seulement des données fictives. Aucun compte social, publication publi
 
 ## Parcours conseillé
 
+Calendrier : les boutons précédent/suivant parcourent les jours, semaines ou mois ; « Aujourd’hui » revient à l’horloge du workspace. Changer de vue conserve l’instant choisi, pas le bord gauche d’une semaine. Les dates affichent aussi l’année. En cas d’échec de lecture, aucun ancien créneau n’est actionnable : « Réessayer cette période » recharge la même sélection. Les calculs restent côté serveur, y compris aux changements d’heure.
+
 Pour tester la vidéo : entrer dans **Music Studio**, puis « Lire l’ambiance vidéo ». Elle est muette et se boucle ; « Arrêter » ou changer de thème la démonte. Aucun lancement au retour dans le monde. En mode mouvement réduit ou économie de données, la lecture reste désactivée. Les [décors locaux supplémentaires](WORLDS_AND_THEMES.md) doivent être présents ; les autres vidéos attendent les fichiers utilisateur.
 
 1. Accueil Aurora : choisir Classic ou Sci-Fi, sélectionner un monde dans la roue puis « Entrer ». Music Studio contient Artist Brain et Music Brain ; Social Hub relie réseaux, Approval Center, calendrier, campagnes et statistiques. « Explorer tous les environnements » ouvre la grille ; « Explorer tous les espaces » garde un accès direct aux onze modules. Le soleil réduit temporairement la transparence. Les mondes « À venir » n’activent rien.

@@ -3431,6 +3431,40 @@ describe("IDA API — première tranche Phase 1", () => {
     expect(tooWide.json()).toMatchObject({ error: { code: "INVALID_CALENDAR_QUERY" } });
   });
 
+  it("navigue par ancre dans le fuseau serveur et refuse les queries ambiguës", async () => {
+    const first = await app.inject({ method: "GET", url: "/v1/calendar?view=MONTH&anchor=2026-12-31T12:00:00.000Z" });
+    expect(first.statusCode).toBe(200);
+    const range = first.json().data.range;
+    expect(range).toEqual({
+      view: "MONTH",
+      timezone: "Europe/Paris",
+      from: "2026-11-30T23:00:00.000Z",
+      to: "2026-12-31T23:00:00.000Z",
+    });
+    const next = await app.inject({ method: "GET", url: `/v1/calendar?view=MONTH&anchor=${range.to}` });
+    expect(next.statusCode).toBe(200);
+    expect(next.json().data.range).toEqual({
+      view: "MONTH",
+      timezone: "Europe/Paris",
+      from: "2026-12-31T23:00:00.000Z",
+      to: "2027-01-31T23:00:00.000Z",
+    });
+    const dst = await app.inject({ method: "GET", url: "/v1/calendar?view=DAY&anchor=2026-03-29T12:00:00.000Z" });
+    expect(dst.statusCode).toBe(200);
+    expect(dst.json().data.range).toMatchObject({ from: "2026-03-28T23:00:00.000Z", to: "2026-03-29T22:00:00.000Z" });
+    for (const query of [
+      "anchor=bad-date",
+      "anchor=9999-12-31T12:00:00.000Z",
+      "anchor=2026-09-01T00:00:00.000Z&from=2026-09-01T00:00:00.000Z&to=2026-10-01T00:00:00.000Z",
+      "anchor=2026-09-01T00:00:00.000Z&timezone=UTC",
+      "anchor=2026-09-01T00:00:00.000Z&workspaceId=wsp_other",
+    ]) {
+      const invalid = await app.inject({ method: "GET", url: `/v1/calendar?${query}` });
+      expect(invalid.statusCode).toBe(400);
+      expect(invalid.json()).toMatchObject({ error: { code: "INVALID_CALENDAR_QUERY" } });
+    }
+  });
+
   it("crée une planification interne depuis une approbation exacte, sans effet de livraison", async () => {
     const queue = await app.inject({ method: "GET", url: "/v1/approvals/queue" });
     const proposal = (
