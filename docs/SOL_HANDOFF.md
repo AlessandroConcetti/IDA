@@ -1,5 +1,17 @@
 # IDA — Relais de consolidation pour Sol
 
+## Dernière tranche — Préparation Home Assistant — 7 septembre 2026
+
+L’utilisateur demande la connexion de sa domotique Alexa/Google Home puis confirme **Home Assistant en cours d’installation de son côté**. Ce choix est retenu, mais l’adresse, la méthode d’installation, les appareils exposés et l’accès sécurisé restent inconnus. Ne pas installer/scanner/associer de compte ni demander de token dans le chat. La lecture ou commande de la maison réelle n’est pas encore implémentée.
+
+Livré dans le même environnement IDA Home : `HomeConnections` et un guide selon l’installation déclarée, sans persistance, réseau, secret ou faux bouton de connexion. Thèmes, Roue, musique et social préservés. Côté serveur, `SmartHomeReadProvider` / `createHomeAssistantReadProvider` dans `smart-home-read.ts` prépare la lecture ciblée d’une lampe Home Assistant via un transport injecté, non implémenté et non enregistré dans le runtime. Projection minimale, validations, erreurs génériques, aucun cache ou retry ; `AbortSignal` annule avant/pendant la lecture et empêche un résultat tardif de redevenir visible. Ce port n’est pas une autorisation : pas de branchement direct à une route.
+
+[SMART_HOME.md](SMART_HOME.md) et [ADR 0005](adr/0005-smart-home-read-pilot.md) consignent les sources officielles Alexa/Google/HA, les limites natives, données/rétention, sécurité, futur Home Safety Steward, routes/outils candidats non publiés et critères d’activation. Aucun nouveau paquet, schéma, table, endpoint, agent ou privilège. L’exposition réseau du Core reste interdite. Ne pas affaiblir TLS/CORS/auth pour accélérer le pilote ; choisir le transport après connaissance du véritable trajet hôte/VM/LAN.
+
+Vérifications : suite complète **287 tests / 26 fichiers, 187,68 s** ; après ajout du support d’annulation, **36 tests ciblés / 2 fichiers, 614 ms**, dont trois nouveaux scénarios d’annulation/nettoyage. Types des quatre apps/packages, lint global et builds web/API réussis. Les tests de protocole utilisent uniquement des réponses fictives, aucun socket vers HA. Les 287 incluent la tranche de dates toujours en pause ; ne pas les attribuer tous à la domotique. Cette passe n’a pas effectué de nouvelle recette visuelle/navigation dans le navigateur ni de test matériel.
+
+L’aperçu existant répond toujours sur `127.0.0.1:5173`, son API sur `127.0.0.1:8787` ; pas de relance, de doublon ou de modification des données. Le travail Sites a conservé l’accueil et ses styles existants, sans hébergement cloud. Suite : demander seulement méthode d’installation, adresse sans secret et lampe pilote visible ; préparer ensuite coffre/identité/transport/Gateway/audit et leurs tests avant la première lecture réelle. Conserver intactes les modifications non committées des dates de release.
+
 ## Dernière tranche — IDA Home — 7 septembre 2026
 
 À la demande utilisateur, **mettre en pause la section sur la saisie des dates de release**, préserver ses changements non committés et travailler sur IDA Home. Ne pas les supprimer ni les inclure dans le commit Home. Les fichiers de cette tranche précédente restent dans `App.tsx`, `api.ts`, `styles.css`, les contrats/tests API, `ReleaseDateField`/`release-date` et leurs documents API/roadmap/guide/OpenAPI.

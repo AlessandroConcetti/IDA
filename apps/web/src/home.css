@@ -463,6 +463,60 @@
 .home-future-note {
   margin-top: 22px;
 }
+.home-connections {
+  margin-top: 20px;
+  text-align: left;
+  font-size: 1rem;
+  line-height: 1.65;
+}
+.home-connections p {
+  margin: 12px 0;
+}
+.home-connections label {
+  font-weight: 550;
+}
+.home-connections select {
+  width: 100%;
+  min-width: 0;
+  max-width: 560px;
+  min-height: 48px;
+  padding: 10px 12px;
+  margin: 8px 0;
+  color: var(--world-ink);
+  background: var(--world-surface);
+  border: 1px solid var(--home-line);
+  border-radius: 12px;
+  font: inherit;
+}
+.home-connection-advice {
+  border-left: 2px solid var(--world-active);
+  padding-left: 16px;
+  margin: 12px 0;
+}
+.home-connection-advice h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+.home-connections summary {
+  min-height: 44px;
+  padding: 10px 0;
+  cursor: pointer;
+}
+.home-connections ul {
+  padding-left: 22px;
+}
+.home-connections li {
+  margin: 12px 0;
+}
+.home-connections a {
+  color: var(--world-ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.home-connection-safety {
+  color: var(--world-muted);
+  font-size: 0.875rem;
+}
 .home-continuity-card {
   background: linear-gradient(160deg, #e0eaf0df, #f6eee2e8);
   justify-content: center;

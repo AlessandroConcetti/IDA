@@ -16,7 +16,7 @@ Attention au vocabulaire : le monde `home` contient IDA Home ; la cible de navig
 - « Dernière activité » est un historique, **pas un centre de notifications**. Une planification interne n’est jamais présentée comme une publication sur une plateforme réelle.
 - Classic / Sci-Fi, transparence réduite, clavier et présentation responsive sont conservés. Aucun décor ou clip supplémentaire n’est généré. L’ambiance d’IDA Home attend la vidéo utilisateur.
 
-Maison, courses, budget, banque et domotique restent à venir. Ce premier environnement regroupe le quotidien déjà disponible ; il ne simule pas des fonctionnalités domestiques ou des agents professionnels actifs.
+Courses, budget, banque et commande domestique restent à venir. Une [préparation domotique](SMART_HOME.md) a été ajoutée le 7 septembre : guide de compatibilité et adaptateur de lecture hors ligne, sans connexion réelle. Ce premier environnement ne simule pas des fonctionnalités domestiques ou des agents professionnels actifs.
 
 ## Composants et données
 
@@ -29,6 +29,7 @@ Maison, courses, budget, banque et domotique restent à venir. Ce premier enviro
 | `home-overview.ts` | Tri de présentation, formatage, libellés d’activité bornés et cibles des compteurs |
 | `home-start.ts` | Préférence locale de démarrage, lecture défensive et enregistrement explicite |
 | `home.css` | Composition et adaptation desktop/mobile avec les tokens existants |
+| `HomeConnections.tsx` | Préparation de compatibilité domotique, sans secret, persistance ou appel réseau |
 
 Réutilisation exclusive des contrats actuels : résumé déjà chargé par `App`, `fetchTasks()`, `fetchActivityLogs({ limit: 3 })`, transport même origine et `SnapshotReader`. Aucun endpoint, schéma, migration, manifeste d’agent ou paquet ajouté.
 

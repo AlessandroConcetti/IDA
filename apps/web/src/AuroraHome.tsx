@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import type { CommandCenterSummary } from "./api";
 import type { NavigationId } from "./data";
+import { HomeConnections } from "./HomeConnections";
 import { HomeMetrics, HomeOverview } from "./HomeOverview";
 import { homeWorkspaceDate } from "./home-overview";
 import { type HomeStartView, readHomeStart, saveHomeStart } from "./home-start";
@@ -291,8 +292,9 @@ export function AuroraHome({
                     {startNotice ?? "Facultatif · préférence locale à ce navigateur, sans changer votre compte."}
                   </p>
                   <HomeOverview source={source} timezone={readySummary?.timezone} onNavigate={onNavigate} />
+                  <HomeConnections />
                   <p className="home-future-note">
-                    Maison, courses et budget : à venir. Aucun service domestique ou bancaire n’est connecté.
+                    Courses et budget : à venir. Aucun service bancaire n’est connecté.
                   </p>
                 </div>
               ) : null
