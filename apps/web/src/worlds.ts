@@ -69,7 +69,17 @@ export const worlds: readonly IdaWorld[] = [
   { id: "admin", title: "Admin", description: "Documents · Démarches · Organisation", glyph: "▤", spaces: [] },
   { id: "legal", title: "Legal", description: "Comprendre · Vérifier · Accompagner", glyph: "⚖", spaces: [] },
   { id: "health", title: "Health", description: "Prendre soin · Suivre · Équilibrer", glyph: "♡", spaces: [] },
-  { id: "home", title: "Home", description: "Maison · Courses · Quotidien", glyph: "⌂", spaces: [] },
+  {
+    id: "home",
+    title: "IDA Home",
+    description: "Retrouver · Organiser · Avancer",
+    glyph: "⌂",
+    spaces: [
+      { title: "Mes tâches", target: "tasks", detail: "Vos tâches et leurs échéances, sans nouvelle liste parallèle." },
+      { title: "Calendrier", target: "calendar", detail: "Vos planifications éditoriales internes." },
+      { title: "Mémoire", target: "memory", detail: "Vos préférences enregistrées avec votre accord." },
+    ],
+  },
   { id: "idacar", title: "IDACAR", description: "Mobilité · Entretien · Trajets", glyph: "↔", spaces: [] },
 ];
 

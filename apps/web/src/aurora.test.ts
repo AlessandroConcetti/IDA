@@ -39,16 +39,21 @@ describe("Accueil Aurora : présentation sans nouveaux pouvoirs", () => {
       "Votre demande à IDA",
     ])
       expect(html).toContain(title);
-    expect(html).toContain("37 propositions");
-    expect(html).toContain("11 releases");
+    expect(html).toContain('home-metric-number">37</span>');
+    expect(html).toContain('home-metric-number">11</span>');
+    expect(html).toContain("À valider");
+    expect(html).toContain("Releases à venir");
     expect(html).toContain("Démo locale");
     expect(html).not.toContain("Verrouiller IDA");
     expect(html).not.toMatch(/agents actifs|microphone|camera|autoplay/iu);
   });
   it("n’affiche pas de chiffres en cas de chargement ou d’indisponibilité même si un snapshot subsiste", () => {
     expect(render("loading")).toContain("Connexion à votre univers");
-    expect(render("local")).toContain("Les données sont momentanément indisponibles");
-    expect(render("local")).not.toContain("37 propositions");
+    expect(render("local")).toContain("Données momentanément indisponibles");
+    for (const source of ["local", "loading"] as const) {
+      expect(render(source)).not.toContain('home-metric-number">37</span>');
+      expect(render(source).match(/home-metric-number">—/g)).toHaveLength(4);
+    }
   });
   it("montre le verrou uniquement quand la frontière d’accès le permet, sans l’appeler au rendu", () => {
     const onLock = vi.fn();

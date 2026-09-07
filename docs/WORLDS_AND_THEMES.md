@@ -10,7 +10,8 @@ La vision validée organise IDA par **monde → environnement → espaces → ag
 | Content Studio | Content Library (`content`) |
 | Social Hub | Social Brain (`social`), Approval Center et bibliothèque (`content`), calendrier, campagnes, statistiques |
 | Workspace | Command Center (`home`), conversation (`ida`), tâches, mémoire, système et agents |
-| Travel, Finance, Research, Admin, Legal, Health, Home, IDACAR | À venir : aucune action, aucun outil, aucun agent actif |
+| IDA Home | Tâches, calendrier et mémoire existants ; aperçu quotidien en lecture seule, voir [IDA Home](IDA_HOME.md) |
+| Travel, Finance, Research, Admin, Legal, Health, IDACAR | À venir : aucune action, aucun outil, aucun agent actif |
 
 Artist Brain et Mémoire conduisent volontairement à l’écran partagé existant, pas à deux mémoires. `home` ouvre la vue d’ensemble, `ida` la conversation. « Explorer tous les espaces » conserve un accès direct à chacun des onze modules, en complément de la roue et de la navigation mobile.
 
@@ -40,7 +41,7 @@ Ces fichiers sont des **décors publics du client de démonstration locale**, pa
 ## Activation, ressources et repli
 
 - Aucun lecteur/source vidéo au rendu initial ni au simple changement de thème. Music Studio propose « Lire l’ambiance vidéo » ; lecture muette, en boucle, inline, avec arrêt explicite.
-- Aucun son, microphone, caméra, permission OS, image biométrique, appel IA ou enregistrement de préférence durable.
+- Aucun son, microphone, caméra, permission OS, image biométrique ou appel IA. Seul le choix explicite d’ouverture d’IDA Home peut être conservé localement dans le navigateur ; il n’active aucun capteur, agent ou vidéo.
 - Mouvement réduit (`prefers-reduced-motion`) ou économie de données (`saveData`, si exposé par le navigateur) : lecture refusée et indication visible. Sans détection d’économie, l’activation reste manuelle.
 - Une vidéo montée au maximum, aucun préchargement des autres clips. Pause/démontage en sortie, masquage ou changement de thème ; nettoyage des abonnements et rejet tardif de lecture ignoré.
 - Aucune information indispensable dans un décor. Surfaces opaques, focus, libellés, commandes classiques et grille restent disponibles.

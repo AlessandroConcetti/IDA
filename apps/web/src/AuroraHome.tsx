@@ -1,6 +1,9 @@
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import type { CommandCenterSummary } from "./api";
 import type { NavigationId } from "./data";
+import { HomeMetrics, HomeOverview } from "./HomeOverview";
+import { homeWorkspaceDate } from "./home-overview";
+import { type HomeStartView, readHomeStart, saveHomeStart } from "./home-start";
 import { WorldWheel } from "./WorldWheel";
 import type { HomeTheme } from "./worlds";
 
@@ -72,6 +75,39 @@ export function AuroraHome({
   const [expanded, setExpanded] = useState(false);
   const [solid, setSolid] = useState(false);
   const more = useRef<HTMLElement>(null);
+  const worldArea = useRef<HTMLDivElement>(null);
+  const commandInput = useRef<HTMLTextAreaElement>(null);
+  const readySummary = source === "api" ? summary : undefined;
+  const [startView, setStartView] = useState<HomeStartView>(() => {
+    try {
+      return readHomeStart(window.localStorage);
+    } catch {
+      return "worlds";
+    }
+  });
+  const [wheelEntry, setWheelEntry] = useState(() => ({ view: startView, revision: 0 }));
+  const [startNotice, setStartNotice] = useState<string | undefined>();
+
+  function showWorlds() {
+    setWheelEntry((current) => ({ view: "worlds", revision: current.revision + 1 }));
+    worldArea.current?.scrollIntoView({ block: "start", behavior: "auto" });
+    worldArea.current?.focus({ preventScroll: true });
+  }
+
+  function changeStartView(view: HomeStartView) {
+    setStartView(view);
+    let saved = false;
+    try {
+      saved = saveHomeStart(window.localStorage, view);
+    } catch {
+      /* Stockage navigateur indisponible. */
+    }
+    setStartNotice(
+      saved
+        ? "Choix enregistré sur ce navigateur uniquement."
+        : "Choix conservé pour cette visite ; le navigateur ne permet pas son enregistrement.",
+    );
+  }
   useEffect(() => {
     if (expanded) more.current?.scrollIntoView({ block: "nearest", behavior: "auto" });
   }, [expanded]);
@@ -80,10 +116,21 @@ export function AuroraHome({
     if (command.trim() && !isSubmitting) onCommand(command.trim());
   }
   return (
-    <div className="aurora-home" data-theme={theme} data-surface={solid ? "solid" : "glass"}>
+    <div className="aurora-home ida-home-layout" data-theme={theme} data-surface={solid ? "solid" : "glass"}>
+      <a className="home-skip-link" href="#aurora-command">
+        Aller à la demande IDA
+      </a>
       <header className="aurora-topbar">
-        <span className="aurora-corner-wordmark">IDA</span>
+        <div className="home-brand">
+          <span className="aurora-corner-wordmark">IDA</span>
+          <span>
+            INTELLIGENT
+            <br />
+            DIGITAL AGENT
+          </span>
+        </div>
         <div className="aurora-access-actions">
+          <span className="home-workspace-date">{homeWorkspaceDate(readySummary)}</span>
           {onThemeChange ? (
             <fieldset className="home-theme-picker">
               <legend className="sr-only">Thème de l’accueil</legend>
@@ -110,43 +157,148 @@ export function AuroraHome({
         </div>
       </header>
 
-      <main className="aurora-welcome">
-        <div className="aurora-signature">
-          <h1 id="aurora-start" tabIndex={-1}>
-            IDA
-          </h1>
-          <p>Intelligent Digital Agent</p>
-        </div>
-        <p className="aurora-greeting">
-          Bienvenue. <span>Comment puis-je vous assister aujourd’hui ?</span>
-        </p>
-        <form className="aurora-command" onSubmit={submit} aria-busy={isSubmitting}>
-          <label className="sr-only" htmlFor="aurora-command">
-            Votre demande à IDA
-          </label>
-          <textarea
-            id="aurora-command"
-            rows={2}
-            enterKeyHint="send"
-            value={command}
-            onChange={(event) => setCommand(event.target.value)}
-            placeholder="Décrivez votre demande ou choisissez un environnement"
-            maxLength={2000}
-            autoComplete="off"
-            disabled={isSubmitting}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
-                event.preventDefault();
-                if (command.trim() && !isSubmitting) onCommand(command.trim());
-              }
-            }}
-          />
-          <button type="submit" disabled={isSubmitting || !command.trim()} aria-label="Envoyer ma demande à IDA">
-            <AuroraIcon name="arrow" />
+      <aside className="home-sidebar" aria-label="Raccourcis de l’accueil">
+        <nav aria-label="Navigation IDA Home">
+          <a href="#aurora-start" aria-current="page">
+            <span aria-hidden="true">⌂</span>Accueil
+          </a>
+          <button type="button" onClick={showWorlds}>
+            <span aria-hidden="true">◎</span>La Roue des Mondes
           </button>
-        </form>
+          <button
+            type="button"
+            onClick={() => setWheelEntry((current) => ({ view: "home", revision: current.revision + 1 }))}
+          >
+            <span aria-hidden="true">⌂</span>IDA Home
+          </button>
+          <button type="button" onClick={() => onNavigate("tasks")}>
+            <span aria-hidden="true">✓</span>Mes tâches
+          </button>
+          <button type="button" onClick={() => onNavigate("content")}>
+            <span aria-hidden="true">◇</span>À valider
+          </button>
+          <button type="button" onClick={() => onNavigate("calendar")}>
+            <span aria-hidden="true">□</span>Calendrier
+          </button>
+          <button type="button" onClick={() => onNavigate("system")}>
+            <span aria-hidden="true">⚙</span>Système & agents
+          </button>
+        </nav>
+        <div className="home-sidebar-note">
+          <span aria-hidden="true">✦</span>
+          <p>
+            De la place pour
+            <br />
+            chaque idée.
+          </p>
+          <small>Votre espace, à votre rythme.</small>
+        </div>
+      </aside>
 
-        <WorldWheel onNavigate={onNavigate} theme={theme} />
+      <main className="aurora-welcome">
+        <div className="home-intro">
+          <div className="aurora-signature">
+            <h1 id="aurora-start" tabIndex={-1}>
+              IDA
+            </h1>
+            <p>Votre univers. Une présence.</p>
+          </div>
+          <p className="aurora-greeting">
+            Bienvenue. <span>Qu’allons-nous faire aujourd’hui ?</span>
+          </p>
+          <form className="aurora-command" onSubmit={submit} aria-busy={isSubmitting}>
+            <label className="sr-only" htmlFor="aurora-command">
+              Votre demande à IDA
+            </label>
+            <textarea
+              ref={commandInput}
+              id="aurora-command"
+              rows={2}
+              enterKeyHint="send"
+              value={command}
+              onChange={(event) => setCommand(event.target.value)}
+              placeholder="Décrivez votre demande ou choisissez un environnement"
+              maxLength={2000}
+              autoComplete="off"
+              disabled={isSubmitting}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+                  event.preventDefault();
+                  if (command.trim() && !isSubmitting) onCommand(command.trim());
+                }
+              }}
+            />
+            <button type="submit" disabled={isSubmitting || !command.trim()} aria-label="Envoyer ma demande à IDA">
+              <AuroraIcon name="arrow" />
+            </button>
+          </form>
+          <fieldset className="home-command-suggestions">
+            <legend className="sr-only">Suggestions de demande</legend>
+            {[
+              { label: "Ma journée", command: "Qu’est-ce que j’ai aujourd’hui ?" },
+              { label: "Mes contenus inutilisés", command: "Montre-moi mes contenus inutilisés." },
+              { label: "Mes publications à valider", command: "Montre-moi les posts en attente." },
+            ].map((suggestion) => (
+              <button
+                key={suggestion.label}
+                type="button"
+                disabled={isSubmitting}
+                onClick={() => {
+                  setCommand(suggestion.command);
+                  commandInput.current?.focus();
+                }}
+              >
+                {suggestion.label} <span aria-hidden="true">↗</span>
+              </button>
+            ))}
+          </fieldset>
+        </div>
+
+        <div className="home-section-heading">
+          <span>VOTRE UNIVERS, MAINTENANT</span>
+          <p role="status">
+            {readySummary
+              ? "Données de votre espace IDA"
+              : source === "loading"
+                ? "Connexion à votre univers…"
+                : "Données momentanément indisponibles"}
+          </p>
+        </div>
+        <HomeMetrics summary={summary} source={source} onNavigate={onNavigate} />
+
+        <div id="home-worlds" ref={worldArea} tabIndex={-1}>
+          <WorldWheel
+            key={wheelEntry.revision}
+            onNavigate={onNavigate}
+            theme={theme}
+            initialWorldId={wheelEntry.view === "home" ? "home" : "music"}
+            startOpened={wheelEntry.view === "home"}
+            renderEnvironment={(worldId) =>
+              worldId === "home" ? (
+                <div className="ida-home-environment-content">
+                  <p className="home-environment-intro">
+                    Votre quotidien, dans le même univers IDA. Les espaces ci-dessous utilisent vos données existantes.
+                  </p>
+                  <label className="home-start-choice">
+                    <input
+                      type="checkbox"
+                      checked={startView === "home"}
+                      onChange={(event) => changeStartView(event.target.checked ? "home" : "worlds")}
+                    />
+                    Ouvrir IDA Home dans l’accueil au démarrage
+                  </label>
+                  <p className="home-start-notice" role="status">
+                    {startNotice ?? "Facultatif · préférence locale à ce navigateur, sans changer votre compte."}
+                  </p>
+                  <HomeOverview source={source} timezone={readySummary?.timezone} onNavigate={onNavigate} />
+                  <p className="home-future-note">
+                    Maison, courses et budget : à venir. Aucun service domestique ou bancaire n’est connecté.
+                  </p>
+                </div>
+              ) : null
+            }
+          />
+        </div>
 
         <button
           className="aurora-explore"
@@ -168,21 +320,6 @@ export function AuroraHome({
             ))}
           </nav>
         ) : null}
-
-        <p className="aurora-day-context" role="status">
-          {source === "api" && summary ? (
-            <>
-              <span className="aurora-presence-dot" aria-hidden="true" />
-              {summary.pendingApprovals} proposition{summary.pendingApprovals !== 1 ? "s" : ""} à valider
-              <span aria-hidden="true">·</span>
-              {summary.upcomingReleases} release{summary.upcomingReleases !== 1 ? "s" : ""} à venir
-            </>
-          ) : source === "loading" ? (
-            "Connexion à votre univers…"
-          ) : (
-            "Les données sont momentanément indisponibles."
-          )}
-        </p>
       </main>
 
       <footer className="aurora-footer">

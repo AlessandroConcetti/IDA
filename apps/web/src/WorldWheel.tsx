@@ -1,11 +1,28 @@
-import { type CSSProperties, useEffect, useRef, useState } from "react";
+import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from "react";
 import type { NavigationId } from "./data";
 import { WorldAmbience } from "./WorldAmbience";
 import { initialWorldIndex, nearestWorldIndex, worldIndexForKey, worlds } from "./worlds";
 
-export function WorldWheel({ onNavigate, theme }: { onNavigate: (id: NavigationId) => void; theme: string }) {
-  const [selected, setSelected] = useState(initialWorldIndex);
-  const [opened, setOpened] = useState(false);
+export function WorldWheel({
+  onNavigate,
+  theme,
+  initialWorldId,
+  startOpened = false,
+  renderEnvironment,
+}: {
+  onNavigate: (id: NavigationId) => void;
+  theme: string;
+  initialWorldId?: string;
+  startOpened?: boolean;
+  renderEnvironment?: (worldId: string) => ReactNode;
+}) {
+  const [selected, setSelected] = useState(() => {
+    const index = worlds.findIndex((item) => item.id === initialWorldId);
+    return index < 0 ? initialWorldIndex : index;
+  });
+  const [opened, setOpened] = useState(
+    () => startOpened && worlds.some((item) => item.id === initialWorldId && item.spaces.length > 0),
+  );
   const [grid, setGrid] = useState(false);
   const rail = useRef<HTMLDivElement>(null);
   const cards = useRef<(HTMLButtonElement | null)[]>([]);
@@ -62,6 +79,7 @@ export function WorldWheel({ onNavigate, theme }: { onNavigate: (id: NavigationI
             </h2>
             <p>{world.description}</p>
           </header>
+          {renderEnvironment?.(world.id)}
           <div className="world-spaces">
             {world.spaces.map((space) => (
               <button key={space.title} type="button" onClick={() => onNavigate(space.target)}>

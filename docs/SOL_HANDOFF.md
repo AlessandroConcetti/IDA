@@ -1,5 +1,21 @@
 # IDA — Relais de consolidation pour Sol
 
+## Dernière tranche — IDA Home — 7 septembre 2026
+
+À la demande utilisateur, **mettre en pause la section sur la saisie des dates de release**, préserver ses changements non committés et travailler sur IDA Home. Ne pas les supprimer ni les inclure dans le commit Home. Les fichiers de cette tranche précédente restent dans `App.tsx`, `api.ts`, `styles.css`, les contrats/tests API, `ReleaseDateField`/`release-date` et leurs documents API/roadmap/guide/OpenAPI.
+
+Clarification UX intégrée : un seul accueil `AuroraHome`, une seule Roue, IDA Home comme environnement du monde `home`. Les aperçus quotidiens sont montés dans cet environnement, pas dans une deuxième page. Une case permet de choisir explicitement son ouverture dans le même accueil au démarrage, préférence du navigateur uniquement. Le choix par défaut reste la Roue ; il a été restauré après la recette. Voir [contrat et composants IDA Home](IDA_HOME.md).
+
+Livré : accueil recomposé avec les tokens/décors existants, navigation desktop/mobile, quatre compteurs factuels, suggestions de commande sans envoi automatique ; IDA Home affiche les tâches ouvertes et le journal via les lecteurs/contrats existants, puis relie Tâches, Calendrier, Mémoire et Conversation. Les onze modules, dont toute la chaîne musicale et sociale, sont conservés. Pas de base, route, endpoint, dépendance, agent ou pouvoir ajouté. Maison/courses/budget restent futurs.
+
+Vérification finale : **254 tests / 24 fichiers en 160,66 s**, types web/API/contracts/domain, lint global et build web réussis. Le premier passage complet a signalé deux attentes de libellés obsolètes dans `aurora.test.ts` ; elles ont été adaptées aux compteurs et messages actuels sans retirer les invariants. Les 254 tests incluent aussi les changements de dates laissés en pause : ne pas les attribuer tous à Home.
+
+Recette sur la base de démo existante : sélection IDA Home dans la Roue, ouverture, deux tâches et trois événements réellement lus, raccourci latéral, retour Échap et réentrée, actualisation, préférence cochée + rechargement puis décochée + rechargement, Classic/Sci-Fi. Un seul `main`, une seule vue quotidienne et zéro lecteur vidéo observés. Mise en page responsive contrôlée à largeur CSS effective 480 px : colonne unique, navigation mobile, sidebar masquée, aucun débordement horizontal. Le viewport demandé est mis à l’échelle par l’aperçu ; il ne s’agit pas d’un test iPhone physique. Captures toujours tronquées, pas de validation visuelle multi-appareils complète revendiquée. Logs consultés sans erreur ni avertissement à la fin.
+
+Les anciens processus d’aperçu n’étaient plus actifs : relance après refus de connexion constaté, **sans doublon ni changement de données**. API session `39091` sur `127.0.0.1:8787`, web session `37541` sur `127.0.0.1:5173`, même base `tmp/ida-preview-relative-dates/data`, même stockage `media`, mode `LOCAL_DEMO`. Aperçu conservé ouvert sur IDA Home en Classic ; serveurs laissés actifs. Aucun service Windows installé ni accès LAN/Internet ouvert.
+
+Suite bornée : faire valider cette organisation, puis consolider les espaces quotidiens par petites tranches autorisées. Ne pas démarrer maison/banque/courses ou des agents autonomes sous prétexte que le monde est accessible. Les dates restent en pause jusqu’à reprise demandée. La démarche Sites a guidé la réutilisation du projet, de son design et de son aperçu local ; aucun hébergement cloud.
+
 ## Dernière tranche — Navigation du calendrier — 7 septembre 2026
 
 Le calendrier propose période précédente, période suivante et retour à aujourd’hui en vues jour, semaine et mois. Le nouveau paramètre facultatif `anchor` de `GET /v1/calendar` est exclusif avec `from`/`to` et borné aux années 1000 à 9998. Le serveur reste seul responsable du fuseau du workspace, des bornes civiles et des changements d’heure. La navigation utilise le début de la période suivante ou l’instant précédant la période courante, sans ajouter de durées fixes. Le changement de vue conserve l’ancre choisie, même lorsqu’une semaine chevauche deux mois ; aujourd’hui revient à l’horloge serveur. Les années sont affichées dans la plage.

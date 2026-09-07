@@ -23,9 +23,43 @@ describe("Roue des Mondes : navigation sans pouvoirs supplémentaires", () => {
     );
   });
   it("ne donne aucun accès métier aux mondes futurs", () => {
-    for (const id of ["travel", "finance", "research", "admin", "legal", "health", "home", "idacar"]) {
+    for (const id of ["travel", "finance", "research", "admin", "legal", "health", "idacar"]) {
       expect(worlds.find((world) => world.id === id)?.spaces).toEqual([]);
     }
+  });
+  it("ouvre IDA Home dans la même roue et réutilise les espaces existants", () => {
+    expect(worlds.find((world) => world.id === "home")?.spaces.map((space) => space.target)).toEqual([
+      "tasks",
+      "calendar",
+      "memory",
+    ]);
+    const renderEnvironment = vi.fn((id: string) => createElement("p", null, `Contenu ${id}`));
+    const html = renderToStaticMarkup(
+      createElement(WorldWheel, {
+        onNavigate: vi.fn(),
+        theme: "classic",
+        initialWorldId: "home",
+        startOpened: true,
+        renderEnvironment,
+      }),
+    );
+    expect(html).toContain("Contenu home");
+    expect(html).toContain("← La Roue des Mondes");
+    expect(html).not.toContain("<main");
+    expect(renderEnvironment).toHaveBeenCalledWith("home");
+  });
+  it.each(["finance", "unknown"])("n’ouvre pas le monde futur ou inconnu %s au démarrage", (initialWorldId) => {
+    const renderEnvironment = vi.fn();
+    renderToStaticMarkup(
+      createElement(WorldWheel, {
+        onNavigate: vi.fn(),
+        theme: "classic",
+        initialWorldId,
+        startOpened: true,
+        renderEnvironment,
+      }),
+    );
+    expect(renderEnvironment).not.toHaveBeenCalled();
   });
   it("conserve les approbations et tous les modules éditoriaux dans Social Hub", () => {
     const spaces = worlds.find((world) => world.id === "social")?.spaces ?? [];
