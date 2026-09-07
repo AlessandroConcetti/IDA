@@ -2,6 +2,7 @@ import { z } from "zod";
 
 const key = z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/u);
 const id = z.string().min(1).max(200);
+const modelId = z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,127}$/u);
 const timestamp = z.string().datetime({ offset: true });
 const nonNegative = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
 
@@ -30,7 +31,7 @@ export const aiProviderManifestSchema = z
       .array(
         z
           .object({
-            id: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,127}$/u),
+            id: modelId,
             capabilities: z.array(modelCapabilitySchema).min(1),
             maxComplexity: z.number().int().min(1).max(3),
             maxInputChars: z.number().int().min(1).max(32_000),
@@ -75,6 +76,15 @@ export const intelligencePolicySchema = z
   .object({
     mode: z.enum(["NORMAL", "AI"]),
     allowedProviderKeys: z.array(key).max(32),
+    // Absence : contraintes existantes ; liste vide : aucun modèle/lieu autorisé.
+    allowedModels: z
+      .array(z.object({ providerKey: key, modelId }).strict())
+      .max(1024)
+      .optional(),
+    allowedLocalities: z
+      .array(z.enum(["LOCAL", "CLOUD"]))
+      .max(2)
+      .optional(),
     localFirst: z.boolean(),
     preferredProviderKey: key.optional(),
     maxAttempts: z.number().int().min(1).max(3),

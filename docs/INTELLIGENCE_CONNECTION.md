@@ -4,6 +4,8 @@ Statut : 7 septembre 2026. Fondation exécutable et testée avec réponses synth
 
 ## Analyse et réutilisation
 
+Extension du même jour : profils par environnement et listes de modèles/localisations autorisés livrés dans [ENVIRONMENT_BRAINS.md](ENVIRONMENT_BRAINS.md). La façade `EnvironmentIntelligence` utilise le même registre et le même Core ; aucun provider réseau n'est activé par cette extension.
+
 `AI_PROVIDERS.md` et `PRIVACY.md` définissaient déjà le Provider Registry, les modes NORMAL/AI, le local-first et l'egress contrôlé. Aucun registre ou routeur LLM concret n'existait. Le Core déterministe, l'Agent Registry, les manifestes, les permissions et l'identité étaient déjà implémentés : ils sont conservés.
 
 Le chemin interne est maintenant :

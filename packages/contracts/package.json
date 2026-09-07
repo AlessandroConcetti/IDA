@@ -4,6 +4,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./environment-brains": {
+      "types": "./src/environment-brains.ts",
+      "import": "./dist/environment-brains.js"
+    },
     "./intelligence": {
       "types": "./src/intelligence.ts",
       "import": "./dist/intelligence.js"

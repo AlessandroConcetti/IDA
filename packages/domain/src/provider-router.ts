@@ -52,6 +52,7 @@ function permitted(
     policy.mode !== "AI" ||
     request.dataClasses.includes("SECRET") ||
     !policy.allowedProviderKeys.includes(manifest.key) ||
+    (policy.allowedLocalities !== undefined && !policy.allowedLocalities.includes(manifest.locality)) ||
     !state.enabled ||
     !state.configured ||
     state.availability !== "READY" ||
@@ -76,6 +77,13 @@ function permitted(
   );
 }
 
+function modelPermitted(providerKey: string, modelId: string, policy: IntelligencePolicy): boolean {
+  return (
+    policy.allowedModels === undefined ||
+    policy.allowedModels.some((model) => model.providerKey === providerKey && model.modelId === modelId)
+  );
+}
+
 /** Contraintes dures avant classement ; aucune préférence ne les assouplit. */
 export function selectModels(
   providers: ProviderCandidate[],
@@ -91,6 +99,7 @@ export function selectModels(
       provider.manifest.models
         .filter(
           (model) =>
+            modelPermitted(provider.manifest.key, model.id, policy) &&
             request.capabilities.every((capability) => model.capabilities.includes(capability)) &&
             model.maxComplexity >= request.complexity &&
             model.maxInputChars >= request.prompt.length &&
@@ -201,6 +210,7 @@ export class ProviderRouter implements IntelligencePort {
       const currentPolicy = await this.policy(request);
       if (
         !permitted(provider, request, currentPolicy, this.now()) ||
+        !modelPermitted(provider.manifest.key, model.id, currentPolicy) ||
         currentPolicy.maxCostMicros < spentMicros + event.estimatedCostMicros ||
         currentPolicy.maxAttempts <= attempted.size
       )
@@ -246,7 +256,13 @@ export class ProviderRouter implements IntelligencePort {
         if (controller.signal.aborted) throw controller.signal.reason;
         // Le dernier appel réservé peut avoir épuisé remainingCalls, ce qui n'invalide pas son résultat.
         if (
-          !permitted({ ...provider, state: { ...provider.state, remainingCalls: 1 } }, request, finalPolicy, this.now())
+          !permitted(
+            { ...provider, state: { ...provider.state, remainingCalls: 1 } },
+            request,
+            finalPolicy,
+            this.now(),
+          ) ||
+          !modelPermitted(provider.manifest.key, model.id, finalPolicy)
         ) {
           throw new IntelligenceError("FORBIDDEN");
         }
@@ -259,7 +275,8 @@ export class ProviderRouter implements IntelligencePort {
             request,
             deliveryPolicy,
             this.now(),
-          )
+          ) ||
+          !modelPermitted(provider.manifest.key, model.id, deliveryPolicy)
         ) {
           throw new IntelligenceError("FORBIDDEN");
         }

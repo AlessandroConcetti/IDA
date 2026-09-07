@@ -8,6 +8,8 @@ Le runtime de démonstration ne compose pas encore cette façade et ne charge au
 
 ## Principes
 
+Chaque environnement dispose désormais d'un profil serveur de cerveau, avec rôles prévus, références aux agents existants, sources de contexte et modèles explicitement autorisés. Le registre de providers et ses allocations restent uniques. Les douze profils démarrent PLANNED / LOCAL_ONLY / sans modèle, sans agent activé. Voir `docs/ENVIRONMENT_BRAINS.md` pour les contrats, le mode sans coût API, la mémoire contrôlée et les limites réelles des offres gratuites.
+
 - Un module dépend d'une capacité, jamais d'un fournisseur concret.
 - Aucun provider n'obtient de token utilisateur, accès SQL ou outil IDA.
 - Les secrets sont résolus côté serveur au moment de l'appel et ne figurent jamais dans un manifeste public.

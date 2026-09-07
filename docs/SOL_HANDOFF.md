@@ -1,5 +1,11 @@
 # IDA — Relais de consolidation pour Sol
 
+## Dernière tranche — Cerveaux par environnement — 7 septembre 2026
+
+Douze profils serveur correspondent à la Roue existante ; tous PLANNED / LOCAL_ONLY / budget API nul / sans modèle. Les rôles futurs ne sont pas des agents exécutables. `EnvironmentIntelligence` implémente le port commun et revalide profil/agent/contexte/version via les mêmes Identity/Gateway/Router. Les deux agents existants restent PLANNED. `allowedModels` et `allowedLocalities` limitent le Router sans dupliquer providers/quotas. **442 tests / 32 fichiers**, dont 52 nouveaux, types des quatre packages/apps et lint validés.
+
+Lire `ENVIRONMENT_BRAINS.md` avant activation. Mémoire consentie et recherche documentaire ne sont pas un entraînement automatique ; le Context Broker et la provenance des ressources restent à livrer. Pas de clés, modèle téléchargé, réseau d'inférence, migration, UI, nouveau domaine métier actif ou auto-déploiement. Offres gratuites documentées avec sources actuelles : ne pas promettre qualité identique ni API gratuite via chat web ; GitHub Models est retiré, Gemini a des conditions EEE à vérifier, Copilot SDK a ses propres droits/coûts. Domotique et dates toujours en pause et préservées.
+
 ## Dernière tranche — Fondation multi-intelligences — 7 septembre 2026
 
 Vérification de cette tranche : **390 tests / 29 fichiers** (baseline 290, donc 100 nouveaux), types des quatre packages/apps, lint global sans avertissement et quatre builds réussis. Aucun appel réseau d'inférence ; tests synthétiques uniquement. Détails et prochaines étapes dans `INTELLIGENCE_CONNECTION.md`.

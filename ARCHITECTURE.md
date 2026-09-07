@@ -310,6 +310,8 @@ Les modules peuvent publier des événements internes, par exemple : `media.uplo
 
 ## 11. Intégrations externes
 
+Les environnements de la Roue peuvent avoir des agents et des modèles spécialisés via `EnvironmentIntelligence`, une façade du même `IntelligencePort`. Leurs profils serveur restreignent les manifestes/policies existants ; ils ne créent pas de Core, mémoire globale ou provider parallèle. Plusieurs environnements peuvent partager un modèle local chargé à la demande. La première tranche fournit uniquement les profils et leurs contrôles, pas des agents actifs pour les domaines futurs. Voir `docs/ENVIRONMENT_BRAINS.md`.
+
 Chaque fournisseur est caché derrière un adaptateur enregistré par capacité dans le Provider Registry (fondation LLM livrée ; extension aux autres catégories future) :
 
 - `AIProvider` pour la génération, transcription ou synthèse vocale futures ;
