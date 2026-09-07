@@ -1,6 +1,6 @@
 # IDA — Fondation multi-intelligences
 
-Statut : 7 septembre 2026. Fondation exécutable et testée avec réponses synthétiques ; **aucun modèle connecté à la démo**. Domotique/Home Assistant et tranche dates de release en pause, changements conservés.
+Statut : 8 septembre 2026. Fondation et transport HTTP Ollama exécutables et testés ; **aucun modèle connecté à la démo**. Domotique/Home Assistant et tranche dates de release en pause, changements conservés. Voir [transport local et installation](OLLAMA_LOCAL.md).
 
 ## Analyse et réutilisation
 
@@ -16,7 +16,8 @@ DeterministicIdaCore.generateProposal
   → IdentityAccessPolicy + ToolGateway + autorité de policy fraîche
   → ProviderRegistry → ProviderRouter → sélection de modèle
   → IntelligenceAdapter → OpenAI Responses | Ollama | futur adaptateur
-  → transport serveur à raccorder → API officielle / moteur local
+  → OllamaLoopbackTransport disponible / transport cloud à raccorder
+  → API officielle / moteur local
 ```
 
 Le chat déterministe actuel ne redirige pas implicitement une commande inconnue vers un LLM. Le constructeur du Core accepte un quatrième argument optionnel `IntelligencePort` ; la composition actuelle ne le fournit pas. Un appel de proposition sans ce branchement est refusé. Aucun second Core, nouveau registre d'agents, migration ou dépendance n'est ajouté.
@@ -31,6 +32,7 @@ Le chat déterministe actuel ne redirige pas implicitement une commande inconnue
 | `apps/api/src/core-intelligence.ts` | Façade réutilisant Identity/Tool Gateway ; port obligatoire de relecture de l'autorité serveur |
 | `apps/api/src/ida-core.ts` | Extension minimale du Core existant : `generateProposal`, sans modification des commandes actuelles |
 | `apps/api/src/ai-adapters.ts` | Adaptateurs OpenAI Responses et Ollama, sérialisation officielle et validation des réponses ; transport JSON injecté |
+| `apps/api/src/ollama-transport.ts` | HTTP Node vers 127.0.0.1 uniquement, inventaire avant prompt, pins de modèles, limites et fermeture sur annulation ; non composé dans la démo |
 
 Trois fichiers de tests couvrent les contrats à travers les frontières réelles : `provider-router.test.ts`, `core-intelligence.test.ts`, `ai-adapters.test.ts`. Les tests du Core ouvrent une base en mémoire dédiée, pas les données de la démo.
 
@@ -54,8 +56,8 @@ L'audit `SUCCEEDED` constate la génération validée, pas une publication ni n�
 
 ## Ce qui n'est pas encore connecté
 
-1. Transport HTTP effectif, coffre/résolution des clés et configuration de déploiement. Les adaptateurs ne lisent aucune variable d'environnement et n'ouvrent aucun socket.
-2. Modèle local installé, capacité matérielle, contrôle d'egress local, découverte/health checks et évaluation de qualité. Une étiquette LOCAL ne prouve pas à elle seule l'absence d'envoi externe.
+1. Transport cloud, coffre/résolution des clés et composition de déploiement. Le transport HTTP local est livré séparément ; les adaptateurs restent sans accès direct aux variables d'environnement et ne l'activent pas implicitement.
+2. Modèle local installé, politique d'egress opérationnelle et évaluation de qualité. L'inventaire explicite est disponible ; aucun health check périodique ni modèle approuvé. Une étiquette LOCAL ne prouve pas à elle seule l'absence d'envoi externe.
 3. Accès API OpenAI du compte, quotas/tarifs réels et politique de rétention du projet. `store:false` ne constitue pas une garantie de zéro rétention côté fournisseur.
 4. Persistance des réglages, consentements, allocation de coût, audit append-only et liaison à la source d'identité actuelle. `IntelligenceAccessSource.loadCurrent` doit recharger les données d'autorité ; ne jamais renvoyer uniquement le snapshot HTTP d'origine.
 5. Context Broker minimal, filtrage/classification de provenance, prompts versionnés et évaluations d'un premier agent. La classification doit être attribuée par le serveur, pas crue sur parole dans un prompt. Le contrat ne prétend pas détecter automatiquement tous les secrets contenus dans du texte libre.
@@ -75,11 +77,11 @@ Prochaine tranche : transporter uniquement vers `https://api.openai.com/v1/respo
 
 L'adaptateur utilise le [chat officiel Ollama](https://docs.ollama.com/api/chat) sans streaming, avec sortie bornée, aucun outil et libération demandée du modèle via `keep_alive:0`. Il ne lance pas Ollama, ne télécharge rien et n'utilise pas son service cloud.
 
-Prochaine tranche : choisir un modèle réellement installé et évalué sur le PC, confirmer le runtime et une destination loopback fixe, refuser redirections/proxy/accès cloud et noms de modèles distants, vérifier l'egress du runtime, puis injecter ce transport local. Déclarer capacités, limites matérielles et estimations honnêtes dans le manifeste. Aucun modèle n'est supposé disponible maintenant. Un moteur différent peut implémenter `IntelligenceAdapter` sans modifier les agents.
+Transport livré le 8 septembre : destination numérique loopback fixe, aucun proxy/redirection, inventaire et comparaison nom/empreinte avant chaque prompt, validation stricte des entrées et limites HTTP. Il reste à choisir puis évaluer un modèle, contrôler l'egress du runtime et composer la façade avec l'autorité, le contexte et l'audit persistants. Déclarer capacités, limites matérielles et estimations honnêtes dans le manifeste. Aucun modèle n'est supposé disponible maintenant. Un moteur différent peut implémenter `IntelligenceAdapter` sans modifier les agents.
 
 ### Ordre d'activation
 
-1. Configuration et transports serveur revus, secrets protégés, tests sans réseau.
+1. Configuration et transports serveur revus, secrets protégés, tests sans réseau externe (fixtures HTTP loopback isolées pour Ollama).
 2. Relecture Identity/policy, Context Broker minimal, audit persistant et budget commun.
 3. Test local synthétique puis test cloud expressément consenti et borné.
 4. Un premier agent versionné via `IntelligencePort`, parcours de validation et évaluations.

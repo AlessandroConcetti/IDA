@@ -4,6 +4,8 @@
 
 Fondation LLM implémentée le 7 septembre 2026 : contrats, Provider Registry, Router, sélection de modèle, façade Core et adaptateurs OpenAI Responses / Ollama testables par transports injectés. [Contrats, limites et branchement](docs/INTELLIGENCE_CONNECTION.md).
 
+8 septembre : transport HTTP Ollama local livré, réutilisant l'adaptateur existant, sans branchement automatique au Core. Inventaire en lecture seule, vérification nom/empreinte avant prompt, routes fixes, limites de réponse/délai et annulation physique des sockets. [Sécurité, installation et limites restantes](docs/OLLAMA_LOCAL.md). Les tests utilisent des serveurs HTTP fictifs locaux, jamais un service cloud.
+
 Le runtime de démonstration ne compose pas encore cette façade et ne charge aucun LLM, embedding, STT, TTS, générateur d'image ou vidéo. Les providers restent désactivés/non configurés à leur enregistrement. Aucun appel IA réel, clé, téléchargement de modèle ou nouveau endpoint HTTP n'est activé ; ne pas présenter les adaptateurs comme des comptes connectés.
 
 ## Principes

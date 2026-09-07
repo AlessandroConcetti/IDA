@@ -2,10 +2,10 @@ import { type IntelligenceText, intelligenceTextSchema } from "@ida/contracts/in
 import { type IntelligenceAdapter, IntelligenceError } from "@ida/domain";
 
 /**
- * Port serveur uniquement. Le futur transport devra fixer la destination revue,
- * refuser redirections/URLs clientes, borner la réponse et résoudre le secret
- * hors prompt/logs. Un transport local doit interdire tout egress cloud.
- * Aucun transport réseau ni accès à process.env n'est activé dans cette tranche.
+ * Port serveur uniquement. Le transport fixe la destination revue, refuse
+ * redirections/URLs clientes, borne la réponse et résout les secrets hors prompts.
+ * OllamaLoopbackTransport est disponible ; l'egress du daemon reste à contrôler
+ * au déploiement. Aucune activation réseau ni lecture d'env par ces adaptateurs.
  */
 export interface JsonInferenceTransport {
   post(path: string, body: Record<string, unknown>, signal: AbortSignal): Promise<{ status: number; body: unknown }>;
