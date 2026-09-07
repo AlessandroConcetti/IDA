@@ -310,7 +310,7 @@ Les modules peuvent publier des événements internes, par exemple : `media.uplo
 
 ## 11. Intégrations externes
 
-Chaque fournisseur est caché derrière un adaptateur enregistré par capacité dans le futur Provider Registry :
+Chaque fournisseur est caché derrière un adaptateur enregistré par capacité dans le Provider Registry (fondation LLM livrée ; extension aux autres catégories future) :
 
 - `AIProvider` pour la génération, transcription ou synthèse vocale futures ;
 - `StorageProvider` pour les médias ;
@@ -319,6 +319,8 @@ Chaque fournisseur est caché derrière un adaptateur enregistré par capacité 
 - `NotificationProvider` lorsque les notifications sont activées.
 
 Le mode `NORMAL` interdit tout appel de modèle. Le mode `AI` rend seulement éligibles les providers configurés et autorisés ; il n'élève aucune permission et n'autorise aucun fallback cloud silencieux. Voir `AI_PROVIDERS.md`.
+
+La fondation LLM conserve `DeterministicIdaCore` et ajoute son point interne `generateProposal`, dépendant de `IntelligencePort`. La façade serveur `CoreIntelligence` réutilise `IdentityAccessPolicy` et `ToolGateway`, puis appelle `ProviderRouter` / `ProviderRegistry`. Les seuls adaptateurs concrets sont derrière cette frontière ; agents, clients et modules ne les importent pas. Aucun agent existant n'est activé, aucun endpoint générique de génération n'est publié, aucun contexte privé n'est collecté automatiquement. Le branchement réseau et la composition du runtime restent un jalon distinct décrit dans `docs/INTELLIGENCE_CONNECTION.md`.
 
 Un `SocialPlatformAdapter` déclare ses capacités réelles : OAuth, brouillon, publication, planification native, analytics, webhooks, limites, révision d'application et confirmation humaine requise. Le produit n'invente jamais une capacité que l'API officielle ne garantit pas.
 

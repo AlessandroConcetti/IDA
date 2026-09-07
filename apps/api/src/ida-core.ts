@@ -10,9 +10,17 @@ import {
   type SystemStatus,
   systemStatusSchema,
 } from "@ida/contracts";
-import { IdentityAccessPolicy, ToolGateway } from "@ida/domain";
+import type { IntelligenceRequest, IntelligenceText } from "@ida/contracts/intelligence";
+import {
+  IdentityAccessPolicy,
+  IntelligenceError,
+  type IntelligencePort,
+  sameIntelligenceScope,
+  ToolGateway,
+} from "@ida/domain";
 
 import { toContentRotationCandidateResponse } from "./content-rotation.js";
+import { intelligenceProposalTool } from "./core-intelligence.js";
 import type { DemoDatabase, TodayItem } from "./database.js";
 import { getWorkspaceDayRange } from "./workspace-time.js";
 
@@ -52,6 +60,7 @@ export type CommandResponse = {
 type CommandCompletion = Omit<CommandResponse, "command" | "commandRunId" | "state">;
 
 const idaCoreAllowedTools = [
+  intelligenceProposalTool,
   { toolKey: "get_today", moduleKey: "TASKS", permission: "READ" },
   { toolKey: "list_content_rotation_candidates", moduleKey: "CONTENT", permission: "READ" },
   { toolKey: "get_system_status", moduleKey: "SYSTEM", permission: "READ" },
@@ -183,8 +192,34 @@ export class DeterministicIdaCore {
     private readonly database: DemoDatabase,
     gateway = new ToolGateway(undefined, idaCoreAllowedTools),
     private readonly now: () => Date = () => new Date(),
+    private readonly intelligence?: IntelligencePort,
   ) {
     this.gateway = gateway;
+  }
+
+  // Point de branchement interne. Le chat déterministe n'active jamais l'IA
+  // implicitement ; la composition serveur devra injecter CoreIntelligence.
+  async generateProposal(
+    identity: RequestIdentityContext,
+    request: IntelligenceRequest,
+    signal?: AbortSignal,
+  ): Promise<IntelligenceText> {
+    this.assertAuthorized(
+      identity,
+      { key: intelligenceProposalTool.toolKey, moduleKey: "IDA", permission: "READ" },
+      this.now(),
+    );
+    if (
+      !this.intelligence ||
+      !sameIntelligenceScope(request.scope, {
+        userId: identity.userId,
+        workspaceId: identity.workspaceId,
+        sessionId: identity.session.id,
+        clientInstanceId: identity.clientInstance.id,
+      })
+    )
+      throw new IntelligenceError("FORBIDDEN");
+    return this.intelligence.generate(request, signal);
   }
 
   private assertAuthorized(

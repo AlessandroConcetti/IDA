@@ -1,5 +1,15 @@
 # IDA — Relais de consolidation pour Sol
 
+## Dernière tranche — Fondation multi-intelligences — 7 septembre 2026
+
+Vérification de cette tranche : **390 tests / 29 fichiers** (baseline 290, donc 100 nouveaux), types des quatre packages/apps, lint global sans avertissement et quatre builds réussis. Aucun appel réseau d'inférence ; tests synthétiques uniquement. Détails et prochaines étapes dans `INTELLIGENCE_CONNECTION.md`.
+
+À la demande utilisateur, Home Assistant est en pause en attendant ses informations. La tranche dates reste également en pause et non committée. Ne pas y toucher dans le commit IA.
+
+Fondation livrée : sous-export `@ida/contracts/intelligence`, ProviderRegistry/Router, `IntelligencePort`, façade serveur `CoreIntelligence`, point optionnel `DeterministicIdaCore.generateProposal`, adaptateurs OpenAI Responses / Ollama derrière un transport JSON injecté. Réutilise IdentityAccessPolicy, ToolGateway et le Core existant ; pas de dépendance, agent activé, table, route HTTP, clé, modèle téléchargé ou requête IA réelle. La composition `app.ts` ne branche pas encore la façade. Le chat reste déterministe, le frontend et ses thèmes ne changent pas.
+
+Lire [INTELLIGENCE_CONNECTION.md](INTELLIGENCE_CONNECTION.md) avant toute activation. Les contrats sont serveur uniquement ; une classification/policy envoyée par le client ne vaut pas autorisation. Le port de relecture Identity doit lire l'autorité courante, pas le contexte HTTP figé. Coût/latence sont des estimations, le quota une allocation en mémoire partagée par le registre, pas le solde fournisseur. Transports fixes, coffre, egress local, persistance des consentements/budgets/audits, Context Broker et parcours d'activation sont encore à connecter. OpenAI/Astra n'est pas un second Core. Aucun compte ou donnée privée à utiliser pour accélérer un test.
+
 ## Dernière tranche — Préparation Home Assistant — 7 septembre 2026
 
 L’utilisateur demande la connexion de sa domotique Alexa/Google Home puis confirme **Home Assistant en cours d’installation de son côté**. Ce choix est retenu, mais l’adresse, la méthode d’installation, les appareils exposés et l’accès sécurisé restent inconnus. Ne pas installer/scanner/associer de compte ni demander de token dans le chat. La lecture ou commande de la maison réelle n’est pas encore implémentée.

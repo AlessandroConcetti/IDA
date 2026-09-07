@@ -4,6 +4,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./intelligence": {
+      "types": "./src/intelligence.ts",
+      "import": "./dist/intelligence.js"
+    },
     ".": {
       "types": "./src/index.ts",
       "import": "./dist/index.js"
