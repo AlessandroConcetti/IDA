@@ -1,6 +1,6 @@
 # IDA — Premier transport Ollama local
 
-Tranche du 8 septembre 2026. Le transport est réel ; la démo reste déterministe et aucun modèle n'est encore téléchargé, approuvé ou évalué. Installation du runtime explicitement autorisée par l'utilisateur, distincte de l'activation des agents.
+Tranche du 8 septembre 2026. Le transport est réel ; la démo reste déterministe. Depuis la tranche suivante, un modèle est installé pour une évaluation synthétique explicite, sans activation d'agent : [modèle pilote et résultats](LOCAL_MODEL_EVALUATION.md). Installation du runtime et évaluation distinctes de l'activation en production.
 
 ## Réutilisation
 
@@ -14,7 +14,7 @@ Le transport ne remplace pas une autorisation : la future composition doit conse
 - HTTP Node natif avec `hostname:127.0.0.1`, IPv4 et `agent:false` ; port fixé côté serveur (11434 par défaut). Ni URL cliente, DNS, global agent, proxy d'environnement, redirection, cookie ni Authorization. Aucun appel `pull`, `create`, `delete`, processus ou accès caméra.
 - Seulement `GET /api/tags` pour l'inventaire et `POST /api/chat`. L'inventaire seul ne charge ni n'approuve de modèle. Projection limitée à nom, empreinte et taille ; pas de publication automatique de cet inventaire dans l'interface ou les logs.
 - Au maximum 16 modèles explicitement épinglés, nom avec tag obligatoire, empreinte SHA-256 complète. Noms distants/cloud/URL non pris en charge. Inventaire relu avant chaque prompt ; modèle absent, empreinte modifiée, doublon ou métadonnée distante : refus. Une origine Hugging Face ne donne pas une exemption : importer plus tard un artefact revu sous un alias local épinglé, après licence et évaluation.
-- Copie du prompt et des pins avant tout await. Un seul message utilisateur texte (32 000 caractères maximum), aucune image, outil, option libre ou streaming ; sortie demandée bornée à 8 192 tokens, `keep_alive:0`.
+- Copie du prompt et des pins avant tout await. Un seul message utilisateur texte (32 000 caractères maximum), aucune image, outil, option libre ou streaming ; sortie demandée bornée à 8 192 tokens, `keep_alive:0`. Le transport impose `num_ctx` depuis `contextTokens` serveur : 4 096 par défaut, de 512 à 8 192 ; l'appelant ne peut pas fournir cette option. Un nombre de caractères ne garantit pas que tous les tokens entrent dans le contexte : les prompts longs doivent être bornés par le futur Context Broker.
 - Corps émis ≤192 Kio, reçu ≤512 Kio comptés pendant lecture, en-têtes ≤8 Kio, JSON UTF-8 strict, pas de compression. Un inventaire contient au maximum 128 entrées. Les corps d'erreur et en-têtes distants ne sont jamais exposés.
 - Une opération à la fois par instance (inventaire compris), refus immédiat sans file de prompts. Délai global inventaire + génération de 30 s par défaut, configurable jusqu'à 120 s. Annulation, délai ou `dispose()` ferment requête/réponse ; le slot et les listeners sont libérés. `dispose()` interdit tout nouvel appel de cette instance.
 
@@ -47,7 +47,7 @@ L'archive CLI officielle **Ollama 0.33.3** a été installée dans `C:\Users\Ale
 
 Une configuration nouvelle, sans écrasement d'un fichier existant, a été ajoutée dans `C:\Users\Aless\.ollama\server.json` avec `disable_ollama_cloud:true`. Pour la recette, le processus a aussi reçu `OLLAMA_NO_CLOUD=1` et `OLLAMA_HOST=127.0.0.1:11434` avant son lancement masqué. Ces variables n'ont pas été modifiées globalement.
 
-Recette réelle réussie via le transport compilé d'IDA : inventaire **0 modèle** ; journal du daemon confirmant cloud désactivé et écoute sur **127.0.0.1:11434**, version **0.33.3**. Aucun prompt d'inférence, compte cloud ni téléchargement de poids. Ce diagnostic ne rend pas le provider READY dans IDA. Le serveur de recette est arrêté après vérification ; Ollama reste installé et inactif.
+Recette initiale réussie via le transport compilé d'IDA : inventaire **0 modèle** ; journal du daemon confirmant cloud désactivé et écoute sur **127.0.0.1:11434**, version **0.33.3**. Aucun prompt d'inférence à cette étape initiale. Le modèle téléchargé et les essais ultérieurs sont décrits séparément dans [LOCAL_MODEL_EVALUATION.md](LOCAL_MODEL_EVALUATION.md) ; ils ne rendent pas le provider READY dans la démo.
 
 Matériel vérifié : RTX 3060 Laptop GPU, **6 144 Mio de VRAM** (5 838 Mio libres lors de la mesure). L'espace disque avant installation était d'environ 20,5 Gio : mesurer à nouveau avant de choisir les poids, ne pas lancer plusieurs téléchargements de modèles. L'archive d'installation vérifiée reste dans `tmp/ollama-install-v0.33.3`, ignorée par Git, et occupe environ 1,37 Gio.
 
@@ -59,7 +59,7 @@ $env:OLLAMA_HOST = '127.0.0.1:11434'
 & 'C:\Users\Aless\AppData\Local\Programs\Ollama\ollama.exe' serve
 ```
 
-Ne pas ajouter d'origine navigateur wildcard, de bind LAN, de tunnel ou de clé externe. L'API Ollama n'est pas le point d'entrée public d'IDA et ne remplace pas son Identity/Tool Gateway. Le modèle pilote et sa connexion au chat restent à réaliser dans la tranche suivante.
+Ne pas ajouter d'origine navigateur wildcard, de bind LAN, de tunnel ou de clé externe. L'API Ollama n'est pas le point d'entrée public d'IDA et ne remplace pas son Identity/Tool Gateway. La connexion du modèle pilote au chat reste à réaliser après les jalons de qualité et de sécurité.
 
 ## Sources officielles
 

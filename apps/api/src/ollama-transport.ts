@@ -14,11 +14,12 @@ export type OllamaTransportConfig = {
   models?: readonly ModelPin[];
   port?: number;
   timeoutMs?: number;
+  contextTokens?: number;
 };
 
 const MAX_RESPONSE_BYTES = 512 * 1024;
 const MAX_REQUEST_BYTES = 192 * 1024;
-const modelName = /^[a-z0-9][a-z0-9_-]*(?:\/[a-z0-9][a-z0-9_-]*)?:[a-z0-9][a-z0-9._-]*$/;
+const modelName = /^[a-z0-9][a-z0-9_-]*(?:\/[a-z0-9][a-z0-9_-]*)?:[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
 const digestPattern = /^[a-f0-9]{64}$/;
 function record(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -51,6 +52,7 @@ function cancelled(signal: AbortSignal): IntelligenceError {
 export class OllamaLoopbackTransport implements JsonInferenceTransport {
   private readonly port: number;
   private readonly timeoutMs: number;
+  private readonly contextTokens: number;
   private readonly enabled: boolean;
   private readonly localOnlyApproved: boolean;
   private readonly pins = new Map<string, string>();
@@ -61,17 +63,21 @@ export class OllamaLoopbackTransport implements JsonInferenceTransport {
     if (
       !record(config) ||
       Object.keys(config).some(
-        (key) => !["enabled", "localOnlyDeploymentApproved", "models", "port", "timeoutMs"].includes(key),
+        (key) =>
+          !["enabled", "localOnlyDeploymentApproved", "models", "port", "timeoutMs", "contextTokens"].includes(key),
       ) ||
       (config.enabled !== undefined && typeof config.enabled !== "boolean") ||
       (config.localOnlyDeploymentApproved !== undefined && typeof config.localOnlyDeploymentApproved !== "boolean") ||
       (config.port !== undefined && !boundedInteger(config.port, 65535)) ||
       (config.timeoutMs !== undefined && !boundedInteger(config.timeoutMs, 120_000)) ||
+      (config.contextTokens !== undefined &&
+        (!boundedInteger(config.contextTokens, 8192) || config.contextTokens < 512)) ||
       (config.models !== undefined && (!Array.isArray(config.models) || config.models.length > 16))
     )
       throw new IntelligenceError("CONFIGURATION_INVALID");
     this.port = config.port ?? 11434;
     this.timeoutMs = config.timeoutMs ?? 30_000;
+    this.contextTokens = config.contextTokens ?? 4096;
     this.enabled = config.enabled === true;
     this.localOnlyApproved = config.localOnlyDeploymentApproved === true;
     for (const model of config.models ?? []) {
@@ -133,7 +139,7 @@ export class OllamaLoopbackTransport implements JsonInferenceTransport {
       messages: [{ role: "user", content: message.content }],
       stream: false,
       tools: [],
-      options: { num_predict: body.options.num_predict },
+      options: { num_predict: body.options.num_predict, num_ctx: this.contextTokens },
       keep_alive: 0,
     });
     if (Buffer.byteLength(payload) > MAX_REQUEST_BYTES) throw new IntelligenceError("INVALID_REQUEST");

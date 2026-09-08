@@ -18,6 +18,9 @@ function body() {
     keep_alive: 0,
   };
 }
+function serializedBody(contextTokens = 4096) {
+  return { ...body(), options: { num_predict: 100, num_ctx: contextTokens } };
+}
 function deferred() {
   let resolve = () => {};
   const promise = new Promise<void>((done) => {
@@ -101,6 +104,15 @@ afterEach(async () => {
 });
 
 describe("Ollama loopback transport, isolated HTTP fixtures only", () => {
+  it("sets a reviewed server context window and preserves canonical uppercase quantization tags", async () => {
+    const model = { ...pin, name: "qwen3:4b-instruct-2507-q4_K_M" };
+    const f = await fixture((request, response) =>
+      json(response, request.url === "/api/tags" ? { models: [{ ...model, model: model.name, size: 1024 }] } : reply),
+    );
+    const t = transport(f.port, { models: [model], contextTokens: 2048 });
+    await t.post("/api/chat", { ...body(), model: model.name }, signal());
+    expect(JSON.parse(f.calls[1]?.body ?? "{}")).toEqual({ ...serializedBody(2048), model: model.name });
+  });
   it("composes the existing adapter over real HTTP, inventory before prompt, with no extra identity or tools", async () => {
     const f = await fixture();
     const result = await new OllamaAdapter("ollama", transport(f.port)).generate({
@@ -115,7 +127,7 @@ describe("Ollama loopback transport, isolated HTTP fixtures only", () => {
       ["POST", "/api/chat"],
     ]);
     expect(f.calls[0]?.body).toBe("");
-    expect(JSON.parse(f.calls[1]?.body ?? "{}")).toEqual(body());
+    expect(JSON.parse(f.calls[1]?.body ?? "{}")).toEqual(serializedBody());
     expect(f.calls[1]?.headers.authorization).toBeUndefined();
     expect(f.calls[1]?.headers.cookie).toBeUndefined();
     expect(f.calls[1]?.headers.connection).toBe("close");
@@ -148,6 +160,10 @@ describe("Ollama loopback transport, isolated HTTP fixtures only", () => {
     { port: 1.5 },
     { timeoutMs: 0 },
     { timeoutMs: null },
+    { contextTokens: null },
+    { contextTokens: 511 },
+    { contextTokens: 8193 },
+    { contextTokens: 1.5 },
     { timeoutMs: 120001 },
     { enabled: "true" },
     { localOnlyDeploymentApproved: "true" },
@@ -221,7 +237,7 @@ describe("Ollama loopback transport, isolated HTTP fixtures only", () => {
     request.messages[0] = { role: "user", content: "CHANGED" };
     release();
     await pending;
-    expect(JSON.parse(f.calls[1]?.body ?? "{}")).toEqual(body());
+    expect(JSON.parse(f.calls[1]?.body ?? "{}")).toEqual(serializedBody());
   });
   it.each([
     { models: [], code: "NO_COMPATIBLE_MODEL" },

@@ -78,6 +78,8 @@ La spécialisation s'évalue sur les tâches d'IDA : recherche de morceaux, capt
 
 ## Suite concrète
 
+Point d'étape du 8 septembre : matériel vérifié, Ollama installé et premier modèle Qwen3 4B téléchargé pour une évaluation synthétique. Le transport impose maintenant la fenêtre de contexte côté serveur. [Résultats réels et limites du pilote](LOCAL_MODEL_EVALUATION.md). Aucun profil n'est activé par cette étape ; les jalons ci-dessous décrivent toujours le passage à un usage métier, pas une autorisation déduite de l'installation.
+
 1. Confirmer VRAM disponible, runtime local et espace disque ; choisir un seul modèle de petite taille à évaluer avant tout téléchargement. Vérifier dépôt, révision, licence et format ; ne pas exécuter de code distant non revu.
 2. Raccorder le transport local sécurisé décrit dans `INTELLIGENCE_CONNECTION.md`, sans cloud ou capteur implicite.
 3. Ajouter le Context Broker minimal, prompts versionnés et évaluations d'un premier agent Music Studio. Tester uniquement des données synthétiques puis des documents explicitement choisis.

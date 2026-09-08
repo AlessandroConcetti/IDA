@@ -6,6 +6,8 @@ Fondation LLM implémentée le 7 septembre 2026 : contrats, Provider Registry, R
 
 8 septembre : transport HTTP Ollama local livré, réutilisant l'adaptateur existant, sans branchement automatique au Core. Inventaire en lecture seule, vérification nom/empreinte avant prompt, routes fixes, limites de réponse/délai et annulation physique des sockets. [Sécurité, installation et limites restantes](docs/OLLAMA_LOCAL.md). Les tests utilisent des serveurs HTTP fictifs locaux, jamais un service cloud.
 
+Modèle pilote installé ensuite : Qwen3 4B Instruct quantifié, environ 2,50 Go. Un runner explicite et séparé évalue six scénarios synthétiques par `IntelligencePort`/Provider Router ; le résultat ne promeut jamais les agents ou profils. [Évaluation réelle, distincte des tests unitaires](docs/LOCAL_MODEL_EVALUATION.md).
+
 Le runtime de démonstration ne compose pas encore cette façade et ne charge aucun LLM, embedding, STT, TTS, générateur d'image ou vidéo. Les providers restent désactivés/non configurés à leur enregistrement. Aucun appel IA réel, clé, téléchargement de modèle ou nouveau endpoint HTTP n'est activé ; ne pas présenter les adaptateurs comme des comptes connectés.
 
 ## Principes
