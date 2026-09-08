@@ -33,6 +33,7 @@ import {
 
 import { demoContext, demoIdentity, demoWorkspace } from "./demo-context.js";
 import { getDemoDates } from "./demo-dates.js";
+import { ensureIntelligenceAuditSchema } from "./intelligence-audit-schema.js";
 
 export const mediaStatuses = ["UNUSED", "USED", "SCHEDULED", "PUBLISHED", "ARCHIVED"] as const;
 
@@ -5366,6 +5367,7 @@ export class DemoDatabase {
       SELECT revoke_disallowed_local_auth_sessions();
     `);
 
+    await ensureIntelligenceAuditSchema(this.pglite);
     await this.migrateRequestedApprovalPayloadHashes();
   }
 

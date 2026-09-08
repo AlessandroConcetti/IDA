@@ -1,5 +1,7 @@
 # SECURITY — principes de sécurité et d’exploitation
 
+Complément ciblé du 8 septembre : [audit persistant IA](docs/INTELLIGENCE_AUDIT.md), scope serveur lié, champs stricts sans prompt/secret et écriture historique permise après révocation pour conserver les refus. Les triggers append-only protègent les opérations SQL ordinaires, pas un propriétaire de base ou compte OS compromis. Pas d'exposition réseau ni de qualification sécurité globale supplémentaire.
+
 > **Statut :** architecture complétée et première tranche locale implémentée ; aucune donnée réelle ni intégration externe n’est active.
 > **Dernière revue :** 5 septembre 2026.
 > **Règle MVP :** aucune publication publique, aucun paiement et aucun transfert ne peuvent être déclenchés sans une validation humaine explicite — et les paiements/transferts ne font pas partie du périmètre MVP.

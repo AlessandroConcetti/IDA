@@ -51,7 +51,7 @@ Ces contrôles ne promettent ni révocation rétroactive de données déjà lues
 
 Puits d'audit obligatoire/injecté : son échec bloque lecture ou restitution. Champs : run, scope, environnement, agent, intention, résultat `ATTEMPT`/`SUCCEEDED`/`DENIED`. Aucun titre, filtre libre, référence de média, réponse, erreur SQL ou token. Une erreur typée est reconstruite à partir de son seul code pour supprimer message/cause privés.
 
-`SUCCEEDED` constate la lecture validée, pas sa livraison : une révocation durant cet audit entraîne ensuite un refus. Les requêtes invalides sont rejetées avant l'audit métier ; leur futur journal HTTP devra être expurgé. Le puits append-only persistant n'est pas encore composé ; les tests emploient un audit en mémoire.
+`SUCCEEDED` constate la lecture validée, pas sa livraison : une révocation durant cet audit entraîne ensuite un refus. Les requêtes invalides sont rejetées avant l'audit métier ; leur futur journal HTTP devra être expurgé. Le [puits append-only persistant](INTELLIGENCE_AUDIT.md) est désormais livré et testé avec ce broker, sans branchement au chat ni modification des anciens tests en mémoire.
 
 L'annulation empêche la lecture ou abandonne un résultat tardif. Elle n'interrompt pas nécessairement une requête PGlite en cours et n'efface pas rétroactivement la mémoire du processus.
 
@@ -59,4 +59,4 @@ L'annulation empêche la lecture ou abandonne un résultat tardif. Elle n'interr
 
 **650 tests / 37 fichiers**, soit 98 tests supplémentaires par rapport à la tranche modèle (552). Lint global, types et builds contracts/domain/API/web réussis. Tests ciblés : borne SQL, archives, isolation, filtres littéraux, champs privés exclus, erreurs, droits profil/agent/source/outils, identité falsifiée, inactivité, rotation, révocation pendant lecture/audit, annulation et autorité asynchrone interdite. Un scénario assemble vraie PGlite + session locale synthétique + broker + Gateway + SQL, puis vérifie le refus après verrouillage. Les statuts ACTIVE n'existent que dans les fixtures.
 
-Suite : audit persistant et parcours opt-in ; validation des ressources à la frontière d'inférence ; prompt de formulation borné et évaluateur. Puis un seul agent musical synthétique via `EnvironmentIntelligence` et le transport Ollama existant, avant branchement au chat. Le broker ne corrige pas automatiquement le score **4/6** du modèle candidat. Aucune nouvelle inférence effectuée dans cette tranche.
+Suite : composer le puits persistant livré et le parcours opt-in ; valider les ressources à la frontière d'inférence ; ajouter prompt de formulation borné et évaluateur. Puis un seul agent musical synthétique via `EnvironmentIntelligence` et le transport Ollama existant, avant branchement au chat. Le broker ne corrige pas automatiquement le score **4/6** du modèle candidat. Aucune nouvelle inférence effectuée dans cette tranche.

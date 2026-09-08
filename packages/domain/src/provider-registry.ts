@@ -4,22 +4,9 @@ import {
   aiProviderManifestSchema,
   aiProviderStateSchema,
   type IntelligenceText,
+  intelligenceErrorCodes,
 } from "@ida/contracts/intelligence";
 
-const intelligenceErrorCodes = [
-  "FORBIDDEN",
-  "INVALID_REQUEST",
-  "CONFIGURATION_INVALID",
-  "NO_COMPATIBLE_MODEL",
-  "UNAVAILABLE",
-  "RATE_LIMITED",
-  "TIMEOUT",
-  "CANCELLED",
-  "INVALID_RESPONSE",
-  "AUTHENTICATION_REQUIRED",
-  "REFUSED",
-  "AUDIT_UNAVAILABLE",
-] as const;
 export type IntelligenceErrorCode = (typeof intelligenceErrorCodes)[number];
 
 // Jamais de message/cause brut d'un fournisseur : ils peuvent contenir les entrées.

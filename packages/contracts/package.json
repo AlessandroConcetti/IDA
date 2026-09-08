@@ -4,6 +4,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./intelligence-audit": {
+      "types": "./src/intelligence-audit.ts",
+      "import": "./dist/intelligence-audit.js"
+    },
     "./music-context": {
       "types": "./src/music-context.ts",
       "import": "./dist/music-context.js"

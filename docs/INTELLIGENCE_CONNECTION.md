@@ -6,6 +6,8 @@ Un premier modèle Qwen3 4B Instruct est maintenant installé pour un laboratoir
 
 Complément du 8 septembre : [sélection du contexte musical](MUSIC_CONTEXT.md) livrée et testée, avec projection SQL bornée, règles communes profil/agent/Gateway et relecture `LOCAL_LOCK` sans prolongation d'inactivité. Le chat reste inchangé ; aucun relevé musical n'est transmis à un modèle.
 
+Puis [audit persistant](INTELLIGENCE_AUDIT.md) livré : les callbacks existants peuvent écrire une table locale append-only à champs stricts, sans prompts ni réponses. Sa composition avec Core/broker est vérifiée sur données synthétiques ; pas encore activée dans le chat.
+
 ## Analyse et réutilisation
 
 Extension du même jour : profils par environnement et listes de modèles/localisations autorisés livrés dans [ENVIRONMENT_BRAINS.md](ENVIRONMENT_BRAINS.md). La façade `EnvironmentIntelligence` utilise le même registre et le même Core ; aucun provider réseau n'est activé par cette extension.
@@ -63,7 +65,7 @@ L'audit `SUCCEEDED` constate la génération validée, pas une publication ni n�
 1. Transport cloud, coffre/résolution des clés et composition de déploiement. Le transport HTTP local est livré séparément ; les adaptateurs restent sans accès direct aux variables d'environnement et ne l'activent pas implicitement.
 2. Validation du modèle pilote pour un usage métier, politique d'egress opérationnelle et évaluations élargies. L'installation locale et le banc d'essai synthétique sont livrés ; aucun health check périodique ni modèle approuvé en production. Une étiquette LOCAL ne prouve pas à elle seule l'absence d'envoi externe.
 3. Accès API OpenAI du compte, quotas/tarifs réels et politique de rétention du projet. `store:false` ne constitue pas une garantie de zéro rétention côté fournisseur.
-4. Persistance des réglages, consentements, allocation de coût, audit append-only et composition runtime. `LocalIntelligenceAccess` livre la relecture d'un travail local déjà authentifié ; ne pas renvoyer le seul snapshot HTTP d'origine. Les profils/policies runtime sont synchrones ; une future autorité persistée exige une vue agrégée/versionnée cohérente.
+4. Persistance des réglages/consentements/allocations de coût et composition runtime. Le puits append-only local est livré (`INTELLIGENCE_AUDIT.md`), pas sa rétention/exploitation de production. `LocalIntelligenceAccess` recharge un travail local déjà authentifié ; ne pas renvoyer le seul snapshot HTTP. Les profils/policies runtime sont synchrones ; une future autorité persistée exige une vue agrégée/versionnée cohérente.
 5. Context Broker minimal livré pour deux recherches musicales structurées : voir `MUSIC_CONTEXT.md`. Restent validation de fraîcheur des ressources à l'envoi, prompt de formulation versionné, évaluations métier et composition avec l'inférence. PRIVATE_CREATIVE est imposé côté serveur ; aucun contrat ne prétend détecter tous les secrets dans le texte libre.
 6. Parcours utilisateur d'activation/arrêt et signal d'annulation global lié au mode AI, puis branchement explicite du chat aux propositions. Les agents existants restent dans leur état PLANNED.
 

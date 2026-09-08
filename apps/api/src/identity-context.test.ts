@@ -270,6 +270,8 @@ describe("Migration et frontière HTTP Identity", () => {
     try {
       database = await DemoDatabase.open({ dataDir });
       await database.pglite.exec(`
+        -- Cette fixture recrée une version antérieure à Identity et à son audit IA.
+        DROP TABLE intelligence_audit_events;
         DROP TRIGGER memberships_revoke_local_auth ON memberships;
         DROP TRIGGER users_revoke_local_auth ON users;
         DROP TABLE identity_security_events;
@@ -303,13 +305,14 @@ describe("Migration et frontière HTTP Identity", () => {
           WHERE table_schema = 'public'
             AND table_name IN (
               'client_instances', 'identity_sessions', 'client_workspace_grants',
-              'local_owner_credentials', 'local_auth_sessions', 'identity_security_events'
+              'local_owner_credentials', 'local_auth_sessions', 'identity_security_events',
+              'intelligence_audit_events'
             )
         `,
       );
 
       expect(migrated.rows).toEqual([{ userStatus: "ACTIVE", membershipStatus: "ACTIVE" }]);
-      expect(identityTables.rows[0]?.count).toBe(6);
+      expect(identityTables.rows[0]?.count).toBe(7);
     } finally {
       await database?.close().catch(() => undefined);
       await rm(dataDir, { recursive: true, force: true });

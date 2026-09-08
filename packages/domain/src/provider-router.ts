@@ -7,30 +7,14 @@ import {
   intelligenceRequestSchema,
   intelligenceTextSchema,
 } from "@ida/contracts/intelligence";
-import {
-  IntelligenceError,
-  type IntelligenceErrorCode,
-  type ProviderCandidate,
-  type ProviderRegistry,
-} from "./provider-registry.js";
+import type { IntelligenceAudit } from "@ida/contracts/intelligence-audit";
+import { IntelligenceError, type ProviderCandidate, type ProviderRegistry } from "./provider-registry.js";
+
+export type { IntelligenceAudit } from "@ida/contracts/intelligence-audit";
 
 export interface IntelligencePort {
   generate(request: IntelligenceRequest, signal?: AbortSignal): Promise<IntelligenceText>;
 }
-
-export type IntelligenceAudit = {
-  runId: string;
-  scope: IntelligenceScope;
-  purpose: IntelligenceRequest["purpose"];
-  providerKey: string;
-  modelId: string;
-  locality: "LOCAL" | "CLOUD";
-  manifestVersion: string;
-  dataClasses: IntelligenceRequest["dataClasses"];
-  attempt: number;
-  estimatedCostMicros: number;
-  outcome: "ATTEMPT" | "SUCCEEDED" | IntelligenceErrorCode;
-};
 
 export function sameIntelligenceScope(a: IntelligenceScope, b: IntelligenceScope): boolean {
   return (

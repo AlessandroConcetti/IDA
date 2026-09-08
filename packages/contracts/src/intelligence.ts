@@ -6,6 +6,21 @@ const modelId = z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,127}$/u);
 const timestamp = z.string().datetime({ offset: true });
 const nonNegative = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
 
+export const intelligenceErrorCodes = [
+  "FORBIDDEN",
+  "INVALID_REQUEST",
+  "CONFIGURATION_INVALID",
+  "NO_COMPATIBLE_MODEL",
+  "UNAVAILABLE",
+  "RATE_LIMITED",
+  "TIMEOUT",
+  "CANCELLED",
+  "INVALID_RESPONSE",
+  "AUTHENTICATION_REQUIRED",
+  "REFUSED",
+  "AUDIT_UNAVAILABLE",
+] as const;
+
 export const aiDataClassSchema = z.enum(["PUBLIC", "INTERNAL", "PRIVATE_CREATIVE", "SENSITIVE_PERSONAL", "SECRET"]);
 export const intelligenceScopeSchema = z
   .object({

@@ -1,5 +1,7 @@
 # IDA — Modèle de données
 
+Audit IA du 8 septembre : table additive `intelligence_audit_events`, champs stricts sans payload libre, index workspace/id, relations de scope vérifiées à l'insertion et triggers contre UPDATE/DELETE/TRUNCATE. Idempotence par workspace/famille/run/tentative/résultat avec comparaison d'empreinte ; aucune modification des journaux existants. Voir [contrat, limites, rétention et tests](docs/INTELLIGENCE_AUDIT.md).
+
 Complément du 8 septembre : [contexte musical](docs/MUSIC_CONTEXT.md), sans migration. Projection SQL dédiée limitée à 10 lignes, champs explicitement sélectionnés, workspace lié et archives exclues. Le résolveur Identity accepte un argument serveur facultatif `localSessionAt` exigeant une session locale active, sans prolonger son inactivité ; son échéance effective est bornée par l'expiration idle. Aucun token/digest sélectionné. Les appels historiques sans cet argument restent inchangés ; ce complément ne constitue pas une authentification HTTP.
 
 Ce document décrit le modèle relationnel cible du MVP d’IDA et distingue ce modèle de la tranche locale réellement livrée. Le modèle complet reste la source de vérité fonctionnelle ; la persistance locale actuelle sert à vérifier le premier flux sans préjuger du déploiement de production.

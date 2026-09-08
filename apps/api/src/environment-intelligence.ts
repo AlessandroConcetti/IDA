@@ -5,23 +5,18 @@ import {
 } from "@ida/contracts/environment-brains";
 import type { IntelligenceRequest, IntelligenceScope, IntelligenceText } from "@ida/contracts/intelligence";
 import { intelligenceRequestSchema } from "@ida/contracts/intelligence";
+import type { EnvironmentIntelligenceAudit } from "@ida/contracts/intelligence-audit";
 import type { ToolGateway } from "@ida/domain";
 import {
   type AgentRegistry,
   constrainEnvironmentPolicy,
-  type IntelligenceAudit,
   IntelligenceError,
   type IntelligencePort,
   type ProviderRegistry,
 } from "@ida/domain";
 import { assertIntelligenceIdentity, CoreIntelligence, type IntelligenceAccessSource } from "./core-intelligence.js";
 
-export type EnvironmentIntelligenceAudit = IntelligenceAudit & {
-  environmentKey: EnvironmentInvocation["environmentKey"];
-  agentKey: string;
-  profileVersion: string;
-};
-
+export type { EnvironmentIntelligenceAudit } from "@ida/contracts/intelligence-audit";
 /** Un profil de cerveau utilise le même registre/provider et les mêmes allocations. */
 export class EnvironmentIntelligence implements IntelligencePort {
   private readonly invocation: EnvironmentInvocation;

@@ -1,5 +1,17 @@
 # IDA — Relais de consolidation pour Sol
 
+## Dernière tranche — Audit persistant de l'intelligence — 8 septembre 2026
+
+Lire [INTELLIGENCE_AUDIT.md](INTELLIGENCE_AUDIT.md). `createPersistentIntelligenceAudit(database, authenticatedScope)` fournit les trois callbacks existants contexte/Core/environnement. Nouveau sous-export `@ida/contracts/intelligence-audit`, types réexportés aux anciens emplacements, codes d'erreur partagés. Table `intelligence_audit_events` ajoutée transactionnellement à l'initialisation locale : colonnes strictes, id/timestamp serveur, empreinte de comparaison, index workspace et guards INSERT/UPDATE/DELETE/TRUNCATE. Aucun payload, prompt, réponse ou secret ; aucun ajout aux journaux existants ou à l'UI.
+
+Le sink lie le scope déjà authentifié et la base recoupe les relations et l'existence de LOCAL_LOCK, sans exiger ACTIVE pour un événement historique après révocation. Réautorisation métier toujours au broker/router. Retry identique idempotent, contradictoire refusé. SUCCEEDED ne prouve pas la livraison ; refus tardifs conservés. Les callbacks ne couvrent pas tous les refus préalables du routeur. Les guards ne protègent pas contre un propriétaire de base désactivant les triggers. Rétention/rotation/administration de production restent à définir.
+
+Tests nouveaux : callback/replay/erreurs/composition et persistance SQL réelle sur base temporaire confinée. Un ancien test de migration Identity a été adapté pour retirer aussi la nouvelle table dans sa fixture antérieure à Identity, puis vérifier sa recréation (7 tables au lieu de 6). Aucun changement des invariants testés ni des droits. Ne pas exécuter la remise en état de cette fixture sur une base de travail.
+
+Vérification finale : **731 tests / 39 fichiers** (81 nouveaux), suite complète relancée après correction de la fixture, 177,05 s. Lint global, types et builds contracts/domain/API/web réussis. Aucune modification de la base d'aperçu, de la configuration locale ou des médias.
+
+Pas de modèle ou réseau d'inférence, aucune activation d'agent, aucun redémarrage de la démo. Dates/Home Assistant et modifications UI toujours en pause/hors tranche. Suite : validation de fraîcheur du contexte à l'envoi, prompt de formulation et évaluateur, parcours opt-in/arrêt puis composition du premier agent au chat avec ce puits. Qwen reste un candidat 4/6, pas un modèle qualifié.
+
 ## Dernière tranche — Contexte musical contrôlé — 8 septembre 2026
 
 Lire [MUSIC_CONTEXT.md](MUSIC_CONTEXT.md). `MusicContextBroker` + store SQL borné (5 lignes défaut, 10 maximum), requêtes strictes SEARCH_TRACK/SEARCH_MEDIA, archives exclues, métadonnées minimales et classification PRIVATE_CREATIVE. Autorisation partagée avec le routeur d'environnement, agent/Gateway READ, audit expurgé obligatoire et annulation. `LocalIntelligenceAccess` recharge l'identité persistée, impose session LOCAL_LOCK active/idle non expirée, conserve le scope, ne renouvelle pas l'inactivité et ne lit aucun token. Les appels Identity existants gardent leur comportement. Pas de migration ou dépendance.

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { EnvironmentBrainProfile, EnvironmentInvocation } from "@ida/contracts/environment-brains";
 import { type IntelligenceScope, intelligencePolicySchema, intelligenceScopeSchema } from "@ida/contracts/intelligence";
+import type { MusicContextAudit } from "@ida/contracts/intelligence-audit";
 import {
   type MusicContextQuery,
   type MusicContextRows,
@@ -10,20 +11,13 @@ import {
 import { type AgentRegistry, authorizeEnvironmentContext, IntelligenceError, type ToolGateway } from "@ida/domain";
 import { assertIntelligenceIdentity, type IntelligenceAccessSource } from "./core-intelligence.js";
 
+export type { MusicContextAudit } from "@ida/contracts/intelligence-audit";
 export type { MusicContextQuery, MusicContextRows, MusicMediaFact, MusicTrackFact } from "@ida/contracts/music-context";
 export { musicContextQuerySchema };
 export interface MusicContextStore {
   // Infrastructure serveur seulement : ce port ne constitue pas une autorisation.
   read(scope: IntelligenceScope, query: MusicContextQuery): Promise<MusicContextRows>;
 }
-export type MusicContextAudit = {
-  runId: string;
-  scope: IntelligenceScope;
-  environmentKey: "music";
-  agentKey: "agent_music_librarian";
-  intent: MusicContextQuery["intent"];
-  outcome: "ATTEMPT" | "SUCCEEDED" | "DENIED";
-};
 export type MusicContextSnapshot = {
   version: "music-context.v1";
   scope: IntelligenceScope;
