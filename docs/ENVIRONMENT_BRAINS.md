@@ -55,7 +55,7 @@ Les modèles sont filtrés par couple exact `providerKey/modelId` ; un profil mu
 
 Première cible : enrichissement documentaire contrôlé. Import choisi → validation/provenance/classe → rattachement workspace/environnement → recherche des extraits nécessaires → contexte limité pour l'agent. Les préférences durables gardent le cycle PENDING/CONFIRMED/REJECTED existant. Lire une conversation ne vaut ni consentement à la mémoriser ni consentement à l'envoyer dans un entraînement.
 
-`CONFIRMED_ONLY` et `HUMAN_REVIEWED` sont les seules politiques de mémoire et d'amélioration déclarables dans ce profil. Cela ne constitue pas encore un chargeur de mémoire : le Context Broker et les contrôles sur chaque ressource restent à raccorder. Cette fondation vérifie les métadonnées de contexte fournies par le serveur ; elle ne prouve pas la provenance d'un texte libre et ne détecte pas tous les secrets dans un prompt.
+`CONFIRMED_ONLY` et `HUMAN_REVIEWED` restent les seules politiques de mémoire et d'amélioration déclarables. Le [Context Broker musical](MUSIC_CONTEXT.md) livre désormais deux projections SQL bornées/isolées, sans charger la mémoire. Composition avec l'inférence et validation de fraîcheur des ressources restent à faire ; les textes libres demeurent non fiables, sans détection garantie de secrets.
 
 Pour s'améliorer, IDA pourra proposer un changement de prompt, une connaissance ou un nouvel agent. Le cycle prévu est proposition → validation humaine → tests d'évaluation → version activée → retour arrière possible. Pas d'auto-réécriture ou d'auto-déploiement du Core, de ses permissions, ni de ses modèles en production.
 
@@ -82,7 +82,7 @@ Point d'étape du 8 septembre : matériel vérifié, Ollama installé et premier
 
 1. Confirmer VRAM disponible, runtime local et espace disque ; choisir un seul modèle de petite taille à évaluer avant tout téléchargement. Vérifier dépôt, révision, licence et format ; ne pas exécuter de code distant non revu.
 2. Raccorder le transport local sécurisé décrit dans `INTELLIGENCE_CONNECTION.md`, sans cloud ou capteur implicite.
-3. Ajouter le Context Broker minimal, prompts versionnés et évaluations d'un premier agent Music Studio. Tester uniquement des données synthétiques puis des documents explicitement choisis.
+3. Composer le Context Broker musical livré, la validation des ressources à l'envoi, les prompts versionnés et les évaluations d'un premier agent Music Studio. `getProfile` est une lecture synchrone de l'autorité runtime après Identity, pas un chargeur asynchrone ni un cache périmé. Tester d'abord des données synthétiques, puis des documents explicitement choisis.
 4. Activer ce profil uniquement après validation, avec status réel et parcours de proposition dans le chat existant. Persister réglages/consentements/budgets/audit et prévoir un arrêt immédiat.
 5. Étendre aux agents Content et Social ; conserver la validation humaine. Ajouter chaque autre domaine à son jalon, avec gouvernance et professionnel d'escalade si pertinent. Une connaissance d'un environnement n'est partagée avec un autre que par une règle serveur explicite.
 6. Évaluer ensuite un cloud officiellement éligible, si l'utilisateur le souhaite, avec consentement d'egress par environnement et budget réel. Ne pas utiliser la classification/requête d'un navigateur comme autorité.

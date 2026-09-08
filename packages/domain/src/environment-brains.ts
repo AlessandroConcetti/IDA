@@ -57,14 +57,13 @@ export function listEnvironmentBrainProfiles(): EnvironmentBrainProfile[] {
   );
 }
 
-/** Intersection : le profil ne peut élargir ni l'agent ni la policy du compte. */
-export function constrainEnvironmentPolicy(
+/** Même autorité pour sélectionner du contexte et pour demander une inférence. */
+export function authorizeEnvironmentContext(
   rawProfile: EnvironmentBrainProfile,
   rawInvocation: EnvironmentInvocation,
-  request: IntelligenceRequest,
-  policy: IntelligencePolicy,
+  dataClasses: IntelligenceRequest["dataClasses"],
   agents: AgentRegistry,
-): IntelligencePolicy {
+): EnvironmentBrainProfile {
   const parsedProfile = environmentBrainProfileSchema.safeParse(rawProfile);
   const parsedInvocation = environmentInvocationSchema.safeParse(rawInvocation);
   if (!parsedProfile.success || !parsedInvocation.success) throw new IntelligenceError("FORBIDDEN");
@@ -82,12 +81,24 @@ export function constrainEnvironmentPolicy(
     !invocation.contextSources.every(
       (source) => profile.contextSources.includes(source) && agent.contextSources.includes(source),
     ) ||
-    !request.dataClasses.every(
+    !dataClasses.every(
       (classification) => classification !== "SECRET" && profile.acceptedDataClasses.includes(classification),
     )
   ) {
     throw new IntelligenceError("FORBIDDEN");
   }
+  return profile;
+}
+
+/** Intersection : le profil ne peut élargir ni l'agent ni la policy du compte. */
+export function constrainEnvironmentPolicy(
+  rawProfile: EnvironmentBrainProfile,
+  rawInvocation: EnvironmentInvocation,
+  request: IntelligenceRequest,
+  policy: IntelligencePolicy,
+  agents: AgentRegistry,
+): IntelligencePolicy {
+  const profile = authorizeEnvironmentContext(rawProfile, rawInvocation, request.dataClasses, agents);
   const allowedModels = profile.modelPolicy.allowedModels.filter(
     (model) =>
       policy.allowedProviderKeys.includes(model.providerKey) &&

@@ -14,7 +14,7 @@ import {
   type IntelligencePort,
   type ProviderRegistry,
 } from "@ida/domain";
-import { CoreIntelligence, type IntelligenceAccessSource } from "./core-intelligence.js";
+import { assertIntelligenceIdentity, CoreIntelligence, type IntelligenceAccessSource } from "./core-intelligence.js";
 
 export type EnvironmentIntelligenceAudit = IntelligenceAudit & {
   environmentKey: EnvironmentInvocation["environmentKey"];
@@ -32,10 +32,13 @@ export class EnvironmentIntelligence implements IntelligencePort {
       registry: ProviderRegistry;
       access: IntelligenceAccessSource;
       gateway: ToolGateway;
-      loadProfile: (
+      // Autorité runtime serveur en mémoire, synchrone et sans effet : ni cache périmé ni entrée cliente.
+      // Une future persistance exige une autorité identité/policy/profil agrégée et versionnée,
+      // pas une Promise cachée dans cette adaptation synchrone.
+      getProfile: (
         scope: IntelligenceScope,
         environmentKey: EnvironmentInvocation["environmentKey"],
-      ) => Promise<EnvironmentBrainProfile>;
+      ) => EnvironmentBrainProfile;
       audit: (event: EnvironmentIntelligenceAudit) => Promise<void>;
       now?: () => Date;
     },
@@ -55,8 +58,9 @@ export class EnvironmentIntelligence implements IntelligencePort {
       access: {
         loadCurrent: async (scope) => {
           const access = await this.options.access.loadCurrent(scope);
-          // Le chargeur est une autorité serveur isolée par scope, pas un profil fourni par le navigateur.
-          const profile = await this.options.loadProfile(scope, this.invocation.environmentKey);
+          assertIntelligenceIdentity(scope, access.identity, this.options.now?.() ?? new Date());
+          // Aucun await entre l'identité fraîche et le profil courant. Le schéma refuse une Promise.
+          const profile = this.options.getProfile(structuredClone(scope), this.invocation.environmentKey);
           return {
             identity: access.identity,
             policy: constrainEnvironmentPolicy(profile, this.invocation, request, access.policy, this.options.agents),

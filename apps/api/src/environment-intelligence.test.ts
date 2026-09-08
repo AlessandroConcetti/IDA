@@ -92,10 +92,14 @@ function fixture() {
     remainingCalls: 3,
     validUntil: "2026-09-07T13:00:00Z",
   });
-  const loadProfile = vi.fn(
-    async (_scope: typeof scope, _key: EnvironmentInvocation["environmentKey"]): Promise<EnvironmentBrainProfile> =>
+  const getProfile = vi.fn(
+    (_scope: typeof scope, _key: EnvironmentInvocation["environmentKey"]): EnvironmentBrainProfile =>
       structuredClone(profile),
   );
+  const loadCurrent = vi.fn(async (_scope: typeof scope) => ({
+    identity: structuredClone(identity),
+    policy: structuredClone(policy),
+  }));
   const audit = vi.fn(async () => {});
   const options = {
     invocation,
@@ -109,9 +113,9 @@ function fixture() {
         supportedIntents: [...entry.supportedIntents],
       })),
     ),
-    access: { loadCurrent: async () => ({ identity: structuredClone(identity), policy }) },
+    access: { loadCurrent },
     gateway: new ToolGateway(undefined, [intelligenceProposalTool]),
-    loadProfile,
+    getProfile,
     audit,
     now: () => new Date("2026-09-07T12:00:00Z"),
   };
@@ -121,7 +125,9 @@ function fixture() {
     request,
     profile,
     adapter,
-    loadProfile,
+    getProfile,
+    loadCurrent,
+    policy,
     identity,
     registry,
     audit,
@@ -141,8 +147,9 @@ describe("Environment-scoped intelligence port", () => {
   it("reuses Core/Identity/Gateway/Router and audits environment without sending it to the model", async () => {
     const f = fixture();
     expect(await f.service.generate(f.request)).toEqual({ text: "Réponse de test" });
-    expect(f.loadProfile).toHaveBeenCalledTimes(4);
-    expect(f.loadProfile).toHaveBeenCalledWith(f.request.scope, "music");
+    expect(f.getProfile).toHaveBeenCalledTimes(4);
+    expect(f.getProfile).toHaveBeenCalledWith(f.request.scope, "music");
+    expect(f.loadCurrent).toHaveBeenCalledTimes(4);
     expect(f.audit).toHaveBeenCalledWith(
       expect.objectContaining({
         environmentKey: "music",
@@ -172,10 +179,11 @@ describe("Environment-scoped intelligence port", () => {
       await expect(f.service.generate(f.request)).rejects.toMatchObject({ code: "FORBIDDEN" });
     },
   );
-  it("does not share workspace authorization through the profile loader", async () => {
+  it("rejects an invalid caller identity before consulting the profile authority", async () => {
     const f = fixture();
     f.request.scope.workspaceId = "another-workspace";
     await expect(f.service.generate(f.request)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(f.getProfile).not.toHaveBeenCalled();
     expect(f.adapter.generate).not.toHaveBeenCalled();
   });
   it("does not duplicate provider quotas for a second environment facade", async () => {
@@ -190,5 +198,35 @@ describe("Environment-scoped intelligence port", () => {
     f.profile.status = "PLANNED";
     await expect(f.service.generate(f.request)).rejects.toMatchObject({ code: "FORBIDDEN" });
     expect(f.adapter.generate).not.toHaveBeenCalled();
+  });
+  it.each(["profile", "identity"])("denies %s revoked while the access source is pending", async (revoked) => {
+    const f = fixture();
+    let resume!: () => void;
+    const pendingAccess = new Promise<void>((resolve) => {
+      resume = resolve;
+    });
+    f.loadCurrent.mockImplementationOnce(async () => {
+      await pendingAccess;
+      return { identity: structuredClone(f.identity), policy: structuredClone(f.policy) };
+    });
+    const result = f.service.generate(f.request);
+    const denied = expect(result).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(f.loadCurrent).toHaveBeenCalledTimes(1);
+    expect(f.getProfile).not.toHaveBeenCalled();
+    if (revoked === "profile") f.profile.status = "DISABLED";
+    else f.identity.clientGrant.status = "REVOKED";
+    resume();
+    await denied;
+    expect(f.getProfile).toHaveBeenCalledTimes(revoked === "profile" ? 1 : 0);
+    expect(f.adapter.generate).not.toHaveBeenCalled();
+    expect(f.registry.list()[0]?.state.remainingCalls).toBe(3);
+  });
+  it("rejects an accidental asynchronous profile authority without calling a model", async () => {
+    const f = fixture();
+    f.getProfile.mockReturnValue(Promise.resolve(structuredClone(f.profile)) as unknown as EnvironmentBrainProfile);
+    await expect(f.service.generate(f.request)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(f.getProfile).toHaveBeenCalledTimes(1);
+    expect(f.adapter.generate).not.toHaveBeenCalled();
+    expect(f.registry.list()[0]?.state.remainingCalls).toBe(3);
   });
 });

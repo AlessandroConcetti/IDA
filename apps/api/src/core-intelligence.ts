@@ -30,6 +30,27 @@ export interface IntelligenceAccessSource {
   }>;
 }
 
+export function assertIntelligenceIdentity(
+  scope: IntelligenceScope,
+  identity: RequestIdentityContext,
+  now: Date,
+): void {
+  try {
+    new IdentityAccessPolicy().assertAuthorized({ context: identity, permission: "READ", now });
+    if (
+      !sameIntelligenceScope(scope, {
+        userId: identity.userId,
+        workspaceId: identity.workspaceId,
+        sessionId: identity.session.id,
+        clientInstanceId: identity.clientInstance.id,
+      })
+    )
+      throw new IntelligenceError("FORBIDDEN");
+  } catch {
+    throw new IntelligenceError("FORBIDDEN");
+  }
+}
+
 /** Façade commune au Core/agents : autorise une proposition, jamais son exécution. */
 export class CoreIntelligence implements IntelligencePort {
   private readonly router: ProviderRouter;
@@ -41,21 +62,11 @@ export class CoreIntelligence implements IntelligencePort {
     now?: () => Date;
   }) {
     const now = options.now ?? (() => new Date());
-    const identityPolicy = new IdentityAccessPolicy();
     this.router = new ProviderRouter(
       options.registry,
       async (request) => {
         const { identity, policy } = await options.access.loadCurrent(request.scope);
-        identityPolicy.assertAuthorized({ context: identity, permission: "READ", now: now() });
-        if (
-          !sameIntelligenceScope(request.scope, {
-            userId: identity.userId,
-            workspaceId: identity.workspaceId,
-            sessionId: identity.session.id,
-            clientInstanceId: identity.clientInstance.id,
-          })
-        )
-          throw new IntelligenceError("FORBIDDEN");
+        assertIntelligenceIdentity(request.scope, identity, now());
         options.gateway.assertAuthorized(intelligenceProposalTool);
         return policy;
       },

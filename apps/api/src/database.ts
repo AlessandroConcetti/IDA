@@ -952,7 +952,13 @@ export class DemoDatabase {
     await this.pglite.close();
   }
 
-  async resolveRequestIdentityContext(sessionId: string, workspaceId: string): Promise<RequestIdentityContext | null> {
+  async resolveRequestIdentityContext(
+    sessionId: string,
+    workspaceId: string,
+    // Relecture d'un travail IA déjà authentifié : exige une vraie session locale,
+    // sans token ni prolongation de l'inactivité. Les lecteurs existants sont inchangés.
+    localSessionAt?: string,
+  ): Promise<RequestIdentityContext | null> {
     const result = await this.pglite.query<ScalarRow>(
       `
         SELECT
@@ -961,7 +967,8 @@ export class DemoDatabase {
           session.client_instance_id AS "clientInstanceId",
           session.status AS "sessionStatus",
           session.issued_at AS "issuedAt",
-          session.expires_at AS "expiresAt",
+          CASE WHEN $3::timestamptz IS NULL THEN session.expires_at
+            ELSE LEAST(session.expires_at, local_session.idle_expires_at) END AS "expiresAt",
           ida_user.status AS "userStatus",
           client.kind AS "clientKind",
           client.platform AS "clientPlatform",
@@ -971,6 +978,7 @@ export class DemoDatabase {
           client_grant.status AS "clientGrantStatus",
           client_grant.access_level AS "clientAccessLevel"
         FROM identity_sessions session
+        LEFT JOIN local_auth_sessions local_session ON local_session.session_id = session.id
         INNER JOIN users ida_user ON ida_user.id = session.user_id
         INNER JOIN client_instances client
           ON client.id = session.client_instance_id
@@ -983,9 +991,12 @@ export class DemoDatabase {
           ON membership.workspace_id = client_grant.workspace_id
           AND membership.user_id = client_grant.user_id
         WHERE session.id = $1
+          AND ($3::timestamptz IS NULL OR (
+            local_session.status = 'ACTIVE' AND local_session.idle_expires_at > $3::timestamptz
+          ))
         LIMIT 1
       `,
-      [sessionId, workspaceId],
+      [sessionId, workspaceId, localSessionAt ?? null],
     );
     const row = result.rows[0];
 

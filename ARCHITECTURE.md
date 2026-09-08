@@ -1,5 +1,7 @@
 # IDA — Architecture de référence
 
+Complément serveur du 8 septembre : [Context Broker musical](docs/MUSIC_CONTEXT.md) livré avec lecture SQL bornée, règles partagées profil/agent/Gateway et source Identity locale fraîche. Fondation non composée dans le chat : aucun agent activé, aucun prompt privé envoyé, aucun nouvel endpoint.
+
 Extension cliente du 6 septembre 2026 : voir [Roue des Mondes et thèmes](docs/WORLDS_AND_THEMES.md). Le catalogue monde/environnement/espace ne remplace ni l’Agent Registry ni le Tool Gateway. Il projette les modules existants vers l’accueil, sans nouveau Core, pouvoir, endpoint ou schéma.
 
 ## 1. Objet et périmètre

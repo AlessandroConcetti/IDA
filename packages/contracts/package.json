@@ -4,6 +4,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./music-context": {
+      "types": "./src/music-context.ts",
+      "import": "./dist/music-context.js"
+    },
     "./environment-brains": {
       "types": "./src/environment-brains.ts",
       "import": "./dist/environment-brains.js"

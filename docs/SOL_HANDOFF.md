@@ -1,5 +1,13 @@
 # IDA — Relais de consolidation pour Sol
 
+## Dernière tranche — Contexte musical contrôlé — 8 septembre 2026
+
+Lire [MUSIC_CONTEXT.md](MUSIC_CONTEXT.md). `MusicContextBroker` + store SQL borné (5 lignes défaut, 10 maximum), requêtes strictes SEARCH_TRACK/SEARCH_MEDIA, archives exclues, métadonnées minimales et classification PRIVATE_CREATIVE. Autorisation partagée avec le routeur d'environnement, agent/Gateway READ, audit expurgé obligatoire et annulation. `LocalIntelligenceAccess` recharge l'identité persistée, impose session LOCAL_LOCK active/idle non expirée, conserve le scope, ne renouvelle pas l'inactivité et ne lit aucun token. Les appels Identity existants gardent leur comportement. Pas de migration ou dépendance.
+
+`getProfile`/`getPolicy` sont maintenant des lecteurs synchrones sans effet de l'autorité runtime, après l'attente Identity ; une autorité persistée future devra être agrégée/versionnée, jamais un cache périmé. Le snapshot musical est historique et **ne constitue pas une autorisation d'inférence** : revalider les ressources à l'envoi. Store SQL jamais directement exposé à une route/agent. Les erreurs typées sont reconstruites pour supprimer leurs détails privés.
+
+Suite complète **650 tests / 37 fichiers** (98 supplémentaires, 171,35 s). Aucun modèle lancé, aucun crédit API consommé. Profils/agents toujours PLANNED, chat toujours déterministe. Reste : audit persistant, parcours d'activation et arrêt, validation des ressources, prompt/évaluation de formulation puis composition au chat. La note du Qwen candidat reste 4/6, pas remplacée par le score des tests logiciels. Dates/Home Assistant/UI et travail en pause préservés.
+
 ## Dernière tranche — Cerveaux par environnement — 7 septembre 2026
 
 Douze profils serveur correspondent à la Roue existante ; tous PLANNED / LOCAL_ONLY / budget API nul / sans modèle. Les rôles futurs ne sont pas des agents exécutables. `EnvironmentIntelligence` implémente le port commun et revalide profil/agent/contexte/version via les mêmes Identity/Gateway/Router. Les deux agents existants restent PLANNED. `allowedModels` et `allowedLocalities` limitent le Router sans dupliquer providers/quotas. **442 tests / 32 fichiers**, dont 52 nouveaux, types des quatre packages/apps et lint validés.

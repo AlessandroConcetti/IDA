@@ -4,6 +4,8 @@ Statut : 8 septembre 2026. Fondation et transport HTTP Ollama exécutables et te
 
 Un premier modèle Qwen3 4B Instruct est maintenant installé pour un laboratoire synthétique séparé utilisant le routeur et l'adaptateur existants. Voir [provenance, limites et évaluation](LOCAL_MODEL_EVALUATION.md). Le laboratoire n'est ni le branchement du chat, ni une activation des profils d'environnement.
 
+Complément du 8 septembre : [sélection du contexte musical](MUSIC_CONTEXT.md) livrée et testée, avec projection SQL bornée, règles communes profil/agent/Gateway et relecture `LOCAL_LOCK` sans prolongation d'inactivité. Le chat reste inchangé ; aucun relevé musical n'est transmis à un modèle.
+
 ## Analyse et réutilisation
 
 Extension du même jour : profils par environnement et listes de modèles/localisations autorisés livrés dans [ENVIRONMENT_BRAINS.md](ENVIRONMENT_BRAINS.md). La façade `EnvironmentIntelligence` utilise le même registre et le même Core ; aucun provider réseau n'est activé par cette extension.
@@ -61,8 +63,8 @@ L'audit `SUCCEEDED` constate la génération validée, pas une publication ni n�
 1. Transport cloud, coffre/résolution des clés et composition de déploiement. Le transport HTTP local est livré séparément ; les adaptateurs restent sans accès direct aux variables d'environnement et ne l'activent pas implicitement.
 2. Validation du modèle pilote pour un usage métier, politique d'egress opérationnelle et évaluations élargies. L'installation locale et le banc d'essai synthétique sont livrés ; aucun health check périodique ni modèle approuvé en production. Une étiquette LOCAL ne prouve pas à elle seule l'absence d'envoi externe.
 3. Accès API OpenAI du compte, quotas/tarifs réels et politique de rétention du projet. `store:false` ne constitue pas une garantie de zéro rétention côté fournisseur.
-4. Persistance des réglages, consentements, allocation de coût, audit append-only et liaison à la source d'identité actuelle. `IntelligenceAccessSource.loadCurrent` doit recharger les données d'autorité ; ne jamais renvoyer uniquement le snapshot HTTP d'origine.
-5. Context Broker minimal, filtrage/classification de provenance, prompts versionnés et évaluations d'un premier agent. La classification doit être attribuée par le serveur, pas crue sur parole dans un prompt. Le contrat ne prétend pas détecter automatiquement tous les secrets contenus dans du texte libre.
+4. Persistance des réglages, consentements, allocation de coût, audit append-only et composition runtime. `LocalIntelligenceAccess` livre la relecture d'un travail local déjà authentifié ; ne pas renvoyer le seul snapshot HTTP d'origine. Les profils/policies runtime sont synchrones ; une future autorité persistée exige une vue agrégée/versionnée cohérente.
+5. Context Broker minimal livré pour deux recherches musicales structurées : voir `MUSIC_CONTEXT.md`. Restent validation de fraîcheur des ressources à l'envoi, prompt de formulation versionné, évaluations métier et composition avec l'inférence. PRIVATE_CREATIVE est imposé côté serveur ; aucun contrat ne prétend détecter tous les secrets dans le texte libre.
 6. Parcours utilisateur d'activation/arrêt et signal d'annulation global lié au mode AI, puis branchement explicite du chat aux propositions. Les agents existants restent dans leur état PLANNED.
 
 Les budgets présents sont des **enveloppes de routage estimées par requête**, pas un plafond bancaire ou une comptabilité fournisseur. Les allocations en mémoire ne survivent pas au redémarrage et ne couvrent pas plusieurs processus. Avant usage payant partagé : réservation persistante/atomique par workspace, plafond global, usage réel et rapprochement. Latence/coût sont aujourd'hui des métadonnées revues, pas une télémétrie automatiquement mesurée. Les futures contraintes réseau et de capteurs restent inchangées.
