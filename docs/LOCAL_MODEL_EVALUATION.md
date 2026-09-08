@@ -63,6 +63,8 @@ Décision de cette tranche : conserver le modèle comme candidat, ne pas activer
 
 ## Reproduire explicitement
 
+Un banc distinct, utilisant désormais la composition serveur complète et le prompt de classement musical, a été exécuté ensuite : voir [MUSIC_PROPOSAL_EVALUATION.md](MUSIC_PROPOSAL_EVALUATION.md). **1/3** classements corrects, trois nouvelles inférences locales, aucun appel cloud. Ces trois critères de regroupement ne remplacent pas ni ne se cumulent avec le score 4/6 ci-dessus. Le runtime temporaire a de nouveau été arrêté ; aucune qualification ou activation en production.
+
 Démarrer Ollama localement selon `OLLAMA_LOCAL.md`, puis après build de l'API :
 
 ```powershell

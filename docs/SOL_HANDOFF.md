@@ -1,5 +1,19 @@
 # IDA — Relais de consolidation pour Sol
 
+## Dernière tranche — Évaluation réelle du classement musical — 8 septembre 2026
+
+Lire [MUSIC_PROPOSAL_EVALUATION.md](MUSIC_PROPOSAL_EVALUATION.md). Banc `music-proposal-grouping.synthetic.v1`, prompt inchangé `music-librarian-ranking.fr.v1`, même Qwen/pin/contexte 4096 et max sortie 256. Trois scénarios préécrits via la composition réelle : versions éloignées, dix homonymes avec artistes entrelacés, crédit artiste contenant une instruction d'inversion. Chaque scénario utilise un workspace/client/session fictif dans une seule base `memory://`, `seed:false`. Les trois sessions doivent avoir des clients distincts car le login local révoque normalement l'ancienne session du même client ; ne pas retirer ce garde.
+
+Résultat réel : **1/3** classements corrects, **3/3** références/faits/messages contrôlés valides. Les trois réponses gardent l'ordre du catalogue : échec du regroupement de versions et de la séparation d'artistes ; le cas hostile est correct parce que son ordre initial l'est déjà. Aucune revendication de robustesse générale aux injections. Trois POST locaux confirmés, zéro retry/fallback/cloud, 30 événements d'audit contrôlés, données métier comparées inchangées et neuf chemins déterministes sans modèle. Code de sortie 1 conservé, pas de changement de critères/prompt après résultat ni second passage pour masquer l'échec.
+
+Temps observés 87,395 / 94,623 / 71,906 s, à froid et en concurrence avec les tests logiciels : ce n'est pas un benchmark isolé. Le compteur `providerAttempts` mesure des appels d'adaptateur, pas systématiquement un POST en cas d'échec précoce d'inventaire. Artefacts sous `tmp/ollama-music-proposal-20260908/`, ignorés Git ; rapport expurgé sans prompt/réponse brute, IDs exclusivement fictifs. Le journal SQL de la base en mémoire n'est pas sauvegardé sur disque.
+
+Livré : `evaluation/music-proposal-cases.ts` et scorer séparant références/qualité/faits/message, `music-proposal-scenario.ts`, CLI `run-music-proposal.ts` au flag exact `--run-synthetic-music-proposal`. Le pin commun est extrait dans `local-model-pin.ts`, ancien import réexporté compatible. Sans flag exact, aucun réseau/base ; import inerte, mémoire fermée et transport libéré. Pas de nouveau bootstrap/endpoint/dépendance/migration. Seules les copies de profil/agent du banc sont actives, les valeurs livrées restent PLANNED.
+
+Validation : **862 tests / 44 fichiers**, **37 nouveaux**, 232,95 s. Lint global, types et builds contracts/domain/API/web réussis. Daemon temporaire 40032 arrêté et absence vérifiée, zéro Ollama restant. Signature runtime valide, mode cloud désactivé et écoute loopback confirmés dans le journal. Aucun serveur d'aperçu redémarré, aucune configuration permanente ou donnée utilisateur modifiée. Les fichiers de dates en pause restent hors commit.
+
+Suite : hypothèse à vérifier, le prompt pourrait mieux distinguer priorité des groupes puis ordre des groupes, sans trier toutes les fiches à nouveau. Versionner une clarification et ajouter des cas nouveaux avant nouvelle recette locale ; comparer le bénéfice au tri déterministe sans modèle. Ne pas activer ce pilote ni prétendre à une démo IA générale à partir de la plomberie logicielle. Le banc historique 4/6 et le nouveau 1/3 mesurent des tâches distinctes.
+
 ## Dernière tranche — Premier parcours musical composé — 8 septembre 2026
 
 Lire [MUSIC_PROPOSALS.md](MUSIC_PROPOSALS.md). `createLocalMusicProposalService` compose `MusicProposalService`, le broker existant, `LocalIntelligenceAccess`, `LocalMusicContextAuthority`, le SQL existant et l'audit persistant. Pas de deuxième Core ni de nouvelle route/activation. Le scope vient obligatoirement d'une authentification serveur réelle ; LOCAL_DEMO ne suffit pas.

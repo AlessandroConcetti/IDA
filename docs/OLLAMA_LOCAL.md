@@ -2,6 +2,8 @@
 
 Tranche du 8 septembre 2026. Le transport est réel ; la démo reste déterministe. Depuis la tranche suivante, un modèle est installé pour une évaluation synthétique explicite, sans activation d'agent : [modèle pilote et résultats](LOCAL_MODEL_EVALUATION.md). Installation du runtime et évaluation distinctes de l'activation en production.
 
+Nouvelle recette du classement via la composition serveur complète : [MUSIC_PROPOSAL_EVALUATION.md](MUSIC_PROPOSAL_EVALUATION.md), **1/3** classements corrects, références préservées. Trois appels supplémentaires sur données fictives, sans téléchargement ou changement de configuration permanente. Le daemon temporaire a été arrêté après la recette ; le modèle reste un candidat non qualifié, pas le cerveau actif du chat.
+
 ## Réutilisation
 
 `OllamaLoopbackTransport` implémente le `JsonInferenceTransport` existant. `OllamaAdapter`, `IntelligencePort`, Provider Registry/Router, profils d'environnement, Identity et Tool Gateway sont conservés. Aucun endpoint client, migration, secret, nouvelle dépendance, second Core ou second registre n'est ajouté. Le code n'est pas importé par la composition de la démo.
