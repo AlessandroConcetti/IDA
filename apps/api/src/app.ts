@@ -1092,6 +1092,8 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     { toolKey: "complete_task", moduleKey: "TASKS", permission: "WRITE" },
     { toolKey: "create_release", moduleKey: "MUSIC", permission: "WRITE" },
     { toolKey: "create_track", moduleKey: "MUSIC", permission: "WRITE" },
+    { toolKey: "get_track", moduleKey: "MUSIC", permission: "READ" },
+    { toolKey: "get_media", moduleKey: "CONTENT", permission: "READ" },
     { toolKey: "create_campaign", moduleKey: "CAMPAIGNS", permission: "WRITE" },
     { toolKey: "link_campaign_release", moduleKey: "CAMPAIGNS", permission: "WRITE" },
     { toolKey: "link_campaign_track", moduleKey: "CAMPAIGNS", permission: "WRITE" },
@@ -1117,6 +1119,28 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     toolGateway.assertAuthorized(authorization);
 
     return identity;
+  };
+
+  const revalidateDetailRead = async (request: FastifyRequest, authorization: ToolAuthorizationRequest) => {
+    const identity = assertToolAuthorized(request, authorization);
+    const current = await database.resolveRequestIdentityContext(
+      identity.session.id,
+      identity.workspaceId,
+      identityMode === "LOCAL_LOCK" ? serverNow().toISOString() : undefined,
+    );
+    if (
+      !current ||
+      current.userId !== identity.userId ||
+      current.workspaceId !== identity.workspaceId ||
+      current.clientInstance.id !== identity.clientInstance.id ||
+      current.session.id !== identity.session.id
+    ) {
+      throw new LocalDemoAuthenticationError();
+    }
+    // Une lecture ne prolonge pas l'échéance capturée par la requête et ne
+    // réutilise pas des droits révoqués pendant l'accès aux données.
+    assertToolAuthorized(request, authorization);
+    identityPolicy.assertAuthorized({ context: current, permission: authorization.permission, now: serverNow() });
   };
 
   await app.register(cors, {
@@ -2036,6 +2060,29 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     };
   });
 
+  app.get("/v1/tracks/:trackId", async (request, reply) => {
+    const params = isRecord(request.params) ? request.params : {};
+    const trackId = trackSchema.shape.id
+      .max(80)
+      .regex(/^trk_[a-z0-9_-]+$/i)
+      .safeParse(params.trackId);
+    if (!trackId.success || trackId.data !== params.trackId) {
+      return reply.status(400).send({
+        error: { code: "INVALID_TRACK_DETAIL_PARAMS", message: "L’identifiant du morceau est invalide." },
+      });
+    }
+    const tool = { toolKey: "get_track", moduleKey: "MUSIC", permission: "READ" } as const;
+    const identity = assertToolAuthorized(request, tool);
+    const track = await database.findTrack(identity.workspaceId, trackId.data);
+    await revalidateDetailRead(request, tool);
+    if (!track) {
+      return reply.status(404).send({
+        error: { code: "TRACK_NOT_FOUND", message: "Morceau introuvable dans ce workspace." },
+      });
+    }
+    return { data: toTrackResponse(track, identity.workspaceId) };
+  });
+
   app.post("/v1/tracks", async (request, reply) => {
     const input = trackCreateSchema.safeParse(request.body);
 
@@ -2094,6 +2141,29 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     return {
       data: media.map((asset) => toMediaAssetResponse(asset, identity.workspaceId)),
     };
+  });
+
+  app.get("/v1/media/:mediaId", async (request, reply) => {
+    const params = isRecord(request.params) ? request.params : {};
+    const mediaId = mediaAssetSchema.shape.id
+      .max(80)
+      .regex(/^med_[a-z0-9_-]+$/i)
+      .safeParse(params.mediaId);
+    if (!mediaId.success || mediaId.data !== params.mediaId) {
+      return reply.status(400).send({
+        error: { code: "INVALID_MEDIA_DETAIL_PARAMS", message: "L’identifiant du média est invalide." },
+      });
+    }
+    const tool = { toolKey: "get_media", moduleKey: "CONTENT", permission: "READ" } as const;
+    const identity = assertToolAuthorized(request, tool);
+    const media = await database.findMedia(identity.workspaceId, mediaId.data);
+    await revalidateDetailRead(request, tool);
+    if (!media) {
+      return reply.status(404).send({
+        error: { code: "MEDIA_NOT_FOUND", message: "Média introuvable dans ce workspace." },
+      });
+    }
+    return { data: toMediaAssetResponse(media, identity.workspaceId) };
   });
 
   app.get("/v1/media/:mediaId/preview", async (request, reply) => {

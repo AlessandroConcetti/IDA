@@ -1,5 +1,15 @@
 # IDA — Relais de consolidation pour Sol
 
+## Dernière tranche — Du chat aux fiches — 9 septembre 2026
+
+Lire la section « Ouverture des résultats » de [CHAT_CATALOG.md](CHAT_CATALOG.md). Les réponses SEARCH_TRACK/SEARCH_MEDIA terminées exposent désormais des boutons Ouvrir via projection cliente limitée des objets structurés, jamais via analyse du texte/historique. Les cibles éphémères conservent les IDs exacts `trk_`/`med_` (y compris tiret historique), sans URL arbitraire. Elles disparaissent au rechargement/verrouillage ; relancer la recherche pour les retrouver. Pas de persistance de résultats structurés ni de relance implicite.
+
+`CatalogDetailPanel` navigue dans Musique/Contenus existants, réutilise TrackPanel/MediaGrid et SnapshotReader/requestApi. Deux routes READ get_track/get_media relisent SQL par ID ET workspace, réutilisent les projections existantes, Identity + Tool Gateway avant lecture et revalidation avant retour. Pas de nouvelle base/migration/dépendance/Core/agent ni activation du modèle. Même 404 absent/étranger, no-store, aucune écriture métier, pas de fallback vers une ancienne réponse. La projection média conserve son hash historique mais jamais le stockage. Les lecteurs privés existants restent sans autoplay.
+
+Validation root : **1 066 tests / 49 fichiers**, 175,54 s, **47 nouveaux** (25 API et 22 frontend), lint sans avertissement, quatre vérifications de types et builds. Revue indépendante : correction du validateur UUID initial pour supporter les vrais IDs sans minuscule forcée. L’agent backend a livré les fichiers avant interruption de quota ; root a relu et exécuté les tests ciblés puis complets. Recette navigateur : boutons réels, fiche Lumière Noire, retour chat sans perte, fiche night-drive-preview.mp4 avec aperçu indisponible honnête. Pas de création/modification de musique/média ; deux recherches READ ont été ajoutées à l'historique de démo.
+
+Aperçu API rechargé en loopback : même `tmp/ida-preview-relative-dates/data` et stockage media, même LOCAL_DEMO ; Vite 5173 préservé. Dates et Home Assistant restent en pause/hors commit. Suite bornée : actions explicites sur la sélection (médias liés à un morceau), puis propositions évaluées avec un fournisseur qualifié. Ne pas transformer un bouton Ouvrir en consentement à modifier, transmettre ou publier.
+
 ## Dernière tranche — Chat catalogue visible — 8 septembre 2026
 
 Priorité utilisateur validée : rendre le chat existant utile, sans activer le modèle non qualifié. Lire [CHAT_CATALOG.md](CHAT_CATALOG.md). `catalog-command.ts` transforme des commandes françaises bornées en SEARCH_TRACK/SEARCH_MEDIA ou clarification ; le Core réutilise le SQL musical et la bibliothèque existants, Identity et Gateway. Journée et rotation présentent maintenant les libellés, pas un compteur seul. Le frontend réutilise `message` et l'historique : texte React multiligne, quatre exemples remplissant le textarea sans envoi automatique. Pas de nouveau Core/agent/route/paquet/migration/modèle.

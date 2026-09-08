@@ -31,7 +31,24 @@ Champs existants `data.command`, `commandRunId`, `state`, `kind`, `message`, `to
 - CLARIFY_CATALOG : `result: {}`, outil READ `IDA/describe_supported_commands`. Aucun filtre implicite ni appel modèle pour deviner.
 - TODAY/TOMORROW/UNUSED_CONTENT : résultats structurés existants inchangés ; `message` contient maintenant les libellés utiles, et plus seulement leur nombre.
 
-`apps/web/src/api.ts` continue de lire le même `message`. `ConversationText` rend du texte React échappé avec retours à la ligne, jamais HTML ou Markdown actif. Aucune route ou donnée métier n'est dupliquée dans le client.
+`apps/web/src/api.ts` continue de lire le même `message`. `ConversationText` rend du texte React échappé avec retours à la ligne, jamais HTML ou Markdown actif. Aucune donnée métier n'est dupliquée dans le client.
+
+## Ouverture des résultats — 9 septembre 2026
+
+Après une nouvelle recherche SEARCH_TRACK/SEARCH_MEDIA réussie, des boutons **Ouvrir** accompagnent les résultats. Le client projette seulement type, ID exact et libellé depuis les objets structurés ; il ne déduit aucun lien du texte, du Markdown ou de l'historique. Au plus dix cibles, identifiants `trk_…`/`med_…` de 80 caractères maximum, casse conservée, doublons éliminés et libellés échappés.
+
+Le clic navigue vers le module Musique ou Contenus existant. Une fiche relue par ID réutilise `TrackPanel` ou `MediaGrid`, avec retour à la conversation, accès au catalogue complet et actualisation. La sélection ne modifie pas la bibliothèque, ne marque pas un média utilisé et ne lance ni génération, ni publication. Les lecteurs privés existants ne sont affichés qu'après lecture autorisée de la fiche ; audio/vidéo sans autoplay. Un média seed sans fichier garde un aperçu indisponible, pas une vidéo inventée.
+
+Deux lectures ciblées complètent l'API existante :
+
+- `GET /v1/tracks/{trackId}` → `{ data: Track }`, outil `MUSIC/get_track` READ.
+- `GET /v1/media/{mediaId}` → `{ data: MediaAsset }`, outil `CONTENT/get_media` READ.
+
+Les deux réutilisent les projections et SQL existants, avec filtre lié **ID + workspace**, sans chercher dans les premières pages. Codes 400 `INVALID_TRACK_DETAIL_PARAMS` / `INVALID_MEDIA_DETAIL_PARAMS`, 404 `TRACK_NOT_FOUND` / `MEDIA_NOT_FOUND` identiques pour ressource étrangère ou inexistante ; refus Identity 401/403, `Cache-Control: no-store`. Les IDs acceptent lettres, chiffres, `_` et `-` après le préfixe, sans espaces ni chemin. La projection média complète conserve le hash déjà exposé par la liste, jamais la clé/URL/chemin de stockage. Aucun nouveau schéma SQL, dépendance ou agent.
+
+La permission READ et le Tool Gateway sont vérifiés avant lecture ; identité et droits sont relus avant retour, y compris session locale et échéance d'inactivité en LOCAL_LOCK. Comme le chat, ce sont des contrôles de frontière, pas une garantie atomique contre une révocation après le dernier contrôle. `requestApi` et `SnapshotReader` existants rejettent les réponses d'une identité invalidée et ignorent celles d'une sélection démontée. Une erreur ne réaffiche jamais les vieux faits du chat comme fiche actuelle.
+
+Les cibles restent **éphémères dans l'état React** : navigation aller-retour sans perte, mais rechargement/verrouillage les efface. L'historique textuel reste inchangé et privé ; pour obtenir des boutons après rechargement, relancer la recherche. Il n'existe pas encore de relance implicite « et le deuxième ? », d'édition depuis la fiche ni de lien partageable. Le mode de démonstration local n'est pas une authentification de production ou un accès iPhone distant.
 
 ## Sécurité, historique et limites
 
@@ -49,4 +66,6 @@ Tests de grammaire, SQL réel synthétique, isolation workspace, alias de titre 
 
 Suite complète : **1 019 tests / 47 fichiers**, dont 157 nouveaux. Lint, types et builds vérifiés ; la recette visuelle et l'activation de l'aperçu sont consignées dans le relais de consolidation. Ce compte mesure les tests logiciels, pas la qualité d'un modèle ni l'aptitude à la production.
 
-Suite recommandée : navigation vers les fiches et relances structurées sur sélection explicitement autorisée, puis génération de propositions par un fournisseur qualifié. Ne pas demander au modèle de trier un catalogue que SQL sait déjà sélectionner ; ajouter l'IA seulement sur une tâche où son apport et ses limites sont évaluables.
+Après ouverture des fiches : **1 066 tests / 49 fichiers**, dont 47 nouveaux (25 backend, 22 frontend). Vérifiés : vrais IDs seed/import, média hors des 50 premiers résultats, homonymes/ID exact, paramètres hostiles, refus Gateway, session expirée/révoquée, grant VIEW_ONLY sans WRITE, révocation pendant lecture, verrou local réel, absence d'effet métier/réseau, invalidation des réponses tardives et rendu sans HTML ni envoi implicite. Lint global, types des quatre packages et builds réussis. Recette navigateur local : recherche musicale → Lumière Noire → retour chat → recherche vidéo → night-drive-preview.mp4. Les médias seed n'ont pas de fichier privé ; aperçu correctement indisponible. Aucun test physique iPhone ni validation de production revendiqué.
+
+Suite recommandée : actions explicites depuis une sélection (par exemple consulter ses médias liés), puis génération de propositions par un fournisseur qualifié. Ne pas demander au modèle de trier un catalogue que SQL sait déjà sélectionner ; ajouter l'IA seulement sur une tâche où son apport et ses limites sont évaluables.

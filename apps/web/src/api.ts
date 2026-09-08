@@ -1,4 +1,5 @@
 import { apiBaseUrl, IdaApiError, requestApi } from "./api-transport";
+import { type CatalogTarget, isCatalogId, readCatalogTargets } from "./catalog-navigation";
 import type { ArtistBrain, MediaAsset, OperationalState, SystemService, Track } from "./data";
 
 export { apiBaseUrl, IdaApiError } from "./api-transport";
@@ -7,6 +8,7 @@ export interface IdaCommandResult {
   message: string;
   commandRunId?: string;
   state?: string;
+  catalogTargets: CatalogTarget[];
 }
 
 export interface IdaCommandRunRecord {
@@ -374,6 +376,7 @@ function extractResult(payload: unknown): IdaCommandResult {
     message: message ?? "IDA a reçu la commande. Le résultat détaillé sera disponible dans l’historique.",
     commandRunId: readString(data.commandRunId, envelope.commandRunId),
     state: readString(data.state, envelope.state),
+    catalogTargets: readCatalogTargets(data),
   };
 }
 
@@ -1243,6 +1246,26 @@ function toTracks(payload: unknown): Track[] {
 
 export async function fetchTrackReferences(): Promise<TrackReference[]> {
   return readDataList(await getApiJson("/v1/tracks"), "/v1/tracks").map(toTrackReference);
+}
+
+export async function fetchTrackDetail(id: string): Promise<Track> {
+  if (!isCatalogId(id, "track")) throw new IdaApiError("La référence du morceau est invalide.");
+  const path = `/v1/tracks/${encodeURIComponent(id)}`;
+  const record = readDataObject(await getApiJson(path), path);
+  if (record.id !== id || !readString(record.title) || !readString(record.artistCredit)) {
+    throw new IdaApiError("Le morceau reçu ne correspond pas à la sélection.");
+  }
+  return toTrack(record);
+}
+
+export async function fetchMediaDetail(id: string): Promise<MediaAsset> {
+  if (!isCatalogId(id, "media")) throw new IdaApiError("La référence du média est invalide.");
+  const path = `/v1/media/${encodeURIComponent(id)}`;
+  const record = readDataObject(await getApiJson(path), path);
+  if (record.id !== id || !readString(record.filename)) {
+    throw new IdaApiError("Le média reçu ne correspond pas à la sélection.");
+  }
+  return toMediaAsset(record);
 }
 
 export async function createTrack(input: TrackCreateInput): Promise<Track> {

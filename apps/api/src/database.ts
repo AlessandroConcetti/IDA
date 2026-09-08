@@ -2336,6 +2336,14 @@ export class DemoDatabase {
   }
 
   async listTracks(workspaceId: string): Promise<Track[]> {
+    return this.readTracks(workspaceId);
+  }
+
+  async findTrack(workspaceId: string, trackId: string): Promise<Track | undefined> {
+    return (await this.readTracks(workspaceId, trackId))[0];
+  }
+
+  private async readTracks(workspaceId: string, trackId?: string): Promise<Track[]> {
     const result = await this.pglite.query<ScalarRow>(
       `
         SELECT
@@ -2360,9 +2368,11 @@ export class DemoDatabase {
           AND release.workspace_id = track.workspace_id
           AND release.artist_project_id = track.artist_project_id
         WHERE track.workspace_id = $1
+          ${trackId === undefined ? "" : "AND track.id = $2"}
         ORDER BY track.release_date NULLS LAST, track.title
+        ${trackId === undefined ? "" : "LIMIT 1"}
       `,
-      [workspaceId],
+      trackId === undefined ? [workspaceId] : [workspaceId, trackId],
     );
 
     return result.rows.map(toTrack);
@@ -2490,8 +2500,21 @@ export class DemoDatabase {
   }
 
   async listMedia(workspaceId: string, filters: MediaListQuery = {}): Promise<MediaAsset[]> {
+    return this.readMedia(workspaceId, filters);
+  }
+
+  async findMedia(workspaceId: string, mediaId: string): Promise<MediaAsset | undefined> {
+    return (await this.readMedia(workspaceId, { limit: 1 }, mediaId))[0];
+  }
+
+  private async readMedia(workspaceId: string, filters: MediaListQuery, mediaId?: string): Promise<MediaAsset[]> {
     const values: unknown[] = [workspaceId];
     const whereClauses = ["asset.workspace_id = $1"];
+
+    if (mediaId !== undefined) {
+      values.push(mediaId);
+      whereClauses.push(`asset.id = $${values.length}`);
+    }
 
     if (filters.status) {
       values.push(filters.status);

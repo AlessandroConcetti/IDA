@@ -510,6 +510,70 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/TrackReleaseNotFound'
+  /v1/tracks/{trackId}:
+    get:
+      operationId: getTrack
+      summary: Relit la fiche exacte d'un morceau du workspace
+      description: >-
+        READ MUSIC/get_track via Identity et Tool Gateway, SQL par ID et workspace,
+        identité relue avant retour. Même 404 pour un ID absent ou étranger.
+        Aucun effet de bord métier ; réponse no-store. Projection identique à la liste.
+      parameters:
+        - name: trackId
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 80
+            pattern: '^[tT][rR][kK]_[a-zA-Z0-9_-]+$'
+      responses:
+        '200':
+          description: Fiche actuelle du morceau
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrackResponse'
+        '400':
+          description: INVALID_TRACK_DETAIL_PARAMS — référence malformée
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: TRACK_NOT_FOUND — morceau absent ou inaccessible dans le workspace
+  /v1/media/{mediaId}:
+    get:
+      operationId: getMedia
+      summary: Relit la fiche exacte d'un média du workspace
+      description: >-
+        READ CONTENT/get_media via Identity et Tool Gateway, SQL par ID et workspace,
+        sans limite de première page. Identité relue avant retour ; même 404 pour un ID
+        absent ou étranger. Projection identique à la liste, hash inclus, sans chemin
+        ni clé de stockage. Ne charge pas les octets et ne modifie pas usage_count.
+        Réponse no-store ; la route privée preview existante garde ses propres contrôles.
+      parameters:
+        - name: mediaId
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 80
+            pattern: '^[mM][eE][dD]_[a-zA-Z0-9_-]+$'
+      responses:
+        '200':
+          description: Fiche actuelle du média
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaAssetResponse'
+        '400':
+          description: INVALID_MEDIA_DETAIL_PARAMS — référence malformée
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: MEDIA_NOT_FOUND — média absent ou inaccessible dans le workspace
   /v1/media:
     get:
       operationId: listMedia

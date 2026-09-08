@@ -60,8 +60,10 @@ import {
   uploadMediaAsset,
 } from "./api";
 import { onWorkspaceMutation } from "./api-transport";
-import { CommandSuggestions, ConversationText } from "./ConversationTools";
+import { CatalogDetailPanel } from "./CatalogDetailPanel";
+import { CatalogResultLinks, CommandSuggestions, ConversationText } from "./ConversationTools";
 import { adjacentCalendarAnchor, createCalendarReader } from "./calendar-navigation";
+import type { CatalogTarget } from "./catalog-navigation";
 import {
   type ArtistBrain,
   getLocalIdaResponse,
@@ -85,6 +87,7 @@ interface ConversationMessage {
   meta?: string;
   fallback?: boolean;
   pending?: boolean;
+  catalogTargets?: CatalogTarget[];
 }
 
 interface NavigationControlProps {
@@ -247,10 +250,12 @@ function ConversationPanel({
   messages,
   limit = 3,
   contextLabel = "Dernières réponses",
+  onOpenCatalog,
 }: {
   messages: ConversationMessage[];
   limit?: number;
   contextLabel?: string;
+  onOpenCatalog: (target: CatalogTarget) => void;
 }) {
   const latest = messages.slice(-limit);
 
@@ -271,6 +276,9 @@ function ConversationPanel({
             </span>
             <div>
               <ConversationText content={message.content} />
+              {message.role === "assistant" && !message.pending && !message.fallback && message.catalogTargets ? (
+                <CatalogResultLinks targets={message.catalogTargets} onOpen={onOpenCatalog} />
+              ) : null}
               {message.meta ? (
                 <span className={message.fallback ? "message-meta fallback" : "message-meta"}>{message.meta}</span>
               ) : null}
@@ -4197,10 +4205,16 @@ function SystemView({ dashboard, source }: { dashboard: DashboardSnapshot; sourc
   );
 }
 
-function IdaView({ messages }: { messages: ConversationMessage[] }) {
+function IdaView({
+  messages,
+  onOpenCatalog,
+}: {
+  messages: ConversationMessage[];
+  onOpenCatalog: (target: CatalogTarget) => void;
+}) {
   return (
     <div className="page-grid ida-view">
-      <ConversationPanel messages={messages} limit={24} contextLabel="Historique privé" />
+      <ConversationPanel messages={messages} limit={24} contextLabel="Historique privé" onOpenCatalog={onOpenCatalog} />
       <section className="panel helper-panel">
         <p className="eyebrow">RÈGLES D’EXÉCUTION</p>
         <h2>Vous gardez le contrôle.</h2>
@@ -4219,18 +4233,20 @@ function HomeView({
   dashboard,
   source,
   onOpenCalendar,
+  onOpenCatalog,
 }: {
   messages: ConversationMessage[];
   dashboard: DashboardSnapshot;
   source: DashboardSource;
   onOpenCalendar: () => void;
+  onOpenCatalog: (target: CatalogTarget) => void;
 }) {
   return (
     <>
       <PriorityGrid summary={dashboard.summary} source={source} />
       <div className="home-grid">
         <CalendarPanel onOpenCalendar={onOpenCalendar} />
-        <ConversationPanel messages={messages} />
+        <ConversationPanel messages={messages} onOpenCatalog={onOpenCatalog} />
       </div>
       <div className="home-grid lower-grid">
         <TrackPanel items={dashboard.tracks} source={source} />
@@ -4256,16 +4272,35 @@ function SectionContent({
   dashboard,
   source,
   onNavigate,
+  catalogTarget,
+  onOpenCatalog,
 }: {
   activeId: NavigationId;
   messages: ConversationMessage[];
   dashboard: DashboardSnapshot;
   source: DashboardSource;
   onNavigate: (id: NavigationId) => void;
+  catalogTarget: CatalogTarget | undefined;
+  onOpenCatalog: (target: CatalogTarget) => void;
 }) {
+  if (
+    catalogTarget &&
+    ((activeId === "music" && catalogTarget.kind === "track") ||
+      (activeId === "content" && catalogTarget.kind === "media"))
+  ) {
+    return (
+      <CatalogDetailPanel
+        target={catalogTarget}
+        onBack={() => onNavigate("ida")}
+        onShowLibrary={() => onNavigate(activeId)}
+        renderTrack={(track) => <TrackPanel items={[track]} source="api" />}
+        renderMedia={(media) => <MediaGrid assets={[media]} detailed />}
+      />
+    );
+  }
   switch (activeId) {
     case "ida":
-      return <IdaView messages={messages} />;
+      return <IdaView messages={messages} onOpenCatalog={onOpenCatalog} />;
     case "music":
       return <MusicView dashboard={dashboard} source={source} />;
     case "content":
@@ -4291,6 +4326,7 @@ function SectionContent({
           dashboard={dashboard}
           source={source}
           onOpenCalendar={() => onNavigate("calendar")}
+          onOpenCatalog={onOpenCatalog}
         />
       );
   }
@@ -4301,6 +4337,7 @@ function App({ onLock }: { onLock?: (() => void) | undefined }) {
   const [activeId, setActiveId] = useState<NavigationId>("home");
   const [isOverviewOpen, setIsOverviewOpen] = useState(false);
   const [messages, setMessages] = useState<ConversationMessage[]>(initialMessages);
+  const [catalogTarget, setCatalogTarget] = useState<CatalogTarget | undefined>();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [apiMode, setApiMode] = useState<"connected" | "fallback">("fallback");
   const [isMoreOpen, setIsMoreOpen] = useState(false);
@@ -4326,7 +4363,7 @@ function App({ onLock }: { onLock?: (() => void) | undefined }) {
 
   const section = sectionCopy[activeId];
   const moreItems = useMemo(() => navigation.filter((item) => !mobilePrimaryNavigation.includes(item.id)), []);
-  const screenId = `${activeId}:${isOverviewOpen ? "overview" : "space"}`;
+  const screenId = `${activeId}:${isOverviewOpen ? "overview" : "space"}:${catalogTarget?.id ?? "library"}`;
   const previousScreen = useRef(screenId);
 
   useEffect(() => {
@@ -4389,6 +4426,12 @@ function App({ onLock }: { onLock?: (() => void) | undefined }) {
     setActiveId(id);
     setIsOverviewOpen(false);
     setIsMoreOpen(false);
+    setCatalogTarget(undefined);
+  }
+
+  function openCatalog(target: CatalogTarget) {
+    navigateTo(target.kind === "track" ? "music" : "content");
+    setCatalogTarget(target);
   }
 
   async function handleCommand(command: string) {
@@ -4417,6 +4460,7 @@ function App({ onLock }: { onLock?: (() => void) | undefined }) {
             ? {
                 ...message,
                 content: result.message,
+                catalogTargets: result.catalogTargets,
                 meta: result.commandRunId
                   ? `IDA · ${result.state ?? "received"} · ${result.commandRunId}`
                   : `IDA · ${result.state ?? "completed"}`,
@@ -4540,6 +4584,8 @@ function App({ onLock }: { onLock?: (() => void) | undefined }) {
             dashboard={dashboard}
             source={dashboardSource}
             onNavigate={navigateTo}
+            catalogTarget={catalogTarget}
+            onOpenCatalog={openCatalog}
           />
         </div>
       </main>
