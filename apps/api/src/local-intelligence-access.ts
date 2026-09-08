@@ -15,7 +15,7 @@ export class LocalIntelligenceAccess implements IntelligenceAccessSource {
   private readonly boundScope: IntelligenceScope;
   constructor(
     private readonly options: {
-      database: DemoDatabase;
+      database: Pick<DemoDatabase, "resolveRequestIdentityContext">;
       authenticatedScope: IntelligenceScope;
       // Lecture sans effet de l'autorité runtime, synchrone : aucun await après l'identité.
       getPolicy: (scope: IntelligenceScope) => IntelligencePolicy;

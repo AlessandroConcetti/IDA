@@ -13,7 +13,9 @@ function literalLike(value: string): string {
 }
 
 /** Projection interne uniquement. Le broker autorise l'identité, l'agent et les sources avant/après la lecture. */
-export function createMusicContextStore(database: DemoDatabase): MusicContextStore {
+export function createMusicContextStore(database: {
+  pglite: Pick<DemoDatabase["pglite"], "query">;
+}): MusicContextStore {
   return {
     async read(rawScope, rawQuery) {
       const parsedScope = intelligenceScopeSchema.safeParse(rawScope);

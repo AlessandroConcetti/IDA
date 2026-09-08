@@ -60,6 +60,7 @@ export class CoreIntelligence implements IntelligencePort {
     gateway: ToolGateway;
     audit: (event: IntelligenceAudit) => Promise<void>;
     now?: () => Date;
+    acceptOutput?: (output: IntelligenceText) => boolean;
   }) {
     const now = options.now ?? (() => new Date());
     this.router = new ProviderRouter(
@@ -72,6 +73,7 @@ export class CoreIntelligence implements IntelligencePort {
       },
       options.audit,
       () => now().getTime(),
+      options.acceptOutput,
     );
   }
   generate(request: IntelligenceRequest, signal?: AbortSignal): Promise<IntelligenceText> {

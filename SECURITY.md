@@ -285,6 +285,12 @@ Avant une bêta avec données réelles :
 11. matrice de contrôles OWASP ASVS versionnée, revue des risques API/IA et test dynamique de la configuration destinée à la bêta ;
 12. aucune exposition réseau tant que les contrôles du jalon correspondant à la section 3.2 ne sont pas vérifiés.
 
+## Proposition musicale interne — 8 septembre 2026
+
+Le parcours `MusicProposalService` réutilise les contrôles de Core/Gateway/Identity et impose une permutation complète de références éphémères ; aucun texte libre du modèle, fait ajouté, mémoire ou effet externe n'est rendu/exécuté. Les informations affichables viennent des fiches serveur et restent des données non fiables à échapper côté client. `ProviderRouter.acceptOutput`, validateur synchrone injecté par le serveur, refuse une sortie métier invalide avant succès, sans fallback.
+
+`LocalMusicContextAuthority` réunit identité et faits dans un même snapshot SQL en lecture seule, sans audit/réseau sous transaction. Les ressources sont comparées en totalité aux frontières du routeur ; pas de garantie de révocation rétroactive d'un prompt déjà transmis ni de transaction base/réseau. La projection de prompt se limite aux alias/titres/crédits artistes, toujours PRIVATE_CREATIVE ; elle n'est ni anonymisation ni détection exhaustive des secrets saisis dans les champs métier. Voir [périmètre, refus et limites](docs/MUSIC_PROPOSALS.md). Cette tranche n'active aucun modèle, route cliente ou profil en production.
+
 ## Références de conception
 
 - [OWASP OAuth 2.0 Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/OAuth2_Cheat_Sheet.html)

@@ -1,5 +1,19 @@
 # IDA — Relais de consolidation pour Sol
 
+## Dernière tranche — Premier parcours musical composé — 8 septembre 2026
+
+Lire [MUSIC_PROPOSALS.md](MUSIC_PROPOSALS.md). `createLocalMusicProposalService` compose `MusicProposalService`, le broker existant, `LocalIntelligenceAccess`, `LocalMusicContextAuthority`, le SQL existant et l'audit persistant. Pas de deuxième Core ni de nouvelle route/activation. Le scope vient obligatoirement d'une authentification serveur réelle ; LOCAL_DEMO ne suffit pas.
+
+Plusieurs pistes : prompt versionné de regroupement, modèle limité à une permutation complète d'alias `R1`…`R10`, message français et fiches issus du serveur. Aucun texte factuel libre, référence étrangère, action ou mémoire accepté. Recherche vide, piste unique et médias sans critères sémantiques : zéro inférence. Le résultat expose `EMPTY_CONTEXT`, `CATALOG_ORDER` ou `MODEL_PROPOSAL` pour ne pas attribuer au modèle les chemins déterministes.
+
+`MusicContextBroker.prepare` capture scope/requête/faits dans une fermeture indépendante des copies rendues. À chaque frontière du Router, il compare une nouvelle projection à l'originale et réévalue les droits. `LocalMusicContextAuthority` utilise une transaction `REPEATABLE READ, READ ONLY` commune à l'identité/faits ; paramètre `reader` interne ajouté au résolveur existant, aucun changement des anciens appels. Pas de réseau ou audit sous transaction. Reste la limite normale entre dernier snapshot SQL et envoi réseau : aucune révocation rétroactive d'un prompt déjà envoyé n'est promise.
+
+`ProviderRouter.acceptOutput` facultatif, propagé par les façades existantes, valide avant succès : seul `true` accepte, copie non mutante, exception/Promise refusée en `INVALID_RESPONSE` sans fallback. Les autres contrôles identité/profil/modèle restent appliqués ensuite. Audit inchangé en structure, callbacks contexte/inférence toujours distincts et sans données créatives.
+
+Vérification : **825 tests / 42 fichiers**, **94 nouveaux**, 174,61 s ; lint global, types et builds contracts/domain/API/web réussis. Scénarios synthétiques avec vraie PGlite/session locale/audit : recherche → classement → réponse, absence, référence inventée, changement SQL de titre/archive et révocation durant le provider, absence d'écriture métier. Revue indépendante et corrections vérifiées. Aucun appel réel à Ollama/cloud, service redémarré, dépendance ou migration ajouté. Préserver les fichiers de dates en pause et l'interface existante.
+
+Suite bornée : évaluation locale synthétique de `music-librarian-ranking.fr.v1` via le modèle épinglé et la composition livrée, puis activation/arrêt explicites dans le chat actuel avec rendu texte des fiches. Aucun fournisseur gratuit via scraping. Le modèle demeure non qualifié (ancien banc **4/6**, pas réévalué ici), les agents/profils livrés `PLANNED`. Ne pas augmenter le pourcentage de démo au nombre de tests : ce parcours n'est pas encore exposé à l'utilisateur final.
+
 ## Dernière tranche — Audit persistant de l'intelligence — 8 septembre 2026
 
 Lire [INTELLIGENCE_AUDIT.md](INTELLIGENCE_AUDIT.md). `createPersistentIntelligenceAudit(database, authenticatedScope)` fournit les trois callbacks existants contexte/Core/environnement. Nouveau sous-export `@ida/contracts/intelligence-audit`, types réexportés aux anciens emplacements, codes d'erreur partagés. Table `intelligence_audit_events` ajoutée transactionnellement à l'initialisation locale : colonnes strictes, id/timestamp serveur, empreinte de comparaison, index workspace et guards INSERT/UPDATE/DELETE/TRUNCATE. Aucun payload, prompt, réponse ou secret ; aucun ajout aux journaux existants ou à l'UI.

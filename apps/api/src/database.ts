@@ -959,8 +959,10 @@ export class DemoDatabase {
     // Relecture d'un travail IA déjà authentifié : exige une vraie session locale,
     // sans token ni prolongation de l'inactivité. Les lecteurs existants sont inchangés.
     localSessionAt?: string,
+    // Lecteur interne facultatif pour une vue transactionnelle identité + ressources.
+    reader: Pick<PGlite, "query"> = this.pglite,
   ): Promise<RequestIdentityContext | null> {
-    const result = await this.pglite.query<ScalarRow>(
+    const result = await reader.query<ScalarRow>(
       `
         SELECT
           session.id AS "sessionId",

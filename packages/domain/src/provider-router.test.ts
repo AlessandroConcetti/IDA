@@ -3,6 +3,7 @@ import type {
   AIProviderState,
   IntelligencePolicy,
   IntelligenceRequest,
+  IntelligenceText,
 } from "@ida/contracts/intelligence";
 import { describe, expect, it, vi } from "vitest";
 import { type IntelligenceAdapter, IntelligenceError, ProviderRegistry } from "./provider-registry.js";
@@ -242,6 +243,118 @@ describe("Provider routing and isolation", () => {
       expect(required(f.adapters).generate).not.toHaveBeenCalled();
     },
   );
+});
+
+describe("Synchronous structured output acceptance", () => {
+  it("accepts only a detached copy and preserves the original validated result", async () => {
+    const f = fixture();
+    const providerOutput = { text: "local response" };
+    required(f.adapters).generate.mockResolvedValue(providerOutput);
+    const acceptOutput = vi.fn((output: IntelligenceText) => {
+      expect(output).toEqual(providerOutput);
+      expect(output).not.toBe(providerOutput);
+      output.text = "SYNTHETIC_CALLBACK_MUTATION";
+      return true;
+    });
+    const router = new ProviderRouter(f.registry, f.authorize, f.audit, () => now, acceptOutput);
+
+    expect(await router.generate(request())).toEqual({ text: "local response" });
+    expect(providerOutput).toEqual({ text: "local response" });
+    expect(acceptOutput).toHaveBeenCalledTimes(1);
+    expect(f.audit.mock.calls.map(([event]) => event.outcome)).toEqual(["ATTEMPT", "SUCCEEDED"]);
+    expect(JSON.stringify(f.audit.mock.calls)).not.toContain("SYNTHETIC_CALLBACK_MUTATION");
+  });
+
+  it.each([
+    { name: "false", result: () => false },
+    { name: "truthy string", result: () => "true" },
+    { name: "truthy number", result: () => 1 },
+    { name: "truthy object", result: () => ({ accepted: true }) },
+    { name: "undefined", result: () => undefined },
+    { name: "null", result: () => null },
+    { name: "resolved Promise", result: () => Promise.resolve(true) },
+    {
+      name: "rejected Promise",
+      result: () => Promise.reject(new Error("SYNTHETIC_PRIVATE_VALIDATOR_ERROR")),
+    },
+    {
+      name: "exception",
+      result: () => {
+        throw new Error("SYNTHETIC_PRIVATE_VALIDATOR_ERROR");
+      },
+    },
+    {
+      name: "forged transient error",
+      result: () => {
+        throw new IntelligenceError("UNAVAILABLE");
+      },
+    },
+  ])("rejects $name without success, private error details or compatible fallback", async ({ result }) => {
+    const f = fixture();
+    f.setPolicy(policy({ cloudConsents: [consent()] }));
+    // Injection volontaire de valeurs runtime impossibles dans le contrat TypeScript.
+    const acceptOutput = vi.fn(result) as unknown as (output: IntelligenceText) => boolean;
+    const router = new ProviderRouter(f.registry, f.authorize, f.audit, () => now, acceptOutput);
+
+    await expect(router.generate(request())).rejects.toThrow("IDA intelligence: INVALID_RESPONSE");
+    expect(acceptOutput).toHaveBeenCalledTimes(1);
+    expect(required(f.adapters).generate).toHaveBeenCalledTimes(1);
+    expect(required(f.adapters, 1).generate).not.toHaveBeenCalled();
+    expect(f.audit.mock.calls.map(([event]) => event.outcome)).toEqual(["ATTEMPT", "INVALID_RESPONSE"]);
+    expect(JSON.stringify(f.audit.mock.calls)).not.toContain("SYNTHETIC_PRIVATE_VALIDATOR_ERROR");
+    expect(f.registry.list().map((provider) => provider.state.remainingCalls)).toEqual([9, 10]);
+  });
+
+  it("does not invoke acceptance or the provider when initial authorization fails", async () => {
+    const f = fixture();
+    f.authorize.mockRejectedValue(new Error("SYNTHETIC_PRIVATE_AUTHORIZATION_ERROR"));
+    const acceptOutput = vi.fn(() => true);
+    const router = new ProviderRouter(f.registry, f.authorize, f.audit, () => now, acceptOutput);
+
+    await expect(router.generate(request())).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(acceptOutput).not.toHaveBeenCalled();
+    expect(required(f.adapters).generate).not.toHaveBeenCalled();
+    expect(f.audit).not.toHaveBeenCalled();
+  });
+
+  it("cannot accept an output rejected by the base response schema", async () => {
+    const f = fixture();
+    required(f.adapters).generate.mockResolvedValue({ text: "response", tools: ["publish_post"] } as IntelligenceText);
+    const acceptOutput = vi.fn(() => true);
+    const router = new ProviderRouter(f.registry, f.authorize, f.audit, () => now, acceptOutput);
+
+    await expect(router.generate(request())).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+    expect(acceptOutput).not.toHaveBeenCalled();
+    expect(f.audit.mock.calls.map(([event]) => event.outcome)).toEqual(["ATTEMPT", "INVALID_RESPONSE"]);
+  });
+
+  it("rechecks authorization after acceptance instead of treating true as a permission", async () => {
+    const f = fixture();
+    const acceptOutput = vi.fn(() => {
+      f.setPolicy(policy({ mode: "NORMAL" }));
+      return true;
+    });
+    const router = new ProviderRouter(f.registry, f.authorize, f.audit, () => now, acceptOutput);
+
+    await expect(router.generate(request())).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(acceptOutput).toHaveBeenCalledTimes(1);
+    expect(f.audit.mock.calls.map(([event]) => event.outcome)).toEqual(["ATTEMPT", "FORBIDDEN"]);
+    expect(required(f.adapters, 1).generate).not.toHaveBeenCalled();
+  });
+
+  it("still denies delivery when authorization changes during the success audit", async () => {
+    const f = fixture();
+    const acceptOutput = vi.fn(() => true);
+    f.audit.mockImplementation(async (event) => {
+      if (event.outcome === "SUCCEEDED") f.authorize.mockRejectedValue(new Error("revoked"));
+    });
+    const router = new ProviderRouter(f.registry, f.authorize, f.audit, () => now, acceptOutput);
+
+    await expect(router.generate(request())).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(acceptOutput).toHaveBeenCalledTimes(1);
+    expect(f.audit.mock.calls.map(([event]) => event.outcome)).toEqual(["ATTEMPT", "SUCCEEDED", "FORBIDDEN"]);
+    expect(required(f.adapters, 1).generate).not.toHaveBeenCalled();
+  });
 });
 
 describe("Controlled fallback", () => {

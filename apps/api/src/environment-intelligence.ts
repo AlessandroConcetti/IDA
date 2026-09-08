@@ -36,6 +36,7 @@ export class EnvironmentIntelligence implements IntelligencePort {
       ) => EnvironmentBrainProfile;
       audit: (event: EnvironmentIntelligenceAudit) => Promise<void>;
       now?: () => Date;
+      acceptOutput?: (output: IntelligenceText) => boolean;
     },
   ) {
     const parsed = environmentInvocationSchema.safeParse(options.invocation);
@@ -50,6 +51,7 @@ export class EnvironmentIntelligence implements IntelligencePort {
       registry: this.options.registry,
       gateway: this.options.gateway,
       now: this.options.now,
+      acceptOutput: this.options.acceptOutput,
       access: {
         loadCurrent: async (scope) => {
           const access = await this.options.access.loadCurrent(scope);

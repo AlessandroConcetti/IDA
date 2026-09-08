@@ -259,6 +259,12 @@ Le registre n’exécute jamais du code stocké en base. Les modules et agents s
 
 ## Évolution contrôlée
 
+### Instantané local identité et contexte musical
+
+`LocalMusicContextAuthority` exécute le résolveur Identity existant et la projection `MusicContextStore` dans la même transaction brève `REPEATABLE READ, READ ONLY`. Un paramètre interne `reader` facultatif de `resolveRequestIdentityContext` accepte le lecteur transactionnel ; omis, tous les anciens appels utilisent toujours `this.pglite`. Aucune nouvelle table, migration ou modification des données utilisateur dans cette tranche.
+
+Cette composition exige une session locale réelle et ne prolonge pas l'inactivité. Elle compare les faits courants à ceux sélectionnés avant l'inférence et avant restitution. Ni réseau ni audit dans la transaction. Un snapshot SQL cohérent n'est pas un verrou global sur un modèle externe : voir limites et tests dans [MUSIC_PROPOSALS.md](docs/MUSIC_PROPOSALS.md).
+
 ### Dates des nouvelles données de démonstration
 
 L’amorçage reçoit l’horloge `DemoDatabaseOptions.now`, partagée avec `CreateAppOptions.now` et évaluée une seule fois pour le seed. `getDemoDates` calcule à partir du jour UTC de référence : teaser studio à J+2 18:00 UTC, hook à J+4 17:30 UTC et release/morceau associés à J+19. Les horaires sont stockés en UTC et présentés dans le fuseau du workspace ; ils ne garantissent pas une heure locale identique été/hiver. Les exemples historiques et les données d’isolation restent fixes.

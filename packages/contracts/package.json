@@ -4,6 +4,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./music-proposal": {
+      "types": "./src/music-proposal.ts",
+      "import": "./dist/music-proposal.js"
+    },
     "./intelligence-audit": {
       "types": "./src/intelligence-audit.ts",
       "import": "./dist/intelligence-audit.js"

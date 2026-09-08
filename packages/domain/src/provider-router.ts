@@ -120,6 +120,8 @@ export class ProviderRouter implements IntelligencePort {
     private readonly authorize: (request: IntelligenceRequest) => Promise<IntelligencePolicy>,
     private readonly audit: (event: IntelligenceAudit) => Promise<void>,
     private readonly now: () => number = Date.now,
+    // Validation métier synchrone, sans effet : ne confère aucun droit et ne transforme pas la sortie.
+    private readonly acceptOutput?: (output: IntelligenceText) => boolean,
   ) {}
 
   private async policy(request: IntelligenceRequest): Promise<IntelligencePolicy> {
@@ -236,6 +238,16 @@ export class ProviderRouter implements IntelligencePort {
         ]);
         const result = intelligenceTextSchema.safeParse(output);
         if (!result.success) throw new IntelligenceError("INVALID_RESPONSE");
+        if (this.acceptOutput) {
+          try {
+            const accepted: unknown = this.acceptOutput(structuredClone(result.data));
+            // Une extension async accidentelle est refusée, y compris sans rejet non géré.
+            if (accepted instanceof Promise) void accepted.catch(() => {});
+            if (accepted !== true) throw new Error("Rejected output");
+          } catch {
+            throw new IntelligenceError("INVALID_RESPONSE");
+          }
+        }
         const finalPolicy = await this.policy(request);
         if (controller.signal.aborted) throw controller.signal.reason;
         // Le dernier appel réservé peut avoir épuisé remainingCalls, ce qui n'invalide pas son résultat.

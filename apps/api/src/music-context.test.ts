@@ -99,6 +99,59 @@ function fixture() {
 }
 
 describe("Music context broker, no inference or action authority", () => {
+  it("closes over private copies of scope/query/facts for subsequent inference authority", async () => {
+    const f = fixture();
+    const query = { intent: "SEARCH_TRACK" as const, title: "Aube", limit: 5 };
+    const aggregate = vi.fn(async () => ({
+      identity: structuredClone(f.identity),
+      policy: structuredClone(f.policy),
+      facts: structuredClone(f.rows),
+    }));
+    const prepared = await f.broker.prepare(f.scope, query, { loadCurrent: aggregate });
+    query.title = "Another query";
+    prepared.snapshot.scope.workspaceId = "forged";
+    prepared.snapshot.invocation.contextSources = ["ARTIST_PROFILE"];
+    if (prepared.snapshot.facts.tracks[0]) prepared.snapshot.facts.tracks[0].title = "Forged title";
+    const current = await prepared.access.loadCurrent(f.scope);
+    expect(aggregate).toHaveBeenCalledWith(f.scope, { intent: "SEARCH_TRACK", title: "Aube", limit: 5 });
+    expect(current).toEqual({ identity: f.identity, policy: f.policy });
+    expect(Object.keys(current).sort()).toEqual(["identity", "policy"]);
+    expect(f.audit.mock.calls.map(([event]) => event.outcome)).toEqual(["ATTEMPT", "SUCCEEDED"]);
+    expect(f.read).toHaveBeenCalledTimes(1);
+  });
+  it.each(["userId", "workspaceId", "sessionId", "clientInstanceId"] as const)(
+    "rejects reuse of prepared authority for another %s before SQL",
+    async (key) => {
+      const f = fixture();
+      const aggregate = vi.fn();
+      const prepared = await f.broker.prepare(f.scope, { intent: "SEARCH_TRACK" }, { loadCurrent: aggregate });
+      await expect(prepared.access.loadCurrent({ ...f.scope, [key]: "foreign" })).rejects.toMatchObject({
+        code: "FORBIDDEN",
+      });
+      expect(aggregate).not.toHaveBeenCalled();
+    },
+  );
+  it("validates identity from the aggregate, not the earlier authorization", async () => {
+    const f = fixture();
+    const aggregate = vi.fn(async () => ({
+      identity: { ...structuredClone(f.identity), workspaceId: "foreign" },
+      policy: structuredClone(f.policy),
+      facts: structuredClone(f.rows),
+    }));
+    const prepared = await f.broker.prepare(f.scope, { intent: "SEARCH_TRACK" }, { loadCurrent: aggregate });
+    await expect(prepared.access.loadCurrent(f.scope)).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+  it("compares projected values even if updatedAt was not advanced", async () => {
+    const f = fixture();
+    const aggregate = vi.fn(async () => ({
+      identity: structuredClone(f.identity),
+      policy: structuredClone(f.policy),
+      facts: structuredClone(f.rows),
+    }));
+    const prepared = await f.broker.prepare(f.scope, { intent: "SEARCH_TRACK" }, { loadCurrent: aggregate });
+    if (f.rows.tracks[0]) f.rows.tracks[0].bpm = 125;
+    await expect(prepared.access.loadCurrent(f.scope)).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
   it("selects only the requested source and returns provenance, fixed classification and a copied bounded snapshot", async () => {
     const f = fixture();
     const result = await f.broker.read(f.scope, { intent: "SEARCH_TRACK", title: "Aube" });
