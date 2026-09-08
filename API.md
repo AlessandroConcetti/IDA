@@ -13,6 +13,8 @@ Ce document définit les conventions et la surface API d’IDA. L’API est le p
 
 ## Tranche locale Phase 1 livrée
 
+Le [contrat complémentaire du chat local](docs/CHAT_CATALOG.md) décrit SEARCH_TRACK, SEARCH_MEDIA, CLARIFY_CATALOG et les réponses détaillées de la journée/rotation sur la route existante `/v1/ida/commands`. Ces fonctions ne déclenchent aucun modèle.
+
 Le premier runtime est une API Fastify locale sur `http://127.0.0.1:8787`, consommée par le Command Center web. `LOCAL_DEMO` reste le mode par défaut : il emploie un contexte de démonstration fixé côté serveur et une session technique persistée sans credential client. Le mode `LOCAL_LOCK`, activé explicitement, protège le propriétaire local par passphrase et cookie de session opaque sans autoriser l'exposition réseau. Dans les deux modes, le serveur rejoint compte, membership, instance, grant et session puis échoue fermé si une couche est suspendue, révoquée, expirée ou hors scope. Le résultat est gelé et attaché à la requête ; routes, réponses, audits et IDA Core en dérivent leur acteur et leur workspace. Chaque action recoupe ensuite rôle, grant et permission avant le Tool Gateway. Ce socle local ne remplace pas l’authentification multi-appareils ou de production.
 
 | Route | État actuel | Contrat actif |

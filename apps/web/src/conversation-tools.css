@@ -1,0 +1,40 @@
+.command-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  min-width: 0;
+  margin: 11px 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.command-suggestion {
+  max-width: 100%;
+  min-height: 36px;
+  padding: 7px 11px;
+  color: var(--ida-text);
+  border: 1px solid rgba(97, 106, 111, 0.22);
+  border-radius: 9px;
+  background: transparent;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  text-align: left;
+}
+
+.command-suggestion:hover:not(:disabled) {
+  border-color: var(--ida-accent);
+}
+
+.command-suggestion:focus-visible {
+  outline: 2px solid var(--ida-accent);
+  outline-offset: 3px;
+}
+
+.command-suggestion:disabled {
+  opacity: 0.52;
+}
+
+.conversation-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

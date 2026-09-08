@@ -450,7 +450,7 @@ describe("IDA API — première tranche Phase 1", () => {
     expect(todayBody.data).toMatchObject({
       kind: "TODAY",
       command: { intent: "PREPARE_DAY" },
-      message: "Aujourd’hui, tu as 2 éléments à suivre dans IDA.",
+      message: expect.stringContaining("Aujourd’hui, voici 2 éléments à suivre dans IDA (Europe/Paris)."),
       tools: [{ key: "get_today", moduleKey: "TASKS", permission: "READ" }],
     });
     expect(todayBody.data.result.items).toEqual([
@@ -490,7 +490,7 @@ describe("IDA API — première tranche Phase 1", () => {
       data: {
         kind: "TOMORROW",
         command: { intent: "PREPARE_DAY" },
-        message: "Demain, tu as 1 élément à suivre dans IDA.",
+        message: expect.stringContaining("Demain, voici 1 élément à suivre dans IDA (Europe/Paris)."),
         result: {
           items: [
             {
@@ -4308,7 +4308,7 @@ describe("IDA API — première tranche Phase 1", () => {
       url: "/v1/ida/commands",
       payload: { message: "IDA, montre-moi mes contenus jamais publiés." },
     });
-    expect((unsupportedHistory.json() as { data: { kind: string } }).data.kind).toBe("HELP");
+    expect((unsupportedHistory.json() as { data: { kind: string } }).data.kind).toBe("CLARIFY_CATALOG");
   });
 
   it("refuse les filtres médias invalides ou dupliqués", async () => {

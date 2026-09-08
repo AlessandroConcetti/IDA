@@ -21,6 +21,7 @@ Une propriété fail-safe complète ce fonctionnement : dès que le credential l
 
 ## Documentation
 
+- [Chat local : recherches musicales, médias et journée détaillée](docs/CHAT_CATALOG.md)
 - [Guide de démonstration locale](docs/DEMO_GUIDE.md)
 - [Architecture](ARCHITECTURE.md)
 - [Base de données](DATABASE.md)

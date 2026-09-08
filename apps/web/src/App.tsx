@@ -60,6 +60,7 @@ import {
   uploadMediaAsset,
 } from "./api";
 import { onWorkspaceMutation } from "./api-transport";
+import { CommandSuggestions, ConversationText } from "./ConversationTools";
 import { adjacentCalendarAnchor, createCalendarReader } from "./calendar-navigation";
 import {
   type ArtistBrain,
@@ -97,7 +98,7 @@ const initialMessages: ConversationMessage[] = [
     id: "welcome",
     role: "assistant",
     content:
-      "Je peux consulter ta journée, retrouver des médias inutilisés et expliquer l’état du système. Les autres demandes ne sont pas encore prises en charge dans cette démo.",
+      "Je peux consulter ta journée, lister tes morceaux, rechercher un titre et retrouver des médias inutilisés dans ton espace IDA. Ces recherches locales fonctionnent sans modèle IA. Choisis un exemple ou saisis ta demande.",
     meta: "IDA · command center",
   },
 ];
@@ -179,6 +180,7 @@ function CommandComposer({
   apiMode: "connected" | "fallback";
 }) {
   const [command, setCommand] = useState("");
+  const commandInput = useRef<HTMLTextAreaElement>(null);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -215,11 +217,19 @@ function CommandComposer({
         </label>
         <textarea
           id="ida-command"
+          ref={commandInput}
           value={command}
           onChange={(event) => setCommand(event.target.value)}
           placeholder="Qu’est-ce que j’ai aujourd’hui ?"
           rows={2}
           disabled={isSubmitting}
+        />
+        <CommandSuggestions
+          disabled={isSubmitting}
+          onSelect={(example) => {
+            setCommand(example);
+            commandInput.current?.focus();
+          }}
         />
         <div className="command-actions">
           <p>IDA utilisera uniquement les données et outils autorisés.</p>
@@ -260,7 +270,7 @@ function ConversationPanel({
               {message.role === "assistant" ? "✦" : "Y"}
             </span>
             <div>
-              <p>{message.content}</p>
+              <ConversationText content={message.content} />
               {message.meta ? (
                 <span className={message.fallback ? "message-meta fallback" : "message-meta"}>{message.meta}</span>
               ) : null}

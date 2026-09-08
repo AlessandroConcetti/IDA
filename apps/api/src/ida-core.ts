@@ -11,6 +11,7 @@ import {
   systemStatusSchema,
 } from "@ida/contracts";
 import type { IntelligenceRequest, IntelligenceText } from "@ida/contracts/intelligence";
+import type { MusicTrackFact } from "@ida/contracts/music-context";
 import {
   IdentityAccessPolicy,
   IntelligenceError,
@@ -18,10 +19,20 @@ import {
   sameIntelligenceScope,
   ToolGateway,
 } from "@ida/domain";
-
+import { type CatalogCommand, parseCatalogCommand } from "./catalog-command.js";
+import {
+  type ChatMediaFact,
+  chatLabel,
+  dayMessage,
+  mediaSearchMessage,
+  readChatMedia,
+  trackSearchMessage,
+} from "./chat-catalog.js";
 import { toContentRotationCandidateResponse } from "./content-rotation.js";
 import { intelligenceProposalTool } from "./core-intelligence.js";
 import type { DemoDatabase, TodayItem } from "./database.js";
+import { LocalDemoAuthenticationError } from "./identity-context.js";
+import { createMusicContextStore } from "./music-context-store.js";
 import { getWorkspaceDayRange } from "./workspace-time.js";
 
 export class CommandInputError extends Error {
@@ -34,13 +45,13 @@ export class CommandInputError extends Error {
   }
 }
 
-type DeterministicCommandKind = "TODAY" | "TOMORROW" | "UNUSED_CONTENT" | "SYSTEM" | "HELP";
+type DeterministicCommandKind = "TODAY" | "TOMORROW" | "UNUSED_CONTENT" | "SYSTEM" | "HELP" | CatalogCommand["kind"];
 
 type SocialPlatformDiagnostic = "Instagram" | "TikTok" | "YouTube" | "Facebook";
 
 export type CommandToolUse = {
   key: string;
-  moduleKey: "TASKS" | "CONTENT" | "SYSTEM" | "IDA";
+  moduleKey: "TASKS" | "CONTENT" | "SYSTEM" | "IDA" | "MUSIC";
   permission: PermissionLevel;
 };
 
@@ -54,6 +65,9 @@ export type CommandResponse = {
   result: {
     items?: TodayItem[] | ContentRotationCandidateContract[];
     system?: SystemStatus[];
+    tracks?: MusicTrackFact[];
+    media?: ChatMediaFact[];
+    catalogQuery?: Exclude<CatalogCommand, { kind: "CLARIFY_CATALOG" }>;
   };
 };
 
@@ -62,6 +76,8 @@ type CommandCompletion = Omit<CommandResponse, "command" | "commandRunId" | "sta
 const idaCoreAllowedTools = [
   intelligenceProposalTool,
   { toolKey: "get_today", moduleKey: "TASKS", permission: "READ" },
+  { toolKey: "list_tracks", moduleKey: "MUSIC", permission: "READ" },
+  { toolKey: "search_media", moduleKey: "CONTENT", permission: "READ" },
   { toolKey: "list_content_rotation_candidates", moduleKey: "CONTENT", permission: "READ" },
   { toolKey: "get_system_status", moduleKey: "SYSTEM", permission: "READ" },
   { toolKey: "describe_supported_commands", moduleKey: "IDA", permission: "READ" },
@@ -109,37 +125,48 @@ function classify(message: string): {
   intent: IdaCommandIntent;
   dayOffset?: 0 | 1;
   socialPlatform?: SocialPlatformDiagnostic;
+  catalog?: CatalogCommand;
 } {
-  const normalized = normalize(message);
-  const socialPlatform = socialPlatformFromMessage(normalized);
-
-  if (normalized.includes("demain") || normalized.includes("tomorrow")) {
-    return { kind: "TOMORROW", intent: "PREPARE_DAY", dayOffset: 1 };
-  }
-
+  const normalized = normalize(message)
+    .replace(/^ida(?:\s*[,!:]\s*|\s+)/u, "")
+    .replace(/[.!?]+$/u, "")
+    .trim();
+  // Compatibilité : la demande générique historique conserve la rotation
+  // éditoriale ; un filtre explicite (vidéo, nom, quantité) cherche la bibliothèque.
   if (
-    normalized.includes("aujourd'hui") ||
-    normalized.includes("aujourdhui") ||
-    normalized.includes("today") ||
-    normalized.includes("prepare ma journee")
+    /^(?:(?:montre(?:-moi| moi)?|liste|affiche) )?(?:(?:mes|les) )?(?:contenus|medias) inutilises$/u.test(normalized) ||
+    normalized === "unused content"
   ) {
-    return { kind: "TODAY", intent: "PREPARE_DAY", dayOffset: 0 };
-  }
-
-  if (normalized.includes("inutilise") || normalized.includes("unused")) {
     return { kind: "UNUSED_CONTENT", intent: "LIST_UNUSED_CONTENT" };
   }
+  // Les noms propres restent des données : « morceau Demain » n'est pas un agenda.
+  const catalog = parseCatalogCommand(message);
+  if (catalog) {
+    return {
+      kind: catalog.kind,
+      intent: catalog.kind === "CLARIFY_CATALOG" ? "UNKNOWN" : catalog.kind,
+      catalog,
+    };
+  }
+  const socialPlatform = socialPlatformFromMessage(normalized);
+  const day =
+    /^(?:(?:prepare|resume|affiche|montre(?:-moi| moi)?) (?:ma journee(?: de)? )?|(?:qu'est-ce que j'ai|qu'est ce que j'ai|que dois-je faire|que dois je faire)(?: a faire)? )?(aujourd'hui|aujourdhui|demain|today|tomorrow)$/u.exec(
+      normalized,
+    );
+  if (day || normalized === "prepare ma journee") {
+    const tomorrow = day?.[1] === "demain" || day?.[1] === "tomorrow";
+    return { kind: tomorrow ? "TOMORROW" : "TODAY", intent: "PREPARE_DAY", dayOffset: tomorrow ? 1 : 0 };
+  }
 
   if (
-    normalized.includes("system") ||
-    normalized.includes("statut") ||
-    normalized.includes("etat") ||
-    normalized.includes("fonctionne") ||
-    (socialPlatform !== undefined &&
-      (normalized.includes("pourquoi") ||
-        normalized.includes("why") ||
-        normalized.includes("probleme") ||
-        normalized.includes("connecte")))
+    /^(?:(?:montre(?:-moi| moi)?|affiche|explique(?:-moi| moi)?) (?:l'|le )?)?(?:etat|statut)(?: du)? (?:systeme|system|ida)$/u.test(
+      normalized,
+    ) ||
+    /^(?:systeme|system|statut|etat)$/u.test(normalized) ||
+    /^(?:pourquoi|why) (?:instagram|tiktok|youtube|facebook) (?:ne fonctionne (?:plus|pas)|n'est pas connecte|est deconnecte)$/u.test(
+      normalized,
+    ) ||
+    /^(?:etat|statut|probleme)(?: de)? (?:instagram|tiktok|youtube|facebook)$/u.test(normalized)
   ) {
     return { kind: "SYSTEM", intent: "UNKNOWN", socialPlatform };
   }
@@ -237,6 +264,10 @@ export class DeterministicIdaCore {
     command: IdaCommand,
     completion: CommandCompletion,
   ): Promise<CommandResponse> {
+    // Relire les droits après la lecture métier. Le contexte HTTP n'est pas
+    // une autorisation permanente ; une révocation pendant l'attente est refusée.
+    let currentIdentity = identity;
+    for (const tool of completion.tools) currentIdentity = await this.refreshIdentity(identity, tool);
     const response: CommandResponse = {
       command,
       commandRunId: command.id,
@@ -254,7 +285,12 @@ export class DeterministicIdaCore {
       now: authorizationNow,
     });
 
-    if (historyPermission.allowed) {
+    const currentHistoryPermission = this.identityPolicy.evaluate({
+      context: currentIdentity,
+      permission: "WRITE",
+      now: this.now(),
+    });
+    if (historyPermission.allowed && currentHistoryPermission.allowed) {
       this.gateway.assertAuthorized({
         toolKey: "persist_command_history",
         moduleKey: "IDA",
@@ -271,7 +307,30 @@ export class DeterministicIdaCore {
       });
     }
 
+    for (const tool of completion.tools) await this.refreshIdentity(identity, tool);
+
     return response;
+  }
+
+  private async refreshIdentity(
+    identity: RequestIdentityContext,
+    tool: CommandToolUse,
+  ): Promise<RequestIdentityContext> {
+    this.assertAuthorized(identity, tool, this.now());
+    const current = await this.database.resolveRequestIdentityContext(identity.session.id, identity.workspaceId);
+    if (
+      !current ||
+      current.userId !== identity.userId ||
+      current.workspaceId !== identity.workspaceId ||
+      current.clientInstance.id !== identity.clientInstance.id ||
+      current.session.id !== identity.session.id
+    )
+      throw new LocalDemoAuthenticationError();
+    // Le contexte initial peut avoir une échéance idle plus courte que la session SQL.
+    // Ne jamais prolonger cette échéance ou augmenter les droits de la requête.
+    this.assertAuthorized(identity, tool, this.now());
+    this.assertAuthorized(current, tool, this.now());
+    return current;
   }
 
   async execute(identity: RequestIdentityContext, body: unknown): Promise<CommandResponse> {
@@ -298,6 +357,57 @@ export class DeterministicIdaCore {
     });
 
     switch (classified.kind) {
+      case "SEARCH_TRACK": {
+        const catalog = classified.catalog;
+        if (catalog?.kind !== "SEARCH_TRACK") throw new CommandInputError("Recherche de morceau invalide.");
+        const tool: CommandToolUse = { key: "list_tracks", moduleKey: "MUSIC", permission: "READ" };
+        await this.refreshIdentity(identity, tool);
+        // Réutiliser la projection SQL bornée, pas activer le broker IA ou un agent.
+        const facts = await createMusicContextStore(this.database).read(
+          {
+            userId: identity.userId,
+            workspaceId: identity.workspaceId,
+            sessionId: identity.session.id,
+            clientInstanceId: identity.clientInstance.id,
+          },
+          {
+            intent: "SEARCH_TRACK",
+            limit: catalog.limit,
+            ...(catalog.title === undefined ? {} : { title: catalog.title }),
+          },
+        );
+        return this.complete(identity, commandNow, command, {
+          kind: "SEARCH_TRACK",
+          message: trackSearchMessage(facts.tracks, catalog.title, catalog.limit),
+          tools: [tool],
+          result: { tracks: facts.tracks, catalogQuery: catalog },
+        });
+      }
+      case "SEARCH_MEDIA": {
+        const catalog = classified.catalog;
+        if (catalog?.kind !== "SEARCH_MEDIA") throw new CommandInputError("Recherche de média invalide.");
+        const tool: CommandToolUse = { key: "search_media", moduleKey: "CONTENT", permission: "READ" };
+        await this.refreshIdentity(identity, tool);
+        const media = await readChatMedia(this.database, identity.workspaceId, catalog);
+        return this.complete(identity, commandNow, command, {
+          kind: "SEARCH_MEDIA",
+          message: mediaSearchMessage(media, catalog),
+          tools: [tool],
+          result: { media, catalogQuery: catalog },
+        });
+      }
+      case "CLARIFY_CATALOG": {
+        const catalog = classified.catalog;
+        if (catalog?.kind !== "CLARIFY_CATALOG") throw new CommandInputError("Demande invalide.");
+        const tool: CommandToolUse = { key: "describe_supported_commands", moduleKey: "IDA", permission: "READ" };
+        this.assertAuthorized(identity, tool, commandNow);
+        return this.complete(identity, commandNow, command, {
+          kind: "CLARIFY_CATALOG",
+          message: catalog.message,
+          tools: [tool],
+          result: {},
+        });
+      }
       case "TODAY":
       case "TOMORROW": {
         const tool: CommandToolUse = { key: "get_today", moduleKey: "TASKS", permission: "READ" };
@@ -314,10 +424,7 @@ export class DeterministicIdaCore {
 
         return this.complete(identity, commandNow, command, {
           kind: classified.kind,
-          message:
-            items.length === 0
-              ? `${dayLabel}, ton agenda IDA est libre pour le moment.`
-              : `${dayLabel}, tu as ${items.length} élément${items.length > 1 ? "s" : ""} à suivre dans IDA.`,
+          message: dayMessage(items, dayLabel, timezone),
           tools: [tool],
           result: { items },
         });
@@ -338,7 +445,11 @@ export class DeterministicIdaCore {
           message:
             items.length === 0
               ? "Je n’ai trouvé aucun média réellement disponible à proposer. Les médias déjà liés à une proposition restent exclus."
-              : `J’ai trouvé ${items.length} média${items.length > 1 ? "s" : ""} réellement disponible${items.length > 1 ? "s" : ""} à proposer.`,
+              : [
+                  `J’ai trouvé ${items.length} média${items.length > 1 ? "s" : ""} réellement disponible${items.length > 1 ? "s" : ""} à proposer (aperçu limité à 12).`,
+                  ...items.map((item, index) => `${index + 1}. « ${chatLabel(item.filename, 160)} »`),
+                  "Source : rotation éditoriale. Les médias déjà liés à une proposition sont exclus. Aucune publication effectuée.",
+                ].join("\n"),
           tools: [tool],
           result: { items },
         });
@@ -362,7 +473,7 @@ export class DeterministicIdaCore {
         return this.complete(identity, commandNow, command, {
           kind: classified.kind,
           message:
-            "Je peux actuellement résumer aujourd’hui ou demain, lister les médias réellement disponibles à proposer et expliquer l’état du système. Essaie : « Qu’est-ce que j’ai aujourd’hui ? »",
+            "Je peux consulter aujourd’hui ou demain, chercher un morceau par son titre, filtrer la bibliothèque et expliquer l’état du système. Essaie : « Trouve le morceau “Aurore” » ou « Montre-moi cinq vidéos inutilisées ». Pour la disponibilité éditoriale, écris « contenus inutilisés ». Recherche locale sans modèle : je ne comprends pas encore les relances comme « et le deuxième ? », ne génère pas de contenu et ne publie rien.",
           tools: [tool],
           result: {},
         });

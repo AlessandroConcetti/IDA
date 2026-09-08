@@ -1148,9 +1148,13 @@ paths:
       operationId: executeIdaCommand
       summary: Exécute une commande IDA déterministe et en lecture seule
       description: >-
-        Une commande READ / COMPLETED est ajoutée à l’historique privé local,
-        avec audit redacted sans texte libre, sans résultat détaillé d’outil ni
-        mémoire implicite. La formulation « contenus inutilisés » sélectionne
+        Une commande READ / COMPLETED est ajoutée à l’historique privé local
+        seulement avec WRITE. La réponse lisible peut contenir des extraits de
+        métadonnées, mais aucun objet structuré d’outil ni mémoire implicite.
+        L’audit reste expurgé sans texte libre. Les recherches explicites de
+        morceaux (titre) et médias (type, statut, texte) ne lancent aucun modèle.
+        Une demande ambiguë retourne CLARIFY_CATALOG sans lecture de catalogue.
+        La formulation générique « contenus inutilisés » sélectionne
         les médias réellement disponibles (UNUSED et sans lien éditorial) avec
         l’outil CONTENT/READ list_content_rotation_candidates ; elle ne crée
         aucun effet éditorial ou externe. Les demandes d’historique « jamais
@@ -2631,7 +2635,7 @@ components:
                 workspaceId: { type: string }
                 message: { type: string }
                 intent:
-                  enum: [PREPARE_DAY, LIST_UNUSED_CONTENT, UNKNOWN]
+                  enum: [PREPARE_DAY, LIST_UNUSED_CONTENT, SEARCH_TRACK, SEARCH_MEDIA, UNKNOWN]
                 state:
                   const: COMPLETED
                 requestedPermission:
@@ -2639,7 +2643,7 @@ components:
                 createdAt: { type: string, format: date-time }
                 updatedAt: { type: string, format: date-time }
             kind:
-              enum: [TODAY, TOMORROW, UNUSED_CONTENT, SYSTEM, HELP]
+              enum: [TODAY, TOMORROW, UNUSED_CONTENT, SYSTEM, HELP, SEARCH_TRACK, SEARCH_MEDIA, CLARIFY_CATALOG]
             message: { type: string }
             tools:
               type: array
@@ -2649,7 +2653,7 @@ components:
                 properties:
                   key: { type: string }
                   moduleKey:
-                    enum: [TASKS, CONTENT, SYSTEM, IDA]
+                    enum: [TASKS, CONTENT, SYSTEM, IDA, MUSIC]
                   permission:
                     const: READ
             result:
@@ -2663,3 +2667,52 @@ components:
                 à échéance et les éléments éditoriaux internes valides de la
                 fenêtre civile du workspace ; une planification interne n'est
                 jamais une livraison sociale.
+                SEARCH_TRACK expose tracks et catalogQuery ; SEARCH_MEDIA expose
+                media et catalogQuery. Une clarification retourne un objet vide.
+              properties:
+                tracks:
+                  type: array
+                  maxItems: 10
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required: [id, title, artistCredit, genre, bpm, musicalKey, status, updatedAt]
+                    properties:
+                      id: { type: string, minLength: 1, maxLength: 200 }
+                      title: { type: string, minLength: 1, maxLength: 240 }
+                      artistCredit: { type: string, minLength: 1, maxLength: 240 }
+                      genre: { type: [string, 'null'], maxLength: 120 }
+                      bpm: { type: [number, 'null'], exclusiveMinimum: 0, maximum: 400 }
+                      musicalKey: { type: [string, 'null'], maxLength: 32 }
+                      status: { enum: [DEMO, UNRELEASED, SCHEDULED, RELEASED] }
+                      updatedAt: { type: string, format: date-time }
+                media:
+                  type: array
+                  maxItems: 10
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required: [id, filename, mediaType, status]
+                    properties:
+                      id: { type: string }
+                      filename: { type: string }
+                      mediaType: { enum: [IMAGE, VIDEO, AUDIO, DOCUMENT, OTHER] }
+                      status: { enum: [UNUSED, USED, SCHEDULED, PUBLISHED, ARCHIVED] }
+                catalogQuery:
+                  oneOf:
+                    - type: object
+                      additionalProperties: false
+                      required: [kind, limit]
+                      properties:
+                        kind: { const: SEARCH_TRACK }
+                        title: { type: string, minLength: 1, maxLength: 120 }
+                        limit: { type: integer, minimum: 1, maximum: 10 }
+                    - type: object
+                      additionalProperties: false
+                      required: [kind, limit]
+                      properties:
+                        kind: { const: SEARCH_MEDIA }
+                        q: { type: string, minLength: 1, maxLength: 160 }
+                        mediaType: { enum: [IMAGE, VIDEO, AUDIO, DOCUMENT, OTHER] }
+                        status: { enum: [UNUSED, USED, SCHEDULED, PUBLISHED] }
+                        limit: { type: integer, minimum: 1, maximum: 10 }
