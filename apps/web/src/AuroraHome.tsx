@@ -134,7 +134,7 @@ export function AuroraHome({
           <span className="home-workspace-date">{homeWorkspaceDate(readySummary)}</span>
           {onThemeChange ? (
             <fieldset className="home-theme-picker">
-              <legend className="sr-only">Thème de l’accueil</legend>
+              <legend className="sr-only">Thème global d’IDA</legend>
               <button type="button" aria-pressed={theme === "classic"} onClick={() => onThemeChange("classic")}>
                 Classic
               </button>

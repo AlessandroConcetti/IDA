@@ -80,6 +80,7 @@ import { statusLabelFr } from "./labels.fr";
 import { MediaProposalComposer } from "./MediaProposalComposer";
 import { canPrepareMedia } from "./post-proposal";
 import { SnapshotReader } from "./snapshot-reader";
+import { applyTheme, readTheme } from "./theme";
 import type { HomeTheme } from "./worlds";
 
 interface ConversationMessage {
@@ -4370,7 +4371,20 @@ function SectionContent({
 }
 
 function App({ onLock }: { onLock?: (() => void) | undefined }) {
-  const [homeTheme, setHomeTheme] = useState<HomeTheme>("classic");
+  const [homeTheme, setHomeTheme] = useState<HomeTheme>(() => {
+    try {
+      return readTheme(window.localStorage);
+    } catch {
+      return "classic";
+    }
+  });
+  useEffect(() => {
+    try {
+      applyTheme(homeTheme, document.documentElement, window.localStorage);
+    } catch {
+      applyTheme(homeTheme, document.documentElement);
+    }
+  }, [homeTheme]);
   const [activeId, setActiveId] = useState<NavigationId>("home");
   const [isOverviewOpen, setIsOverviewOpen] = useState(false);
   const [messages, setMessages] = useState<ConversationMessage[]>(initialMessages);
@@ -4558,7 +4572,7 @@ function App({ onLock }: { onLock?: (() => void) | undefined }) {
   }
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" data-theme={homeTheme}>
       <aside className="sidebar">
         <button
           className="brand-lockup"
@@ -4598,6 +4612,14 @@ function App({ onLock }: { onLock?: (() => void) | undefined }) {
             <p className="page-description">{section.description}</p>
           </div>
           <div className="topbar-actions">
+            <button
+              className="local-lock-button workspace-theme-toggle"
+              type="button"
+              onClick={() => setHomeTheme(homeTheme === "classic" ? "scifi" : "classic")}
+              aria-label={homeTheme === "classic" ? "Activer le thème Sci-Fi" : "Activer le thème Classic"}
+            >
+              {homeTheme === "classic" ? "◐ Sci-Fi" : "☼ Classic"}
+            </button>
             <span
               className="date-pill"
               title={dashboard.summary ? `Date du workspace · ${dashboard.summary.timezone}` : undefined}

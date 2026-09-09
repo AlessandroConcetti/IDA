@@ -1,6 +1,8 @@
 # Domotique — compatibilité, limites et prochaines étapes
 
-Vérification documentaire : **7 septembre 2026**. L’utilisateur confirme le choix de Home Assistant et indique que son installation est en cours. Son bon fonctionnement, son adresse et les appareils exposés ne sont pas encore vérifiés. Aucun compte, appareil ou réseau domestique n’a été consulté.
+Vérification documentaire : **9 septembre 2026**. L’utilisateur a fourni l’adresse exacte de son instance. Une requête GET sans credential à cette adresse a reçu **HTTP 200**, avec le titre « Home Assistant ». L’interface est joignable depuis le PC ; cela ne prouve pas l’accès authentifié à l’API ou la présence d’appareils. Aucun compte, état d’appareil ou service domotique n’a été consulté.
+
+L’adresse fournie utilise HTTP. Aucun token n’a été envoyé. Avant une lecture réelle : définir un trajet protégé (HTTPS correctement vérifié ou tunnel chiffré), un credential serveur dédié et révocable, puis une lampe pilote autorisée. L’adresse privée reste dans la configuration locale et la conversation, pas dans le code versionné. Aucun changement réseau, certificat, permission ou association d’appareil n’a été effectué.
 
 ## Ce qui est livré maintenant
 

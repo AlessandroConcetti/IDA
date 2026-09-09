@@ -1,17 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import { canPlayAmbience } from "./worlds";
 
-/** Une seule instance montée, aucune lecture avant un clic, aucun capteur. */
-export function WorldAmbience({ src }: { src: string }) {
-  const container = useRef<HTMLDivElement>(null);
+/** Décor muet : source montée uniquement si visible et autorisée par les préférences. */
+export function WorldAmbience({ src, paused = false }: { src: string; paused?: boolean }) {
+  const container = useRef<HTMLSpanElement>(null);
   const video = useRef<HTMLVideoElement>(null);
-  const [requested, setRequested] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [ready, setReady] = useState(false);
   const [visible, setVisible] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(true);
   const [saveData, setSaveData] = useState(true);
   useEffect(() => {
-    let inViewport = true;
+    let inViewport = false;
     const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
     const connection = (navigator as Navigator & { connection?: EventTarget & { saveData?: boolean } }).connection;
     const update = () => {
@@ -21,11 +21,10 @@ export function WorldAmbience({ src }: { src: string }) {
       setSaveData(connection?.saveData === true);
       if (!allowed) {
         video.current?.pause();
-        setRequested(false);
       }
     };
     update();
-    const surface = container.current?.closest(".world-environment");
+    const surface = container.current?.closest(".world-card, .world-environment");
     const observer =
       typeof IntersectionObserver === "undefined"
         ? undefined
@@ -44,7 +43,7 @@ export function WorldAmbience({ src }: { src: string }) {
       connection?.removeEventListener("change", update);
     };
   }, []);
-  const playing = canPlayAmbience({ requested, visible, reducedMotion, saveData, failed });
+  const playing = canPlayAmbience({ paused, visible, reducedMotion, saveData, failed });
   useEffect(() => {
     const element = video.current;
     if (!element) return;
@@ -54,7 +53,6 @@ export function WorldAmbience({ src }: { src: string }) {
       void element.play().catch(() => {
         if (current) {
           setFailed(true);
-          setRequested(false);
         }
       });
     } else element.pause();
@@ -64,40 +62,27 @@ export function WorldAmbience({ src }: { src: string }) {
     };
   }, [playing]);
   return (
-    <div className="world-ambience" ref={container}>
-      {requested && !failed ? (
+    <span
+      className="world-ambience"
+      ref={container}
+      aria-hidden="true"
+      data-state={playing && ready ? "playing" : "poster"}
+    >
+      {playing ? (
         <video
           ref={video}
           src={src}
           muted
+          autoPlay
           loop
           playsInline
-          preload="metadata"
+          preload="none"
           aria-hidden="true"
           tabIndex={-1}
-          onError={() => {
-            setFailed(true);
-            setRequested(false);
-          }}
+          onPlaying={() => setReady(true)}
+          onError={() => setFailed(true)}
         />
       ) : null}
-      <button
-        type="button"
-        className="world-media-toggle"
-        disabled={reducedMotion || saveData}
-        aria-pressed={playing}
-        onClick={() => {
-          setFailed(false);
-          setRequested(!requested);
-        }}
-      >
-        {playing ? "Arrêter l’ambiance vidéo" : failed ? "Réessayer la vidéo" : "Lire l’ambiance vidéo"}
-      </button>
-      {failed ? (
-        <p role="status">Vidéo indisponible. Vos espaces restent accessibles.</p>
-      ) : reducedMotion || saveData ? (
-        <p>Vidéo désactivée : mouvement réduit ou économie de données.</p>
-      ) : null}
-    </div>
+    </span>
   );
 }

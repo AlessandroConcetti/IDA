@@ -6,8 +6,16 @@ import "./styles.css";
 import "./aurora.css";
 import "./worlds.css";
 import "./home.css";
+import "./global-theme.css";
+import "./world-scenes.css";
+import { applyTheme, readTheme } from "./theme";
 
 const rootElement = document.getElementById("root");
+try {
+  applyTheme(readTheme(window.localStorage), document.documentElement);
+} catch {
+  applyTheme("classic", document.documentElement);
+}
 
 if (!rootElement) {
   throw new Error("Le point de montage #root est introuvable.");

@@ -17,6 +17,7 @@ export const worlds: readonly IdaWorld[] = [
   {
     id: "workspace",
     title: "Workspace",
+    video: "/design/user-20260909/ambient-2.mov",
     description: "Organiser · Gérer · Avancer",
     glyph: "◇",
     spaces: [
@@ -72,6 +73,7 @@ export const worlds: readonly IdaWorld[] = [
   {
     id: "home",
     title: "IDA Home",
+    video: "/design/user-20260909/ambient-3.mov",
     description: "Retrouver · Organiser · Avancer",
     glyph: "⌂",
     spaces: [
@@ -104,12 +106,12 @@ export function nearestWorldIndex(centers: readonly number[], viewportCenter: nu
 }
 
 export interface AmbienceState {
-  requested: boolean;
+  paused: boolean;
   visible: boolean;
   reducedMotion: boolean;
   saveData: boolean;
   failed: boolean;
 }
 export function canPlayAmbience(state: AmbienceState): boolean {
-  return state.requested && state.visible && !state.reducedMotion && !state.saveData && !state.failed;
+  return !state.paused && state.visible && !state.reducedMotion && !state.saveData && !state.failed;
 }

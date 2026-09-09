@@ -1,0 +1,149 @@
+/* Scènes fournies par l'utilisateur : une image partagée, pas de nouveaux appels IA. */
+.world-card,
+.world-environment {
+  --scene-x: 0%;
+  --scene-y: 0%;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+[data-world="travel"] {
+  --scene-x: 33.333%;
+  --scene-y: 0%;
+}
+[data-world="music"] {
+  --scene-x: 66.667%;
+  --scene-y: 0%;
+}
+[data-world="social"] {
+  --scene-x: 100%;
+  --scene-y: 0%;
+}
+[data-world="home"] {
+  --scene-x: 0%;
+  --scene-y: 50%;
+}
+[data-world="finance"] {
+  --scene-x: 33.333%;
+  --scene-y: 50%;
+}
+[data-world="health"] {
+  --scene-x: 66.667%;
+  --scene-y: 50%;
+}
+[data-world="research"],
+[data-world="legal"] {
+  --scene-x: 100%;
+  --scene-y: 50%;
+}
+[data-world="creative"] {
+  --scene-x: 0%;
+  --scene-y: 100%;
+}
+[data-world="admin"] {
+  --scene-x: 66.667%;
+  --scene-y: 100%;
+}
+[data-world="idacar"] {
+  --scene-x: 100%;
+  --scene-y: 100%;
+}
+.world-card::before,
+.world-environment::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -3;
+  background: url("/design/user-20260909/world-scenes.png") var(--scene-x) var(--scene-y) / 400% 300%;
+}
+.world-card::before {
+  left: 50%;
+  right: auto;
+  height: 100%;
+  aspect-ratio: 16 / 9;
+  transform: translateX(-50%);
+}
+.world-card::after,
+.world-environment::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(transparent 20%, #111c2799 55%, #07111ded);
+}
+[data-world="home"]::before {
+  background: url("/design/user-20260909/classic-atrium.png") center / cover;
+}
+.world-card {
+  min-height: 360px;
+  color: #fff;
+  background: #182a35;
+  border-color: #eadbc299;
+}
+.world-card :is(.world-glyph, .world-card-status, .world-card-description, .world-card-media) {
+  color: #f2f2ee;
+}
+.world-card-status {
+  align-self: center;
+  padding: 5px 9px;
+  background: #0a1421a6;
+  border-radius: 20px;
+}
+.world-card[aria-pressed="true"] {
+  border-color: #fbe0b9;
+  box-shadow:
+    0 0 0 1px #fff4,
+    0 10px 30px #1117;
+}
+.world-ambience {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  margin: 0;
+  pointer-events: none;
+}
+.world-ambience video {
+  z-index: auto;
+  opacity: 0;
+  transition: opacity 450ms ease;
+}
+.world-ambience[data-state="playing"] video {
+  opacity: 1;
+}
+.world-environment {
+  color: #f4f6f8;
+  background: #0d1a27;
+  min-height: 540px;
+}
+.world-environment .world-glyph {
+  color: #f5debd;
+}
+.world-environment .world-spaces button {
+  backdrop-filter: blur(12px);
+}
+.world-environment-heading,
+.world-back {
+  position: relative;
+}
+.world-environment-heading,
+.world-video-pending {
+  color: var(--world-ink);
+}
+.world-motion-toggle {
+  margin-top: 15px;
+  font-size: 0.875rem;
+  min-height: 44px;
+}
+@media (max-width: 600px) {
+  .aurora-home[data-theme="classic"] {
+    background-image: linear-gradient(#fff1, #ffffff35), url("/design/user-20260909/classic-atrium.png");
+    background-position: center top;
+  }
+  .world-card {
+    min-height: 310px;
+  }
+  .world-environment {
+    min-height: 560px;
+  }
+}

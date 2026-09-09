@@ -24,6 +24,7 @@ export function WorldWheel({
     () => startOpened && worlds.some((item) => item.id === initialWorldId && item.spaces.length > 0),
   );
   const [grid, setGrid] = useState(false);
+  const [ambiencePaused, setAmbiencePaused] = useState(false);
   const rail = useRef<HTMLDivElement>(null);
   const cards = useRef<(HTMLButtonElement | null)[]>([]);
   const title = useRef<HTMLHeadingElement>(null);
@@ -55,10 +56,11 @@ export function WorldWheel({
   }, [opened, grid]);
   if (!world) return null;
   return (
-    <section className="worlds" aria-label="La Roue des Mondes">
+    <section className="worlds" aria-label="La Roue des Mondes" data-theme={theme}>
       {opened ? (
         <section
           className="world-environment"
+          data-world={world.id}
           aria-label={`Environnement ${world.title}`}
           onKeyDown={(event) => {
             if (event.key === "Escape") {
@@ -90,7 +92,7 @@ export function WorldWheel({
             ))}
           </div>
           {world.video ? (
-            <WorldAmbience key={`${world.id}:${theme}`} src={world.video} />
+            <WorldAmbience key={world.id} src={world.video} paused={ambiencePaused} />
           ) : (
             <p className="world-video-pending">Ambiance vidéo à venir</p>
           )}
@@ -116,6 +118,7 @@ export function WorldWheel({
                 }}
                 type="button"
                 className="world-card"
+                data-world={item.id}
                 aria-pressed={selected === index}
                 aria-label={`Sélectionner ${item.title}`}
                 style={
@@ -133,6 +136,9 @@ export function WorldWheel({
                   }
                 }}
               >
+                {!grid && selected === index && item.video ? (
+                  <WorldAmbience src={item.video} paused={ambiencePaused} />
+                ) : null}
                 <span className="world-card-status">{item.spaces.length ? "Espaces disponibles" : "À venir"}</span>
                 <span className="world-glyph" aria-hidden="true">
                   {item.glyph}
@@ -189,6 +195,14 @@ export function WorldWheel({
           </button>
         </>
       )}
+      <button
+        className="world-grid-toggle world-motion-toggle"
+        type="button"
+        aria-pressed={ambiencePaused}
+        onClick={() => setAmbiencePaused(!ambiencePaused)}
+      >
+        {ambiencePaused ? "Ambiances animées désactivées" : "Désactiver les ambiances animées"}
+      </button>
     </section>
   );
 }

@@ -83,7 +83,7 @@ describe("Roue des Mondes : navigation sans pouvoirs supplémentaires", () => {
       createElement(AuroraHome, { onNavigate, onCommand, onThemeChange, theme, source: "local", isSubmitting: false }),
     );
     expect(html).toContain(`data-theme="${theme}"`);
-    expect(html).toContain("Thème de l’accueil");
+    expect(html).toContain("Thème global d’IDA");
     expect(html).not.toMatch(/<video|autoplay|<iframe/iu);
     expect(onNavigate).not.toHaveBeenCalled();
     expect(onCommand).not.toHaveBeenCalled();
@@ -109,24 +109,26 @@ describe("Roue des Mondes : navigation sans pouvoirs supplémentaires", () => {
   });
 });
 
-describe("Ambiance vidéo opt-in", () => {
-  it("ne rend aucun lecteur ni source avant une demande explicite", () => {
+describe("Ambiance vidéo automatique et économe", () => {
+  it("attend les préférences et la visibilité avant de monter une source", () => {
     const html = renderToStaticMarkup(createElement(WorldAmbience, { src: "/design/world-reference-v1.mp4" }));
-    expect(html).toContain("Lire l’ambiance vidéo");
+    expect(html).toContain('data-state="poster"');
+    expect(html).not.toContain("<button");
     expect(html).not.toContain("<video");
     expect(html).not.toContain(".mp4");
   });
-  it("refuse chaque condition empêchant la lecture, même après une demande", () => {
-    const allowed = { requested: true, visible: true, reducedMotion: false, saveData: false, failed: false };
+  it("respecte l’arrêt manuel, la visibilité, l’économie de données et le mouvement réduit", () => {
+    const allowed = { paused: false, visible: true, reducedMotion: false, saveData: false, failed: false };
     expect(canPlayAmbience(allowed)).toBe(true);
-    expect(canPlayAmbience({ ...allowed, requested: false })).toBe(false);
+    expect(canPlayAmbience({ ...allowed, paused: true })).toBe(false);
     expect(canPlayAmbience({ ...allowed, visible: false })).toBe(false);
     expect(canPlayAmbience({ ...allowed, reducedMotion: true })).toBe(false);
     expect(canPlayAmbience({ ...allowed, saveData: true })).toBe(false);
     expect(canPlayAmbience({ ...allowed, failed: true })).toBe(false);
   });
-  it("référence uniquement la vidéo fournie, sans image de remplacement ni URL externe", () => {
-    expect(worlds.filter((world) => world.video).map((world) => world.id)).toEqual(["music"]);
+  it("référence uniquement des vidéos fournies et locales", () => {
+    expect(worlds.filter((world) => world.video).map((world) => world.id)).toEqual(["workspace", "music", "home"]);
+    expect(worlds.filter((world) => world.video).every((world) => world.video?.startsWith("/design/"))).toBe(true);
     expect(worlds[initialWorldIndex]?.video).toBe("/design/world-reference-v1.mp4");
   });
 });

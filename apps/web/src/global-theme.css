@@ -1,0 +1,149 @@
+/* Même palette sur l'accueil, les modules et le verrou ; jamais de pouvoir métier. */
+:root {
+  --ida-panel: #fbfcfadf;
+  --ida-control: #f3f6f6;
+  --ida-line: #adbdc280;
+  --ida-hover: #dbe7ed;
+}
+:root[data-theme="scifi"],
+.app-shell[data-theme="scifi"] {
+  --ida-text: #e5edf3;
+  --ida-muted: #a9bdca;
+  --ida-accent: #9dd9f0;
+  --ida-success: #86dcb9;
+  --ida-warning: #f4c98a;
+  --ida-danger: #ffacb5;
+  --ida-background: #070e17;
+  --ida-glass: #102131e8;
+  --ida-glass-border: #9ccee745;
+  --ida-focus: #a4dfff;
+  --ida-panel: #111f2ded;
+  --ida-control: #172b3c;
+  --ida-line: #6f97b257;
+  --ida-hover: #234054;
+  color: var(--ida-text);
+  color-scheme: dark;
+}
+:root[data-theme="scifi"] body {
+  background: var(--ida-background);
+}
+.app-shell[data-theme="scifi"] {
+  background: radial-gradient(ellipse at 80% 0%, #21385077, transparent 58%), var(--ida-background);
+}
+.app-shell[data-theme="scifi"] :is(.sidebar, .mobile-bottom-bar, .mobile-more-sheet) {
+  background: #0b1724f5;
+  border-color: var(--ida-line);
+}
+.app-shell[data-theme="scifi"]
+  :is(.panel, .command-card, .message.assistant, .message.user, .access-card, .campaign-brief) {
+  background: var(--ida-panel);
+  border-color: var(--ida-line);
+  box-shadow: 0 12px 35px #0002;
+}
+.app-shell :is(input:not([type="checkbox"]), select, textarea) {
+  color: var(--ida-text);
+  background: var(--ida-control);
+  border-color: var(--ida-line);
+}
+.app-shell :is(input, textarea)::placeholder {
+  color: var(--ida-muted);
+  opacity: 1;
+}
+.app-shell[data-theme="scifi"]
+  :is(
+    .workspace-avatar,
+    .profile-button,
+    .assistant-mark,
+    .message-avatar,
+    .send-button,
+    .local-lock-button,
+    .navigation-item.is-active,
+    .command-suggestion
+  ) {
+  background: var(--ida-control);
+  color: var(--ida-text);
+  border-color: var(--ida-line);
+}
+.app-shell[data-theme="scifi"]
+  :is(.eyebrow, .navigation-glyph, .brand-symbol, .access-reveal, .page-description, .mobile-more-sheet h2) {
+  color: var(--ida-muted);
+}
+.app-shell[data-theme="scifi"]
+  :is(.navigation-item:hover, .send-button:hover:not(:disabled), .command-suggestion:hover) {
+  background: var(--ida-hover);
+}
+.app-shell[data-theme="scifi"] .navigation-item.is-active {
+  box-shadow: inset 3px 0 0 var(--ida-accent);
+}
+.app-shell[data-theme="scifi"] .assistant-mark span {
+  background: var(--ida-accent);
+}
+.app-shell[data-theme="scifi"]
+  :is(
+    .approval-proposal,
+    .approval-detail,
+    .editorial-calendar-item,
+    .activity-log-entry,
+    .track-card,
+    .release-card,
+    .media-card,
+    .campaign-card,
+    .task-card
+  ) {
+  border-color: var(--ida-line);
+}
+.workspace-theme-toggle {
+  min-height: 44px;
+  white-space: nowrap;
+}
+.app-shell[data-theme="scifi"]
+  :is(
+    .editorial-calendar-tabs,
+    .editorial-calendar-navigation button,
+    .editorial-calendar-item,
+    .approval-plan-line,
+    .api-pill
+  ) {
+  background: var(--ida-control);
+  border-color: var(--ida-line);
+  color: var(--ida-text);
+}
+:root[data-theme="scifi"] .access-shell {
+  background:
+    linear-gradient(#071322a3, #071322d9),
+    url("/design/scifi-observatory.png") center / cover;
+  color: var(--ida-text);
+}
+:root[data-theme="scifi"] :is(.access-card, .access-orb) {
+  background: var(--ida-panel);
+  border-color: var(--ida-line);
+}
+:root[data-theme="scifi"]
+  :is(
+    .access-brand,
+    .access-card h1,
+    .access-form label,
+    .access-notice,
+    .access-reveal,
+    .access-secondary,
+    .access-intro,
+    .access-help,
+    .access-footnote,
+    .access-recovery,
+    .access-local-note,
+    .access-brand span
+  ) {
+  color: var(--ida-text);
+}
+:root[data-theme="scifi"] :is(.access-form input, .access-primary) {
+  background: var(--ida-control);
+  border-color: var(--ida-line);
+  color: var(--ida-text);
+}
+@media (max-width: 760px) {
+  .app-shell .workspace-theme-toggle {
+    margin: 8px 0;
+    width: auto;
+    padding: 10px 16px;
+  }
+}
