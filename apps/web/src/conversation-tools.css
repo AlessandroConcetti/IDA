@@ -89,3 +89,12 @@
 .catalog-detail-actions button {
   min-height: 44px;
 }
+
+.linked-track-media > button {
+  min-height: 44px;
+  margin: 8px 0 16px;
+}
+
+.linked-track-media .media-grid {
+  margin: 16px 0;
+}

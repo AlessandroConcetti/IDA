@@ -579,7 +579,9 @@ paths:
       operationId: listMedia
       summary: Recherche les métadonnées de médias du workspace local
       description: >-
-        Lecture locale bornée et sans effet d'écriture. Les filtres se
+        Lecture locale bornée sans effet d'écriture, autorisée par Identity et
+        CONTENT/search_media READ dans le Tool Gateway. Identité et droits
+        initiaux/courants sont revalidés après la lecture SQL. Les filtres se
         cumulent ; le workspace est résolu côté serveur et ne peut pas être
         fourni par le client. Les filtres releaseId et trackId lisent seulement
         des références déjà portées par les assets de ce workspace : une valeur
@@ -647,6 +649,8 @@ paths:
                 $ref: '#/components/schemas/MediaListResponse'
         '400':
           $ref: '#/components/responses/InvalidMediaQuery'
+        '403':
+          $ref: '#/components/responses/Forbidden'
     post:
       operationId: importMedia
       summary: Importe un média local privé dans la Content Library
@@ -695,7 +699,9 @@ paths:
         workspace ou paramètre de fichier ne vient du client. La réponse garde
         le MIME validé, Cache-Control private, no-store et accepte une seule
         plage HTTP bytes. Un PDF ou un média sans fichier local est traité
-        comme absent, sans détail sur le stockage.
+        comme absent, sans détail sur le stockage. Identity et le Tool Gateway
+        CONTENT/get_media READ autorisent la lecture ; identité et droits
+        initiaux/courants sont revalidés après la lecture privée, avant réponse.
       parameters:
         - name: mediaId
           in: path
@@ -740,6 +746,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '416':
           description: Plage HTTP invalide pour le média privé.
           headers:

@@ -4295,6 +4295,7 @@ function SectionContent({
         onShowLibrary={() => onNavigate(activeId)}
         renderTrack={(track) => <TrackPanel items={[track]} source="api" />}
         renderMedia={(media) => <MediaGrid assets={[media]} detailed />}
+        renderLinkedMedia={(assets) => <MediaGrid assets={assets} detailed />}
       />
     );
   }

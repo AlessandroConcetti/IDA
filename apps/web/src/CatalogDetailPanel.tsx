@@ -4,6 +4,7 @@ import { onWorkspaceMutation } from "./api-transport";
 import type { CatalogTarget } from "./catalog-navigation";
 import type { MediaAsset, Track } from "./data";
 import { SnapshotReader } from "./snapshot-reader";
+import { TrackMediaPanel } from "./TrackMediaPanel";
 import "./conversation-tools.css";
 
 type CatalogDetail = { kind: "track"; track: Track } | { kind: "media"; media: MediaAsset };
@@ -14,12 +15,14 @@ export function CatalogDetailPanel({
   onShowLibrary,
   renderTrack,
   renderMedia,
+  renderLinkedMedia,
 }: {
   target: CatalogTarget;
   onBack: () => void;
   onShowLibrary: () => void;
   renderTrack: (track: Track) => ReactNode;
   renderMedia: (media: MediaAsset) => ReactNode;
+  renderLinkedMedia?: (assets: MediaAsset[]) => ReactNode;
 }) {
   const { id, kind } = target;
   const reader = useMemo(
@@ -76,6 +79,9 @@ export function CatalogDetailPanel({
           ? renderTrack(state.data.track)
           : renderMedia(state.data.media)
         : null}
+      {state.phase === "ready" && state.data.kind === "track" && renderLinkedMedia ? (
+        <TrackMediaPanel key={id} trackId={id} renderMedia={renderLinkedMedia} />
+      ) : null}
     </div>
   );
 }

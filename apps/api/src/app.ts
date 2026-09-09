@@ -1094,6 +1094,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     { toolKey: "create_track", moduleKey: "MUSIC", permission: "WRITE" },
     { toolKey: "get_track", moduleKey: "MUSIC", permission: "READ" },
     { toolKey: "get_media", moduleKey: "CONTENT", permission: "READ" },
+    { toolKey: "search_media", moduleKey: "CONTENT", permission: "READ" },
     { toolKey: "create_campaign", moduleKey: "CAMPAIGNS", permission: "WRITE" },
     { toolKey: "link_campaign_release", moduleKey: "CAMPAIGNS", permission: "WRITE" },
     { toolKey: "link_campaign_track", moduleKey: "CAMPAIGNS", permission: "WRITE" },
@@ -1121,7 +1122,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     return identity;
   };
 
-  const revalidateDetailRead = async (request: FastifyRequest, authorization: ToolAuthorizationRequest) => {
+  const revalidateCatalogRead = async (request: FastifyRequest, authorization: ToolAuthorizationRequest) => {
     const identity = assertToolAuthorized(request, authorization);
     const current = await database.resolveRequestIdentityContext(
       identity.session.id,
@@ -2074,7 +2075,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     const tool = { toolKey: "get_track", moduleKey: "MUSIC", permission: "READ" } as const;
     const identity = assertToolAuthorized(request, tool);
     const track = await database.findTrack(identity.workspaceId, trackId.data);
-    await revalidateDetailRead(request, tool);
+    await revalidateCatalogRead(request, tool);
     if (!track) {
       return reply.status(404).send({
         error: { code: "TRACK_NOT_FOUND", message: "Morceau introuvable dans ce workspace." },
@@ -2117,7 +2118,8 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   });
 
   app.get("/v1/media", async (request) => {
-    const identity = getRequestIdentityContext(request);
+    const tool = { toolKey: "search_media", moduleKey: "CONTENT", permission: "READ" } as const;
+    const identity = assertToolAuthorized(request, tool);
     const rawQuery = isRecord(request.query) ? request.query : {};
     // Ne lire que les clés de filtre reconnues. Un workspace transmis par le
     // client est donc volontairement ignoré : le scope vient du contexte
@@ -2137,6 +2139,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     }
 
     const media = await database.listMedia(identity.workspaceId, query.data);
+    await revalidateCatalogRead(request, tool);
 
     return {
       data: media.map((asset) => toMediaAssetResponse(asset, identity.workspaceId)),
@@ -2157,7 +2160,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     const tool = { toolKey: "get_media", moduleKey: "CONTENT", permission: "READ" } as const;
     const identity = assertToolAuthorized(request, tool);
     const media = await database.findMedia(identity.workspaceId, mediaId.data);
-    await revalidateDetailRead(request, tool);
+    await revalidateCatalogRead(request, tool);
     if (!media) {
       return reply.status(404).send({
         error: { code: "MEDIA_NOT_FOUND", message: "Média introuvable dans ce workspace." },
@@ -2167,7 +2170,8 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   });
 
   app.get("/v1/media/:mediaId/preview", async (request, reply) => {
-    const identity = getRequestIdentityContext(request);
+    const tool = { toolKey: "get_media", moduleKey: "CONTENT", permission: "READ" } as const;
+    const identity = assertToolAuthorized(request, tool);
     const params = mediaPreviewParamsSchema.safeParse(request.params);
 
     if (!params.success) {
@@ -2176,6 +2180,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
 
     const media = await database.findPrivateMediaFile(identity.workspaceId, params.data.mediaId);
     const buffer = media ? await readPrivateMediaPreview(storageDir, identity.workspaceId, media) : undefined;
+    await revalidateCatalogRead(request, tool);
 
     // Même réponse pour une ressource inexistante, hors workspace, non
     // prévisualisable ou manquante du stockage. Aucun détail de stockage n'est

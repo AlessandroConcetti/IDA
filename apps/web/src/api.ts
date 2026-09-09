@@ -1549,7 +1549,40 @@ export async function fetchMediaAssets(input: MediaSearchInput = {}): Promise<Me
 
   query.set("limit", String(input.limit ?? 24));
 
-  return toMediaAssets(await getApiJson(`/v1/media?${query.toString()}`));
+  const payload = await getApiJson(`/v1/media?${query.toString()}`);
+  if (input.trackId) {
+    const rows = isRecord(payload) ? payload.data : undefined;
+    // Ne jamais présenter la bibliothèque entière comme une sélection liée,
+    // même si une API ancienne/incorrecte ignore le filtre envoyé.
+    if (
+      !Array.isArray(rows) ||
+      rows.length > (input.limit ?? 24) ||
+      !rows.every(
+        (row) =>
+          isRecord(row) &&
+          row.trackId === input.trackId &&
+          isCatalogId(row.id, "media") &&
+          typeof row.filename === "string" &&
+          row.filename.trim().length > 0 &&
+          row.filename.length <= 500 &&
+          typeof row.type === "string" &&
+          ["VIDEO", "AUDIO", "IMAGE", "DOCUMENT", "OTHER"].includes(row.type) &&
+          typeof row.status === "string" &&
+          ["UNUSED", "USED", "SCHEDULED", "PUBLISHED", "ARCHIVED"].includes(row.status),
+      )
+    ) {
+      throw new IdaApiError("Les médias reçus ne correspondent pas au morceau sélectionné.");
+    }
+    if (new Set(rows.map((row) => row.id)).size !== rows.length) {
+      throw new IdaApiError("La sélection de médias contient des références en double.");
+    }
+  }
+  return toMediaAssets(payload);
+}
+
+export async function fetchTrackMedia(trackId: string): Promise<MediaAsset[]> {
+  if (!isCatalogId(trackId, "track")) throw new IdaApiError("La référence du morceau est invalide.");
+  return fetchMediaAssets({ trackId, limit: 50 });
 }
 
 export async function fetchContentRotationCandidates(
