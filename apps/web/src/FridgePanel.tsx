@@ -1,0 +1,29 @@
+import { type FormEvent, useState } from "react";
+
+export type FridgeItem = { id: number; name: string; quantity: string; toBuy: boolean };
+export function FridgePanel({ items, onChange }: { items: FridgeItem[]; onChange: (items: FridgeItem[]) => void }) {
+  const [name, setName] = useState("");
+  const [quantity, setQuantity] = useState("");
+  function add(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!name.trim() || items.length >= 100) return;
+    onChange([...items, { id: Math.max(0, ...items.map((item) => item.id)) + 1, name: name.trim(), quantity: quantity.trim(), toBuy: false }]);
+    setName(""); setQuantity("");
+  }
+  return <section className="scene-panel fridge-panel" aria-labelledby="fridge-title">
+    <p className="scene-kicker">IDA HOME / CUISINE</p><h2 id="fridge-title">Mon frigo</h2>
+    <p>Ajoutez un produit et marquez ce qu’il faut racheter.</p>
+    <p className="scene-notice">Inventaire manuel de démonstration, effacé en quittant ce monde. Aucun frigo ni service de courses connecté.</p>
+    <form onSubmit={add} className="fridge-form">
+      <label>Produit<input value={name} onChange={(event) => setName(event.target.value)} required maxLength={100} autoComplete="off" placeholder="Ex. Yaourts" /></label>
+      <label>Quantité<input value={quantity} onChange={(event) => setQuantity(event.target.value)} maxLength={40} autoComplete="off" placeholder="Ex. 4 pots" /></label>
+      <button type="submit" disabled={!name.trim() || items.length >= 100}>Ajouter au frigo +</button>
+    </form>
+    {items.length ? <ul className="fridge-items">{items.map((item) => <li key={item.id}>
+      <div><strong>{item.name}</strong><span>{item.quantity || "Quantité non précisée"}</span></div>
+      <label><input type="checkbox" checked={item.toBuy} onChange={() => onChange(items.map((value) => value.id === item.id ? { ...value, toBuy: !value.toBuy } : value))} />À racheter</label>
+      <button type="button" aria-label={`Retirer ${item.name}`} onClick={() => onChange(items.filter((value) => value.id !== item.id))}>Retirer</button>
+    </li>)}</ul> : <p className="scene-empty">Votre inventaire est vide. Aucun produit ajouté automatiquement.</p>}
+    <p role="status">{items.length} produit{items.length > 1 ? "s" : ""} · {items.filter((item) => item.toBuy).length} à racheter</p>
+  </section>;
+}

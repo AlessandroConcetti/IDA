@@ -1,7 +1,10 @@
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import type { CommandCenterSummary } from "./api";
 import type { NavigationId } from "./data";
-import { HomeConnections } from "./HomeConnections";
+import { CareOnboarding } from "./CareProfile";
+import { ImmersivePresence } from "./ImmersivePresence";
+import { ThemePicker } from "./ThemePicker";
+import { themePalette } from "./theme";
 import { HomeMetrics, HomeOverview } from "./HomeOverview";
 import { homeWorkspaceDate } from "./home-overview";
 import { type HomeStartView, readHomeStart, saveHomeStart } from "./home-start";
@@ -55,6 +58,8 @@ const moreSpaces: { title: string; target: NavigationId }[] = [
 
 export function AuroraHome({
   onNavigate,
+  onEnvironmentNavigate,
+  initialWorldId,
   onCommand,
   onLock,
   isSubmitting,
@@ -64,6 +69,8 @@ export function AuroraHome({
   onThemeChange,
 }: {
   onNavigate: (id: NavigationId) => void;
+  onEnvironmentNavigate?: ((id: NavigationId, worldId: string) => void) | undefined;
+  initialWorldId?: string | undefined;
   onCommand: (command: string) => void;
   onLock?: (() => void) | undefined;
   isSubmitting: boolean;
@@ -75,6 +82,7 @@ export function AuroraHome({
   const [command, setCommand] = useState("");
   const [expanded, setExpanded] = useState(false);
   const [solid, setSolid] = useState(false);
+  const [welcome, setWelcome] = useState(false);
   const more = useRef<HTMLElement>(null);
   const worldArea = useRef<HTMLDivElement>(null);
   const commandInput = useRef<HTMLTextAreaElement>(null);
@@ -86,7 +94,9 @@ export function AuroraHome({
       return "worlds";
     }
   });
-  const [wheelEntry, setWheelEntry] = useState(() => ({ view: startView, revision: 0 }));
+  const [wheelEntry, setWheelEntry] = useState<{ view: HomeStartView; revision: number; worldId?: string | undefined }>(
+    () => ({ view: startView, revision: 0, worldId: initialWorldId }),
+  );
   const [startNotice, setStartNotice] = useState<string | undefined>();
 
   function showWorlds() {
@@ -116,8 +126,10 @@ export function AuroraHome({
     event.preventDefault();
     if (command.trim() && !isSubmitting) onCommand(command.trim());
   }
+  if (welcome) return <CareOnboarding onComplete={() => setWelcome(false)} />;
+  if (theme === "immersive" && onThemeChange) return <ImmersivePresence onThemeChange={onThemeChange} onNavigate={onNavigate} onWelcome={() => setWelcome(true)} />;
   return (
-    <div className="aurora-home ida-home-layout" data-theme={theme} data-surface={solid ? "solid" : "glass"}>
+    <div className="aurora-home ida-home-layout" data-theme={themePalette(theme)} data-surface={solid ? "solid" : "glass"}>
       <a className="home-skip-link" href="#aurora-command">
         Aller à la demande IDA
       </a>
@@ -133,17 +145,10 @@ export function AuroraHome({
         <div className="aurora-access-actions">
           <span className="home-workspace-date">{homeWorkspaceDate(readySummary)}</span>
           {onThemeChange ? (
-            <fieldset className="home-theme-picker">
-              <legend className="sr-only">Thème global d’IDA</legend>
-              <button type="button" aria-pressed={theme === "classic"} onClick={() => onThemeChange("classic")}>
-                Classic
-              </button>
-              <button type="button" aria-pressed={theme === "scifi"} onClick={() => onThemeChange("scifi")}>
-                Sci-Fi
-              </button>
-            </fieldset>
+            <ThemePicker value={theme} onChange={onThemeChange} />
           ) : null}
           <span className="aurora-local-status">{onLock ? "Espace local privé" : "Démo locale"}</span>
+          <button type="button" className="scene-profile-entry" onClick={() => setWelcome(true)}>Premiers pas</button>
           {onLock ? (
             <button
               className="aurora-icon-button"
@@ -275,9 +280,11 @@ export function AuroraHome({
           <WorldWheel
             key={wheelEntry.revision}
             onNavigate={onNavigate}
+            onEnvironmentNavigate={onEnvironmentNavigate}
             theme={theme}
-            initialWorldId={wheelEntry.view === "home" ? "home" : "music"}
-            startOpened={wheelEntry.view === "home"}
+            onThemeChange={onThemeChange}
+            initialWorldId={wheelEntry.worldId ?? (wheelEntry.view === "home" ? "home" : "music")}
+            startOpened={Boolean(wheelEntry.worldId) || wheelEntry.view === "home"}
             renderEnvironment={(worldId) =>
               worldId === "home" ? (
                 <div className="ida-home-environment-content">
@@ -295,10 +302,9 @@ export function AuroraHome({
                   <p className="home-start-notice" role="status">
                     {startNotice ?? "Facultatif · préférence locale à ce navigateur, sans changer votre compte."}
                   </p>
-                  <HomeOverview source={source} timezone={readySummary?.timezone} onNavigate={onNavigate} />
-                  <HomeConnections />
+                  <HomeOverview source={source} timezone={readySummary?.timezone} onNavigate={(id) => onEnvironmentNavigate ? onEnvironmentNavigate(id, "home") : onNavigate(id)} />
                   <p className="home-future-note">
-                    Courses et budget : à venir. Aucun service bancaire n’est connecté.
+                    Frigo : brouillon accessible depuis les espaces de la maison. Budget et banque : non connectés.
                   </p>
                 </div>
               ) : null

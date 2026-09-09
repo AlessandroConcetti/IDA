@@ -1,5 +1,6 @@
 import { type FormEvent, type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { type AccessView, LocalAccessController } from "./local-access";
+import { CareOnboarding } from "./CareProfile";
 import "./local-access.css";
 
 function AccessForm({
@@ -131,6 +132,11 @@ function AccessForm({
 export function LocalAccessGate({ children }: { children: (onLock?: () => void) => ReactNode }) {
   const [controller] = useState(() => new LocalAccessController());
   const view = useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getSnapshot);
+  const [welcomePending, setWelcomePending] = useState(false);
+
+  useEffect(() => {
+    if (view.phase === "closed" && view.screen === "setup") setWelcomePending(true);
+  }, [view]);
 
   useEffect(() => controller.connect(), [controller]);
   useEffect(() => {
@@ -162,7 +168,10 @@ export function LocalAccessGate({ children }: { children: (onLock?: () => void) 
     };
   }, [controller]);
 
-  if (view.phase === "open") return children(view.mode === "LOCAL_LOCK" ? () => void controller.lock() : undefined);
+  if (view.phase === "open") {
+    if (welcomePending) return <CareOnboarding onComplete={() => setWelcomePending(false)} />;
+    return children(view.mode === "LOCAL_LOCK" ? () => void controller.lock() : undefined);
+  }
   const setup = view.phase === "closed" && view.screen === "setup";
   const busy = view.phase === "checking" || view.phase === "locking";
 

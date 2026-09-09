@@ -10,7 +10,7 @@ export interface IdaWorld {
   video?: string;
 }
 
-export type HomeTheme = "classic" | "scifi";
+export type HomeTheme = "classic" | "scifi" | "immersive";
 
 export const worlds: readonly IdaWorld[] = [
   { id: "travel", title: "Travel", description: "Découvrir · Explorer · Planifier", glyph: "↗", spaces: [] },
@@ -69,7 +69,7 @@ export const worlds: readonly IdaWorld[] = [
   { id: "research", title: "Research", description: "Apprendre · Chercher · Comprendre", glyph: "⌕", spaces: [] },
   { id: "admin", title: "Admin", description: "Documents · Démarches · Organisation", glyph: "▤", spaces: [] },
   { id: "legal", title: "Legal", description: "Comprendre · Vérifier · Accompagner", glyph: "⚖", spaces: [] },
-  { id: "health", title: "Health", description: "Prendre soin · Suivre · Équilibrer", glyph: "♡", spaces: [] },
+  { id: "health", title: "IDA Care", description: "Votre corps · Votre rythme · Vos choix", glyph: "♡", spaces: [] },
   {
     id: "home",
     title: "IDA Home",
@@ -83,6 +83,14 @@ export const worlds: readonly IdaWorld[] = [
     ],
   },
   { id: "idacar", title: "IDACAR", description: "Mobilité · Entretien · Trajets", glyph: "↔", spaces: [] },
+  {
+    id: "fabrique", title: "La Fabrique", description: "Imaginer · Organiser · Construire", glyph: "✧",
+    spaces: [
+      { title: "Agents & capacités", target: "system", detail: "Consulter les agents et les outils réellement disponibles." },
+      { title: "Mes projets et tâches", target: "tasks", detail: "Préparer et suivre le travail dans votre espace existant." },
+      { title: "Contenus créatifs", target: "content", detail: "Retrouver vos ressources dans la bibliothèque partagée." },
+    ],
+  },
 ];
 
 export const initialWorldIndex = worlds.findIndex((world) => world.id === "music");

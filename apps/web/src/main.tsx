@@ -10,6 +10,7 @@ import "./home.css";
 import "./global-theme.css";
 import "./world-scenes.css";
 import "./glass.css";
+import "./environments.css";
 import { applyTheme, readTheme } from "./theme";
 
 const rootElement = document.getElementById("root");

@@ -2,6 +2,8 @@
 
 ## Portée livrée — mise à jour du 9 septembre 2026
 
+**Mise à jour frontend :** les cartes ouvrent maintenant leurs environnements plein écran. IDA Care, La Fabrique, Frigo dans IDA Home et thème Immersive robot sont décrits dans [Environnements plein écran](ENVIRONMENT_INTERFACES.md), avec les limites de démonstration et la provenance des décors. Les descriptions et recettes ci-dessous retracent les tranches antérieures ; leurs tests ne valident pas automatiquement ces nouveaux écrans.
+
 La vision validée organise IDA par **monde → environnement → espaces → agents → outils**. Cette tranche construit la navigation, pas de nouveaux agents ni de nouvelles capacités métier. Le monolithe modulaire et tous les modules musicaux et sociaux sont conservés.
 
 | Monde | Espaces réellement reliés |

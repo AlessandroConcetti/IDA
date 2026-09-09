@@ -1,5 +1,6 @@
 import { type DragEvent, type FormEvent, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { AuroraHome } from "./AuroraHome";
+import { ThemePicker } from "./ThemePicker";
 import {
   type ActivityLogRecord,
   type AgentManifestRecord,
@@ -80,8 +81,8 @@ import { statusLabelFr } from "./labels.fr";
 import { MediaProposalComposer } from "./MediaProposalComposer";
 import { canPrepareMedia } from "./post-proposal";
 import { SnapshotReader } from "./snapshot-reader";
-import { applyTheme, readTheme } from "./theme";
-import type { HomeTheme } from "./worlds";
+import { applyTheme, readTheme, themePalette } from "./theme";
+import { type HomeTheme, worlds } from "./worlds";
 
 interface ConversationMessage {
   id: string;
@@ -4386,6 +4387,9 @@ function App({ onLock }: { onLock?: (() => void) | undefined }) {
     }
   }, [homeTheme]);
   const [activeId, setActiveId] = useState<NavigationId>("home");
+  // Repère de navigation éphémère, sans nouveau routeur ni état métier.
+  const [environmentOrigin, setEnvironmentOrigin] = useState<string | undefined>();
+  const [homeEntryWorldId, setHomeEntryWorldId] = useState<string | undefined>();
   const [isOverviewOpen, setIsOverviewOpen] = useState(false);
   const [messages, setMessages] = useState<ConversationMessage[]>(initialMessages);
   const [catalogTarget, setCatalogTarget] = useState<CatalogTarget | undefined>();
@@ -4475,6 +4479,8 @@ function App({ onLock }: { onLock?: (() => void) | undefined }) {
 
   function navigateTo(id: NavigationId) {
     if (id === "home") dashboardReader.refresh();
+    setHomeEntryWorldId(undefined);
+    if (id === "home") setEnvironmentOrigin(undefined);
     setActiveId(id);
     setIsOverviewOpen(false);
     setIsMoreOpen(false);
@@ -4551,6 +4557,14 @@ function App({ onLock }: { onLock?: (() => void) | undefined }) {
   if (activeId === "home" && !isOverviewOpen) {
     return (
       <AuroraHome
+        initialWorldId={homeEntryWorldId}
+        onEnvironmentNavigate={(id, worldId) => {
+          if (id === "home") {
+            dashboardReader.refresh();
+            setIsOverviewOpen(true);
+          } else navigateTo(id);
+          setEnvironmentOrigin(worldId);
+        }}
         onNavigate={(id) => {
           if (id === "home") {
             dashboardReader.refresh();
@@ -4572,7 +4586,7 @@ function App({ onLock }: { onLock?: (() => void) | undefined }) {
   }
 
   return (
-    <div className="app-shell" data-theme={homeTheme}>
+    <div className="app-shell" data-theme={themePalette(homeTheme)}>
       <aside className="sidebar">
         <button
           className="brand-lockup"
@@ -4605,6 +4619,14 @@ function App({ onLock }: { onLock?: (() => void) | undefined }) {
       </aside>
 
       <main className="main-content">
+        {environmentOrigin ? <nav className="environment-return" aria-label="Retour à l’environnement">
+          <button type="button" onClick={() => {
+            const worldId = environmentOrigin;
+            navigateTo("home");
+            setHomeEntryWorldId(worldId);
+          }}>← Retour à {worlds.find((world) => world.id === environmentOrigin)?.title ?? "mon environnement"}</button>
+          <span>{section.title}</span>
+        </nav> : null}
         <header className="topbar">
           <div>
             <p className="eyebrow">{section.eyebrow}</p>
@@ -4612,14 +4634,7 @@ function App({ onLock }: { onLock?: (() => void) | undefined }) {
             <p className="page-description">{section.description}</p>
           </div>
           <div className="topbar-actions">
-            <button
-              className="local-lock-button workspace-theme-toggle"
-              type="button"
-              onClick={() => setHomeTheme(homeTheme === "classic" ? "scifi" : "classic")}
-              aria-label={homeTheme === "classic" ? "Activer le thème Sci-Fi" : "Activer le thème Classic"}
-            >
-              {homeTheme === "classic" ? "◐ Sci-Fi" : "☼ Classic"}
-            </button>
+            <ThemePicker value={homeTheme} onChange={(theme) => { setHomeTheme(theme); if (theme === "immersive") navigateTo("home"); }} />
             <span
               className="date-pill"
               title={dashboard.summary ? `Date du workspace · ${dashboard.summary.timezone}` : undefined}
