@@ -1,5 +1,7 @@
 # IDA — Contrat API
 
+Livré le 9 septembre : `POST /v1/post-proposals` prépare une proposition manuelle avec un média exact, via CONTENT/WRITE. Création transactionnelle, retry idempotent par workspace/acteur/requestId, état REQUESTED et aucune livraison. Voir [parcours et limites](docs/MEDIA_PROPOSALS.md) et le schéma OpenAPI local ; ce reçu de création ne remplace pas la lecture de la file d'approbation.
+
 Ce document définit les conventions et la surface API d’IDA. L’API est le point de partage unique entre le hub desktop/web, le futur iPhone et d’éventuels clients natifs. Les routes effectivement livrées sont distinguées de la surface cible afin que l’interface ne promette jamais une capacité absente.
 
 ## Principes

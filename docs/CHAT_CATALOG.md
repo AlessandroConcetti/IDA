@@ -82,4 +82,6 @@ Après les médias liés : **1 102 tests / 51 fichiers**, dont 36 nouveaux (12 A
 
 Lint, types des quatre packages et builds réussis. Recette dans l'onglet existant : Lumière Noire affiche ses deux vidéos, repli/réouverture fonctionnels, puis Orbit affiche une liste vide sans reprendre les vidéos précédentes. Console sans avertissement/erreur au contrôle. Aperçu local conservé sur Lumière Noire, API rechargée sans changer de base ni de mode. Aucun essai sur téléphone physique.
 
-Suite recommandée : préparer une proposition depuis un média explicitement sélectionné dans le parcours d'approbation existant, puis ajouter une génération par fournisseur qualifié. Ne pas demander au modèle de trier un catalogue que SQL sait déjà sélectionner ; ajouter l'IA seulement sur une tâche où son apport et ses limites sont évaluables.
+Le parcours **Préparer une publication** est maintenant disponible depuis la sélection : voir [MEDIA_PROPOSALS.md](MEDIA_PROPOSALS.md). Le clic ouvre un formulaire manuel ; seule sa soumission explicite crée une proposition à valider. L'ouverture des fiches et médias liés reste en lecture seule.
+
+Suite recommandée : édition contrôlée/date des nouvelles propositions, puis génération par fournisseur qualifié. Ne pas demander au modèle de trier un catalogue que SQL sait déjà sélectionner ; ajouter l'IA seulement sur une tâche où son apport et ses limites sont évaluables.

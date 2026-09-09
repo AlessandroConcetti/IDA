@@ -14,6 +14,8 @@ import type {
   ContentRotationCandidate as ContentRotationCandidateContract,
   IdaCommandRun,
   IdaCommandRunCursor,
+  ManualPostProposalCreate,
+  ManualPostProposalReceipt,
   MediaImport,
   MediaListQuery,
   MemoryProposalCreate,
@@ -3048,6 +3050,133 @@ export class DemoDatabase {
       }
 
       return { kind: "already-decided", state: asString(existingMemory.state) };
+    });
+  }
+
+  async createManualPostProposal(
+    workspaceId: string,
+    actorUserId: string,
+    input: ManualPostProposalCreate,
+    authorize: (reader: Pick<PGlite, "query">) => Promise<void>,
+  ): Promise<
+    | { kind: "created" | "replayed"; receipt: ManualPostProposalReceipt }
+    | { kind: "not-found" | "ineligible" | "conflict" }
+  > {
+    const key = createHash("sha256")
+      .update(JSON.stringify([workspaceId, actorUserId, input.requestId]))
+      .digest("hex");
+    const requestHash = createHash("sha256").update(JSON.stringify(input)).digest("hex");
+    const postId = `post_${key}`;
+    const variantId = `variant_${key}`;
+    const approvalId = `apr_${key}`;
+    const auditId = `act_proposal_${key}`;
+    return this.pglite.transaction(async (transaction) => {
+      await authorize(transaction);
+      const existing = await transaction.query<ScalarRow>(
+        `SELECT payload->>'requestHash' AS hash FROM activity_logs
+         WHERE id = $1 AND workspace_id = $2 AND actor_user_id = $3 AND action = 'post_variant.proposed'`,
+        [auditId, workspaceId, actorUserId],
+      );
+      if (existing.rows[0]) {
+        if (existing.rows[0].hash !== requestHash) return { kind: "conflict" };
+        return { kind: "replayed", receipt: { postId, variantId, approvalId, replayed: true } };
+      }
+      const mediaResult = await transaction.query<ScalarRow>(
+        `SELECT media.id, media.filename, media.media_type AS type, media.status,
+          media.artist_project_id AS "projectId", workspace.timezone
+         FROM media_assets media JOIN workspaces workspace ON workspace.id = media.workspace_id
+         WHERE media.id = $1 AND media.workspace_id = $2
+           AND (media.artist_project_id IS NULL OR EXISTS (
+             SELECT 1 FROM artist_projects project WHERE project.id = media.artist_project_id AND project.workspace_id = $2
+           )) FOR SHARE OF media`,
+        [input.mediaId, workspaceId],
+      );
+      const media = mediaResult.rows[0];
+      if (!media) return { kind: "not-found" };
+      const platformResult = await transaction.query<ScalarRow>(
+        "SELECT id FROM social_platforms WHERE key = $1 AND is_active = TRUE",
+        [input.platform],
+      );
+      if (
+        media.status === "ARCHIVED" ||
+        !["VIDEO", "IMAGE"].includes(asString(media.type)) ||
+        !platformResult.rows[0]
+      ) {
+        return { kind: "ineligible" };
+      }
+      const timezone = asString(media.timezone);
+      const payloadHash = calculatePostVariantPayloadHash({
+        postTitle: input.postTitle,
+        objective: input.objective,
+        rationale: null,
+        platform: input.platform,
+        caption: input.caption,
+        hashtags: input.hashtags,
+        cta: input.cta ?? null,
+        plannedAt: null,
+        timezone,
+        media: [
+          {
+            id: input.mediaId,
+            filename: asString(media.filename),
+            type: asString(media.type),
+            status: asString(media.status) as MediaStatus,
+          },
+        ],
+      });
+      await authorize(transaction);
+      // L'identifiant déterministe impose l'unicité workspace + acteur + requête,
+      // même si le client a perdu la réponse. Aucun audit métier n'est réécrit.
+      const inserted = await transaction.query<ScalarRow>(
+        `INSERT INTO posts (id, workspace_id, artist_project_id, title, objective, status)
+         VALUES ($1, $2, $3, $4, $5, 'PROPOSED') ON CONFLICT (id) DO NOTHING RETURNING id`,
+        [postId, workspaceId, media.projectId, input.postTitle, input.objective],
+      );
+      if (!inserted.rows[0]) {
+        const replay = await transaction.query<ScalarRow>(
+          "SELECT payload->>'requestHash' AS hash FROM activity_logs WHERE id = $1 AND workspace_id = $2 AND actor_user_id = $3",
+          [auditId, workspaceId, actorUserId],
+        );
+        if (replay.rows[0]?.hash !== requestHash) return { kind: "conflict" };
+        return { kind: "replayed", receipt: { postId, variantId, approvalId, replayed: true } };
+      }
+      await transaction.query(
+        `INSERT INTO post_variants (id, workspace_id, post_id, platform_id, caption, hashtags, cta, timezone,
+          approval_state, delivery_state, payload_hash)
+         VALUES ($1, $2, $3, $4, $5, $6::json, $7, $8, 'REQUESTED', 'NOT_CONFIGURED', $9)`,
+        [
+          variantId,
+          workspaceId,
+          postId,
+          platformResult.rows[0].id,
+          input.caption,
+          JSON.stringify(input.hashtags),
+          input.cta ?? null,
+          timezone,
+          payloadHash,
+        ],
+      );
+      await transaction.query(
+        "INSERT INTO post_variant_media (post_variant_id, media_asset_id, workspace_id, sort_order) VALUES ($1, $2, $3, 0)",
+        [variantId, input.mediaId, workspaceId],
+      );
+      await transaction.query(
+        "INSERT INTO approvals (id, workspace_id, post_variant_id, state, payload_hash) VALUES ($1, $2, $3, 'REQUESTED', $4)",
+        [approvalId, workspaceId, variantId, payloadHash],
+      );
+      await transaction.query(
+        `INSERT INTO activity_logs (id, workspace_id, actor_user_id, action, entity_type, entity_id, payload)
+         VALUES ($1, $2, $3, 'post_variant.proposed', 'POST_VARIANT', $4, $5::json)`,
+        [
+          auditId,
+          workspaceId,
+          actorUserId,
+          variantId,
+          JSON.stringify({ requestHash, approvalId, payloadHash, source: "MANUAL" }),
+        ],
+      );
+      await authorize(transaction);
+      return { kind: "created", receipt: { postId, variantId, approvalId, replayed: false } };
     });
   }
 

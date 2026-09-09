@@ -38,6 +38,8 @@ import {
   internalPostScheduleSchema,
   localAuthCredentialRequestSchema,
   localAuthStatusResponseSchema,
+  manualPostProposalCreateSchema,
+  manualPostProposalReceiptSchema,
   mediaAssetSchema,
   mediaImportSchema,
   mediaListQuerySchema,
@@ -1095,6 +1097,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     { toolKey: "get_track", moduleKey: "MUSIC", permission: "READ" },
     { toolKey: "get_media", moduleKey: "CONTENT", permission: "READ" },
     { toolKey: "search_media", moduleKey: "CONTENT", permission: "READ" },
+    { toolKey: "create_manual_post_proposal", moduleKey: "CONTENT", permission: "WRITE" },
     { toolKey: "create_campaign", moduleKey: "CAMPAIGNS", permission: "WRITE" },
     { toolKey: "link_campaign_release", moduleKey: "CAMPAIGNS", permission: "WRITE" },
     { toolKey: "link_campaign_track", moduleKey: "CAMPAIGNS", permission: "WRITE" },
@@ -1122,12 +1125,17 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     return identity;
   };
 
-  const revalidateCatalogRead = async (request: FastifyRequest, authorization: ToolAuthorizationRequest) => {
+  const revalidateCatalogRead = async (
+    request: FastifyRequest,
+    authorization: ToolAuthorizationRequest,
+    reader?: Parameters<DemoDatabase["resolveRequestIdentityContext"]>[3],
+  ) => {
     const identity = assertToolAuthorized(request, authorization);
     const current = await database.resolveRequestIdentityContext(
       identity.session.id,
       identity.workspaceId,
       identityMode === "LOCAL_LOCK" ? serverNow().toISOString() : undefined,
+      reader,
     );
     if (
       !current ||
@@ -2363,6 +2371,49 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
         items: items.map(toCalendarItemResponse),
       },
     });
+  });
+
+  app.post("/v1/post-proposals", async (request, reply) => {
+    const tool = { toolKey: "create_manual_post_proposal", moduleKey: "CONTENT", permission: "WRITE" } as const;
+    const identity = assertToolAuthorized(request, tool);
+    const input = manualPostProposalCreateSchema.safeParse(request.body);
+    if (!input.success) {
+      return reply.status(400).send({
+        error: {
+          code: "INVALID_POST_PROPOSAL",
+          message: "Vérifiez le média, la plateforme et les champs de la proposition.",
+        },
+      });
+    }
+    const result = await database.createManualPostProposal(
+      identity.workspaceId,
+      identity.userId,
+      input.data,
+      (reader) => revalidateCatalogRead(request, tool, reader),
+    );
+    await revalidateCatalogRead(request, tool);
+    if (result.kind === "not-found")
+      return reply
+        .status(404)
+        .send({ error: { code: "PROPOSAL_MEDIA_NOT_FOUND", message: "Média introuvable dans ce workspace." } });
+    if (result.kind === "ineligible")
+      return reply.status(409).send({
+        error: {
+          code: "PROPOSAL_MEDIA_INELIGIBLE",
+          message: "Choisissez une image ou vidéo non archivée et une plateforme active.",
+        },
+      });
+    if (result.kind === "conflict")
+      return reply.status(409).send({
+        error: {
+          code: "PROPOSAL_REQUEST_CONFLICT",
+          message: "Cette demande existe avec un contenu différent. Consultez les propositions avant de recommencer.",
+        },
+      });
+    if (!("receipt" in result)) throw new Error("Reçu de proposition absent.");
+    return reply
+      .status(result.kind === "created" ? 201 : 200)
+      .send({ data: manualPostProposalReceiptSchema.parse(result.receipt) });
   });
 
   app.post("/v1/post-variants/:variantId/approve", async (request, reply) =>

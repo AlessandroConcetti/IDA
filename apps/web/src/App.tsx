@@ -77,6 +77,8 @@ import {
   type Track,
 } from "./data";
 import { statusLabelFr } from "./labels.fr";
+import { MediaProposalComposer } from "./MediaProposalComposer";
+import { canPrepareMedia } from "./post-proposal";
 import { SnapshotReader } from "./snapshot-reader";
 import type { HomeTheme } from "./worlds";
 
@@ -586,7 +588,15 @@ function MediaThumbnail({ asset, previewEnabled }: { asset: MediaAsset; previewE
   );
 }
 
-function MediaGrid({ assets, detailed = false }: { assets: MediaAsset[]; detailed?: boolean }) {
+function MediaGrid({
+  assets,
+  detailed = false,
+  onPrepare,
+}: {
+  assets: MediaAsset[];
+  detailed?: boolean;
+  onPrepare?: (mediaId: string) => void;
+}) {
   return (
     <section className="media-grid" aria-label={detailed ? "Résultats de la Content Library" : "Médias récents"}>
       {assets.map((asset) => (
@@ -619,6 +629,16 @@ function MediaGrid({ assets, detailed = false }: { assets: MediaAsset[]; detaile
                 ) : (
                   <p className="media-library-no-tags">Sans tag</p>
                 )}
+                {onPrepare && canPrepareMedia(asset) && asset.id ? (
+                  <button
+                    type="button"
+                    className="command-suggestion"
+                    onClick={() => onPrepare(asset.id as string)}
+                    aria-label={`Préparer une publication avec ${asset.filename}`}
+                  >
+                    Préparer une publication
+                  </button>
+                ) : null}
               </>
             ) : null}
           </div>
@@ -793,6 +813,7 @@ function activityActionLabel(action: string): string {
     "memory.confirmed": "Préférence enregistrée",
     "memory.rejected": "Préférence non enregistrée",
     "post_variant.approved": "Proposition approuvée",
+    "post_variant.proposed": "Proposition à valider créée",
     "post_variant.rejected": "Proposition refusée",
     "post_variant.internal_scheduled": "Proposition ajoutée au calendrier interne",
     "post_variant.internal_schedule_cancelled": "Planification interne annulée",
@@ -1759,7 +1780,7 @@ function ContentRotationPanel({ refreshVersion }: { refreshVersion: number }) {
   );
 }
 
-function ContentView() {
+function ContentView({ onPrepare }: { onPrepare: (mediaId: string) => void }) {
   const [form, setForm] = useState<MediaUploadForm>(emptyMediaUploadForm);
   const [releases, setReleases] = useState<ReleaseRecord[]>([]);
   const [tracks, setTracks] = useState<TrackReference[]>([]);
@@ -2079,7 +2100,9 @@ function ContentView() {
         {searchState === "ready" && searchResults.length === 0 ? (
           <p className="content-library-empty-state">Essaie un autre mot-clé ou retire un filtre.</p>
         ) : null}
-        {searchState === "ready" && searchResults.length > 0 ? <MediaGrid assets={searchResults} detailed /> : null}
+        {searchState === "ready" && searchResults.length > 0 ? (
+          <MediaGrid assets={searchResults} detailed onPrepare={onPrepare} />
+        ) : null}
       </section>
       <ApprovalCenter />
       <section className="panel content-import-card" aria-labelledby="content-import-title">
@@ -4274,6 +4297,8 @@ function SectionContent({
   onNavigate,
   catalogTarget,
   onOpenCatalog,
+  proposalMediaId,
+  onPrepare,
 }: {
   activeId: NavigationId;
   messages: ConversationMessage[];
@@ -4282,7 +4307,18 @@ function SectionContent({
   onNavigate: (id: NavigationId) => void;
   catalogTarget: CatalogTarget | undefined;
   onOpenCatalog: (target: CatalogTarget) => void;
+  proposalMediaId: string | undefined;
+  onPrepare: (mediaId: string) => void;
 }) {
+  if (activeId === "content" && proposalMediaId)
+    return (
+      <MediaProposalComposer
+        key={proposalMediaId}
+        mediaId={proposalMediaId}
+        onClose={() => onNavigate("content")}
+        renderApprovals={() => <ApprovalCenter />}
+      />
+    );
   if (
     catalogTarget &&
     ((activeId === "music" && catalogTarget.kind === "track") ||
@@ -4294,8 +4330,8 @@ function SectionContent({
         onBack={() => onNavigate("ida")}
         onShowLibrary={() => onNavigate(activeId)}
         renderTrack={(track) => <TrackPanel items={[track]} source="api" />}
-        renderMedia={(media) => <MediaGrid assets={[media]} detailed />}
-        renderLinkedMedia={(assets) => <MediaGrid assets={assets} detailed />}
+        renderMedia={(media) => <MediaGrid assets={[media]} detailed onPrepare={onPrepare} />}
+        renderLinkedMedia={(assets) => <MediaGrid assets={assets} detailed onPrepare={onPrepare} />}
       />
     );
   }
@@ -4305,7 +4341,7 @@ function SectionContent({
     case "music":
       return <MusicView dashboard={dashboard} source={source} />;
     case "content":
-      return <ContentView />;
+      return <ContentView onPrepare={onPrepare} />;
     case "social":
       return <SocialView dashboard={dashboard} source={source} />;
     case "calendar":
@@ -4339,6 +4375,7 @@ function App({ onLock }: { onLock?: (() => void) | undefined }) {
   const [isOverviewOpen, setIsOverviewOpen] = useState(false);
   const [messages, setMessages] = useState<ConversationMessage[]>(initialMessages);
   const [catalogTarget, setCatalogTarget] = useState<CatalogTarget | undefined>();
+  const [proposalMediaId, setProposalMediaId] = useState<string | undefined>();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [apiMode, setApiMode] = useState<"connected" | "fallback">("fallback");
   const [isMoreOpen, setIsMoreOpen] = useState(false);
@@ -4364,7 +4401,7 @@ function App({ onLock }: { onLock?: (() => void) | undefined }) {
 
   const section = sectionCopy[activeId];
   const moreItems = useMemo(() => navigation.filter((item) => !mobilePrimaryNavigation.includes(item.id)), []);
-  const screenId = `${activeId}:${isOverviewOpen ? "overview" : "space"}:${catalogTarget?.id ?? "library"}`;
+  const screenId = `${activeId}:${isOverviewOpen ? "overview" : "space"}:${proposalMediaId ?? catalogTarget?.id ?? "library"}`;
   const previousScreen = useRef(screenId);
 
   useEffect(() => {
@@ -4428,6 +4465,12 @@ function App({ onLock }: { onLock?: (() => void) | undefined }) {
     setIsOverviewOpen(false);
     setIsMoreOpen(false);
     setCatalogTarget(undefined);
+    setProposalMediaId(undefined);
+  }
+
+  function prepareMedia(mediaId: string) {
+    navigateTo("content");
+    setProposalMediaId(mediaId);
   }
 
   function openCatalog(target: CatalogTarget) {
@@ -4587,6 +4630,8 @@ function App({ onLock }: { onLock?: (() => void) | undefined }) {
             onNavigate={navigateTo}
             catalogTarget={catalogTarget}
             onOpenCatalog={openCatalog}
+            proposalMediaId={proposalMediaId}
+            onPrepare={prepareMedia}
           />
         </div>
       </main>

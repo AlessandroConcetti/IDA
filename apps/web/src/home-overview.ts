@@ -58,6 +58,7 @@ const homeActivityLabels: Readonly<Record<string, string>> = {
   "memory.confirmed": "Préférence enregistrée",
   "memory.rejected": "Préférence refusée",
   "post_variant.approved": "Proposition approuvée",
+  "post_variant.proposed": "Proposition à valider créée",
   "post_variant.rejected": "Proposition refusée",
   "post_variant.internal_scheduled": "Contenu planifié dans IDA",
   "post_variant.internal_schedule_cancelled": "Planification interne annulée",

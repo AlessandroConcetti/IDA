@@ -95,6 +95,7 @@ export const activityLogActionValues = [
   "memory.proposed",
   "memory.confirmed",
   "memory.rejected",
+  "post_variant.proposed",
   "post_variant.approved",
   "post_variant.rejected",
   "post_variant.internal_scheduled",
@@ -711,6 +712,35 @@ export const approvalQueueItemSchema = z.object({
 });
 
 export type ApprovalQueueItem = z.infer<typeof approvalQueueItemSchema>;
+
+// Préparation manuelle interne : aucune décision, date ou identité fournie par le client.
+export const manualPostProposalCreateSchema = z
+  .object({
+    requestId: z.string().uuid(),
+    mediaId: z
+      .string()
+      .max(80)
+      .regex(/^med_[A-Za-z0-9_-]+$/),
+    postTitle: postTitleSchema,
+    platform: z.enum(["INSTAGRAM", "TIKTOK", "YOUTUBE", "FACEBOOK"]),
+    caption: postCaptionSchema,
+    objective: postObjectiveSchema,
+    hashtags: z.array(postHashtagSchema).max(30).default([]),
+    cta: postCtaSchema.optional(),
+  })
+  .strict();
+export type ManualPostProposalCreate = z.infer<typeof manualPostProposalCreateSchema>;
+
+// Reçu de création, pas un état d'approbation actuel (un retry peut suivre une décision).
+export const manualPostProposalReceiptSchema = z
+  .object({
+    postId: entityIdSchema,
+    variantId: entityIdSchema,
+    approvalId: entityIdSchema,
+    replayed: z.boolean(),
+  })
+  .strict();
+export type ManualPostProposalReceipt = z.infer<typeof manualPostProposalReceiptSchema>;
 
 // Les deux routes humaines partagent ce corps strict. Ce sont uniquement des
 // préconditions de concurrence : elles ne donnent aucun droit ni aucun état

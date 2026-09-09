@@ -1,0 +1,52 @@
+.proposal-workspace {
+  display: grid;
+  gap: 24px;
+}
+.proposal-form fieldset {
+  border: 0;
+  padding: 0;
+  margin: 20px 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+.proposal-form label {
+  display: grid;
+  gap: 8px;
+  font-size: 0.9375rem;
+}
+.proposal-form input,
+.proposal-form select,
+.proposal-form textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 12px;
+  border: 1px solid var(--ida-muted);
+  border-radius: 12px;
+  color: inherit;
+  background: var(--ida-glass);
+  font: inherit;
+}
+.proposal-form textarea {
+  resize: vertical;
+}
+.proposal-form .proposal-full {
+  grid-column: 1 / -1;
+}
+.proposal-selected-media {
+  overflow-wrap: anywhere;
+}
+.proposal-form fieldset:disabled {
+  opacity: 0.65;
+}
+.media-copy > .command-suggestion {
+  margin-top: 12px;
+  min-height: 44px;
+}
+@media (max-width: 640px) {
+  .proposal-form fieldset {
+    grid-template-columns: 1fr;
+  }
+}

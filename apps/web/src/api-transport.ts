@@ -25,7 +25,7 @@ export function onWorkspaceMutation(listener: () => void): () => void {
 function affectsDashboard(path: string, method: string): boolean {
   if (method !== "POST") return false;
   return (
-    /^\/v1\/(releases|tracks|media|campaigns)$/.test(path) ||
+    /^\/v1\/(releases|tracks|media|campaigns|post-proposals)$/.test(path) ||
     /^\/v1\/post-variants\/[^/]+\/(approve|reject|internal-schedules)$/.test(path) ||
     /^\/v1\/internal-post-schedules\/[^/]+\/cancel$/.test(path)
   );

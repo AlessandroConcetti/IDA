@@ -879,6 +879,49 @@ paths:
           $ref: '#/components/responses/MemoryNotFound'
         '409':
           $ref: '#/components/responses/MemoryDecisionFinal'
+  /v1/post-proposals:
+    post:
+      operationId: createManualPostProposal
+      summary: Prépare une proposition manuelle avec un média choisi
+      description: >-
+        CONTENT/create_manual_post_proposal WRITE via Identity et Tool Gateway.
+        Crée atomiquement post PROPOSED, variante REQUESTED/NOT_CONFIGURED,
+        lien média, approbation REQUESTED et audit réduit. Média image/vidéo
+        non archivé du workspace ; projet lié et plateforme active vérifiés.
+        Une réutilisation de média déjà proposé est possible, sans incrémenter
+        ses usages ni changer son statut. Aucun appel IA, livraison, compte,
+        planning ou certification de compatibilité avec une API sociale.
+        Le fuseau est celui du workspace ; plannedAt et rationale restent null.
+        requestId est stable pour une même tentative : unicité par workspace
+        et acteur, retry identique 200 sans nouvelle écriture, contenu différent
+        avec la même clé 409. Le reçu ne décrit pas l'état d'approbation actuel.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ManualPostProposalCreate'
+      responses:
+        '201':
+          description: Proposition enregistrée, en attente de validation humaine
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ManualPostProposalReceiptResponse' }
+        '200':
+          description: Reçu d'une tentative déjà enregistrée, sans nouvelle proposition
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ManualPostProposalReceiptResponse' }
+        '400':
+          description: INVALID_POST_PROPOSAL — corps invalide ou champs non autorisés
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: PROPOSAL_MEDIA_NOT_FOUND — média absent, étranger ou projet incohérent
+        '409':
+          description: PROPOSAL_MEDIA_INELIGIBLE ou PROPOSAL_REQUEST_CONFLICT
   /v1/approvals/queue:
     get:
       operationId: listApprovalQueue
@@ -1898,6 +1941,7 @@ components:
         - memory.confirmed
         - memory.rejected
         - post_variant.approved
+        - post_variant.proposed
         - post_variant.rejected
         - post_variant.internal_scheduled
         - post_variant.internal_schedule_cancelled
@@ -2389,6 +2433,36 @@ components:
         filename: { type: string, minLength: 1, maxLength: 255 }
         type: { enum: [IMAGE, VIDEO, AUDIO, DOCUMENT, OTHER] }
         status: { enum: [UNUSED, USED, SCHEDULED, PUBLISHED, ARCHIVED] }
+    ManualPostProposalCreate:
+      type: object
+      additionalProperties: false
+      required: [requestId, mediaId, postTitle, platform, caption, objective]
+      properties:
+        requestId: { type: string, format: uuid }
+        mediaId: { type: string, maxLength: 80, pattern: '^med_[A-Za-z0-9_-]+$' }
+        postTitle: { type: string, minLength: 1, maxLength: 240 }
+        platform: { type: string, enum: [INSTAGRAM, TIKTOK, YOUTUBE, FACEBOOK] }
+        caption: { type: string, minLength: 1, maxLength: 4000 }
+        objective: { type: string, minLength: 1, maxLength: 2000 }
+        hashtags:
+          type: array
+          maxItems: 30
+          default: []
+          items: { type: string, minLength: 1, maxLength: 100 }
+        cta: { type: string, minLength: 1, maxLength: 500 }
+    ManualPostProposalReceiptResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required: [postId, variantId, approvalId, replayed]
+          properties:
+            postId: { type: string }
+            variantId: { type: string }
+            approvalId: { type: string }
+            replayed: { type: boolean }
     ApprovalQueueItem:
       type: object
       additionalProperties: false
