@@ -29,6 +29,14 @@ Le thème Sci-Fi conserve l’observatoire fourni comme décor d’accueil. Les 
 
 L'ouverture d'un monde réutilise `WorldWheel` : scène agrandie, titre à gauche, accès aux espaces sur la droite, puis composition empilée sur téléphone. Le décor central reste dégagé ; les vidéos utilisateur et leur politique d'arrêt sont inchangées. Un accès « Dialogue avec IDA » ouvre la conversation existante, sans prétendre connecter un nouveau modèle. L'introduction et les compteurs de l'accueil sont temporairement repliés dans un environnement ; le retour Accueil réaffiche la roue et ces éléments. IDA Home conserve son aperçu quotidien et ses connexions existantes. Aucun environnement futur ni outil métier n'est activé. Cette reprise est limitée au frontend : catalogue et campagne de tests laissés en pause à la demande de l'utilisateur.
 
+### Finition Glass commune
+
+`glass.css`, chargé après les palettes existantes, habille les boutons, onglets, navigations desktop/mobile, panneaux, commandes et verrou. Classic utilise un verre clair, Sci-Fi un verre bleu fumé. Les états sélectionnés, focus clavier, actions de validation/refus/annulation et contrôles désactivés restent distincts. Les dimensions des cartes et leurs vidéos sont conservées ; aucun filtre de flou n'est ajouté aux cartes vidéo ou à chaque bouton. Le flou est limité aux panneaux, retiré dans les environnements animés et remplacé par des surfaces opaques en mode contraste/transparence réduite ou sans prise en charge. Le bouton existant « Réduire la transparence » reste prioritaire sur l'accueil. Aucun appel IA, paquet, capteur ou changement du Core. Livraison visuelle sans relance des tests automatiques, conformément à la demande utilisateur.
+
+### Verre vivant
+
+Un reflet de 2,8 secondes accompagne l'apparition des contrôles. Les commandes principales de l'accueil (envoyer, entrer dans un monde, dialogue) gardent un balayage lent ; les autres réagissent au survol souris et au focus clavier. `LivingGlass.tsx` déplace un éclairage local sur le seul contrôle pointé, y compris pendant un appui tactile. Un RAF au maximum attend un événement de pointeur ; aucune boucle JavaScript au repos. Les coordonnées restent transitoires dans le navigateur, sans stockage ni requête. Sortie du pointeur, fin du toucher, scroll, perte de focus, onglet masqué et démontage nettoient l'effet. Réduction de mouvement/transparence, contraste renforcé, couleurs forcées et surfaces opaques désactivent les animations. Les cartes vidéo sont exclues des effets de suivi et de balayage. Ni caméra, ni micro, ni nouveau lecteur. Les effets n'ont pas fait l'objet d'une recette multi-appareils ou d'une mesure de FPS dans cette tranche ; les tests restent en pause à la demande utilisateur.
+
 ## Médias locaux et provenance
 
 Fichiers utilisateur copiés sans transformation dans `apps/web/public/design/`, exclus explicitement de Git :

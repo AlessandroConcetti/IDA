@@ -2,12 +2,14 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import { LocalAccessGate } from "./LocalAccessGate";
+import { LivingGlass } from "./LivingGlass";
 import "./styles.css";
 import "./aurora.css";
 import "./worlds.css";
 import "./home.css";
 import "./global-theme.css";
 import "./world-scenes.css";
+import "./glass.css";
 import { applyTheme, readTheme } from "./theme";
 
 const rootElement = document.getElementById("root");
@@ -23,6 +25,7 @@ if (!rootElement) {
 
 createRoot(rootElement).render(
   <StrictMode>
+    <LivingGlass root={rootElement} />
     <LocalAccessGate>{(onLock) => <App onLock={onLock} />}</LocalAccessGate>
   </StrictMode>,
 );

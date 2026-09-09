@@ -1,0 +1,273 @@
+/* IDA Glass : une finition commune, sans changer les actions ni les dimensions.
+ * Le flou appartient aux panneaux, jamais à chaque bouton devant une vidéo. */
+:root {
+  --glass-base: #f4f6f4c9;
+  --glass-panel: #f5f7f4b8;
+  --glass-solid: #f4f6f4;
+  --glass-hover: #edf6fbe8;
+  --glass-selected: #d5e5edeb;
+  --glass-edge: #ffffffc9;
+  --glass-highlight: #ffffffc2;
+  --glass-lowlight: #849caa30;
+  --glass-reflection: #ffffff75;
+  --glass-sheen: #ffffff8a;
+  --glass-spotlight: #ffffff91;
+  --glass-shadow: #253d5214;
+  --glass-accent: #426d83;
+  --glass-ink: #253139;
+  --glass-blur: blur(12px) saturate(115%);
+  --glass-marker: inset 0 0 0 0 transparent;
+}
+:root[data-theme="scifi"] {
+  --glass-base: #142838d9;
+  --glass-panel: #101f30cf;
+  --glass-solid: #142838;
+  --glass-hover: #233f53ee;
+  --glass-selected: #254960ed;
+  --glass-edge: #a9d8ec45;
+  --glass-highlight: #d8f2ff61;
+  --glass-lowlight: #020d2170;
+  --glass-reflection: #d2ecff1f;
+  --glass-sheen: #b9e5ff4d;
+  --glass-spotlight: #b5e3ff45;
+  --glass-shadow: #00000038;
+  --glass-accent: #a4dcf3;
+  --glass-ink: #e6f0f7;
+}
+
+/* La portée #root rend cette finition prioritaire sur les anciennes palettes,
+ * sans !important, sans recouvrir les médias ni la zone de fermeture mobile. */
+#root :is(button, [role="tab"], .home-sidebar a, .aurora-mobile-navigation a, .aurora-more-spaces summary):not(:where(.world-card, .mobile-more-dismiss)) {
+  background-color: var(--glass-base);
+  background-image:
+    linear-gradient(110deg, transparent 35%, var(--glass-sheen) 49%, transparent 63%),
+    radial-gradient(ellipse 160px 110px at var(--glass-light-x, 50%) var(--glass-light-y, 50%), var(--glass-light, transparent), transparent 75%),
+    linear-gradient(145deg, var(--glass-reflection), transparent 46%, var(--glass-lowlight));
+  background-size: 280% 100%, 100% 100%, 100% 100%;
+  background-position: 140% 0, 0 0, 0 0;
+  background-repeat: no-repeat;
+  border-color: var(--glass-edge);
+  color: var(--glass-ink);
+  box-shadow:
+    var(--glass-marker),
+    inset 0 1px 0 var(--glass-highlight),
+    inset 0 0 0 1px var(--glass-edge),
+    inset 0 -1px 0 var(--glass-lowlight),
+    0 5px 14px var(--glass-shadow);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+  animation: var(--glass-intro-animation, glass-arrival 2.8s ease-out both);
+  animation-play-state: var(--glass-play-state, running);
+}
+
+/* Une entrée brève sur tous les contrôles ; au repos seules les commandes
+ * principales de l'accueil respirent, jamais les grandes cartes vidéo. */
+@keyframes glass-arrival {
+  from { background-position: 140% 0, 0 0, 0 0; }
+  to { background-position: -140% 0, 0 0, 0 0; }
+}
+@keyframes glass-drift {
+  0%, 50% { background-position: 140% 0, 0 0, 0 0; }
+  100% { background-position: -140% 0, 0 0, 0 0; }
+}
+@keyframes glass-touch {
+  from { background-position: 140% 0, 0 0, 0 0; }
+  to { background-position: -140% 0, 0 0, 0 0; }
+}
+#root .aurora-home[data-surface="glass"] :is(.world-enter, .world-dialogue, .aurora-command button):not(:disabled) {
+  animation: var(--glass-drift-animation, glass-drift 7s ease-in-out infinite);
+  animation-play-state: var(--glass-play-state, running);
+}
+#root [data-glass-hot="true"] {
+  --glass-light: var(--glass-spotlight);
+}
+#root :is(button, [role="tab"], .home-sidebar a, .aurora-mobile-navigation a, summary):not(:where(.world-card, .mobile-more-dismiss, :disabled, [aria-disabled="true"])):focus-visible {
+  animation: var(--glass-touch-animation, glass-touch 1.6s ease-out both);
+  animation-play-state: var(--glass-play-state, running);
+}
+#root :is(button, [role="tab"], .home-sidebar a, .aurora-mobile-navigation a):not(:where(.world-card, .mobile-more-dismiss, :disabled)):active {
+  box-shadow:
+    var(--glass-marker), inset 0 0 0 1px var(--glass-accent),
+    inset 0 3px 10px var(--glass-lowlight), 0 2px 7px var(--glass-shadow);
+}
+#root[data-glass-paused="true"] {
+  --glass-play-state: paused;
+  --glass-spotlight: transparent;
+}
+#root :is(button:disabled, [aria-disabled="true"]) {
+  animation: none;
+}
+
+#root :is(.sidebar, .home-sidebar, .mobile-bottom-bar, .mobile-more-sheet, .aurora-mobile-navigation,
+  .panel, .command-card, .access-card, .aurora-command, .home-daily-card, .home-theme-picker,
+  .editorial-calendar-tabs, .aurora-footer p) {
+  background-color: var(--glass-panel);
+  background-image: linear-gradient(135deg, var(--glass-reflection), transparent 42%, var(--glass-lowlight));
+  border-color: var(--glass-edge);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    inset 0 0 0 1px var(--glass-edge),
+    0 14px 38px var(--glass-shadow);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+
+/* Les petits contrôles gardent leur géométrie ; les liens textuels gagnent un bord doux. */
+#root :is(.text-button, .access-reveal, .access-secondary, .aurora-more-spaces summary) {
+  border-radius: 12px;
+}
+#root .text-button {
+  padding: 8px 12px;
+  min-height: 40px;
+}
+#root :is(.home-sidebar nav, .primary-navigation) {
+  gap: 7px;
+}
+#root :is(.home-sidebar a, .aurora-mobile-navigation a, .world-grid-toggle) {
+  text-decoration: none;
+}
+
+/* Un état choisi se lit aussi par son contour, pas seulement par sa couleur. */
+#root :is(button, a, [role="tab"]):is(.is-active, [aria-current="page"], [aria-pressed="true"], [aria-selected="true"]):not(.world-card) {
+  --glass-marker: inset 0 0 0 2px var(--glass-accent);
+  background-color: var(--glass-selected);
+  border-color: var(--glass-accent);
+  color: var(--glass-ink);
+}
+#root :is(.navigation-item, .home-sidebar a, .more-navigation button):is(.is-active, [aria-current="page"]) {
+  --glass-marker: inset 3px 0 0 var(--glass-accent);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  #root :is(button, [role="tab"], .home-sidebar a, .aurora-mobile-navigation a, .aurora-more-spaces summary):not(:where(.world-card, .mobile-more-dismiss, :disabled, [aria-disabled="true"])):hover {
+    background-color: var(--glass-hover);
+    border-color: var(--glass-accent);
+    animation: var(--glass-touch-animation, glass-touch 1.6s ease-out both);
+    animation-play-state: var(--glass-play-state, running);
+  }
+}
+#root :is(button, [role="tab"], .home-sidebar a, .aurora-mobile-navigation a, summary):focus-visible {
+  outline: 2px solid var(--ida-focus);
+  outline-offset: 4px;
+}
+#root :is(button, [role="tab"]):disabled,
+#root [aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Les décisions métier restent visuellement distinctes et les refus explicites. */
+#root :is(.approval-action-button.approve, .memory-action-button.approve, .task-complete-button, .editorial-calendar-schedule-button) {
+  --glass-accent: var(--ida-success);
+  --glass-marker: inset 0 0 0 1px var(--ida-success);
+  color: var(--ida-success);
+}
+#root :is(.approval-action-button.reject, .memory-action-button.reject) {
+  --glass-accent: var(--ida-warning);
+  --glass-marker: inset 0 0 0 1px var(--ida-warning);
+  color: var(--ida-warning);
+}
+#root :is(.campaign-release-button.remove, .editorial-calendar-cancel-button) {
+  --glass-accent: var(--ida-danger);
+  --glass-marker: inset 0 0 0 1px var(--ida-danger);
+  color: var(--ida-danger);
+}
+
+/* Les cartes vidéo ont un bord de verre, pas un filtre de plus à recomposer. */
+#root .world-card {
+  border-color: #f0e5d69c;
+  box-shadow: inset 0 1px 0 #fff9, inset 0 0 0 1px #fff3, 0 12px 30px #06122130;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+#root .world-card[aria-pressed="true"] {
+  border-color: #ffe3bc;
+  box-shadow: inset 0 0 0 1px #fff9, 0 0 0 1px #ffe3bc8c, 0 12px 30px #06122150;
+}
+:root[data-theme="scifi"] #root .world-card[aria-pressed="true"] {
+  border-color: #b1e5ff;
+  box-shadow: inset 0 0 0 1px #d1efffa1, 0 0 0 1px #b1e5ff80, 0 12px 30px #02081280;
+}
+
+/* Aucune couche de flou supplémentaire dans les ambiances animées. */
+#root .world-environment {
+  --glass-panel: var(--glass-base);
+  --glass-blur: none;
+}
+
+/* Le choix existant de surfaces solides est prioritaire, même devant une vidéo. */
+#root [data-surface="solid"] {
+  --glass-base: var(--glass-solid);
+  --glass-panel: var(--glass-solid);
+  --glass-blur: none;
+  --glass-intro-animation: none;
+  --glass-drift-animation: none;
+  --glass-touch-animation: none;
+  --glass-spotlight: transparent;
+}
+#root [data-surface="solid"] :is(.aurora-agent-card, .home-continuity-card, .home-metrics button, .world-spaces button, .aurora-icon-button, .aurora-explore) {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  :root,
+  :root[data-theme="scifi"] {
+    --glass-base: var(--glass-solid);
+    --glass-panel: var(--glass-solid);
+    --glass-blur: none;
+    --glass-edge: var(--glass-accent);
+    --glass-intro-animation: none;
+    --glass-drift-animation: none;
+    --glass-touch-animation: none;
+    --glass-spotlight: transparent;
+  }
+  #root :is(.aurora-agent-card, .home-continuity-card, .aurora-explore) {
+    background: var(--glass-solid);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  #root :is(button, a, [role="tab"], summary) {
+    animation: none;
+    --glass-light: transparent;
+  }
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root,
+  :root[data-theme="scifi"] {
+    --glass-base: var(--glass-solid);
+    --glass-panel: var(--glass-solid);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --glass-intro-animation: none;
+    --glass-drift-animation: none;
+    --glass-touch-animation: none;
+    --glass-spotlight: transparent;
+  }
+  #root :is(.aurora-home, .app-shell, .access-shell) :is(button, a, [role="tab"], summary) {
+    animation: none;
+    transition: none;
+    --glass-light: transparent;
+  }
+}
+@media (forced-colors: active) {
+  :root,
+  :root[data-theme="scifi"] {
+    --glass-intro-animation: none;
+    --glass-drift-animation: none;
+    --glass-touch-animation: none;
+    --glass-spotlight: transparent;
+  }
+  #root :is(button, [role="tab"], .home-sidebar a, .aurora-mobile-navigation a):not(.mobile-more-dismiss) {
+    border: 1px solid ButtonText;
+    box-shadow: none;
+    background-image: none;
+    animation: none;
+  }
+  #root :is(button, a, [role="tab"]):is(.is-active, [aria-current="page"], [aria-pressed="true"], [aria-selected="true"]) {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+}
