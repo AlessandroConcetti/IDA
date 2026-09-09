@@ -69,6 +69,14 @@ Pas de calendrier arbitraire : chaque tranche nécessite ses données, limites d
 
 ## Vérification
 
+### Cartes immersives — correction du 9 septembre 2026
+
+- Les dimensions du rail sont désormais définies dans `worlds.css`, sans réduction concurrente dans `home.css` ni hauteur contradictoire dans `world-scenes.css`. Largeur desktop 280–360 px, hauteur minimale 460 px ; sous 600 px, largeur `clamp(230px, 72vw, 330px)` et hauteur minimale 420 px. La grille conserve ses dimensions compactes indépendantes.
+- Dans l'aperçu de 1 278 px, la carte active passe de 217 × 249 à 358 × 460 px (environ trois fois la surface). Au breakpoint téléphone testé à 480 px : 330 × 420 px ; aucun débordement horizontal de la page, y compris dans la grille.
+- La carte active ne porte plus de transformation 3D ni de transition de transformation : son lecteur reste sur un plan 2D, comme l'environnement ouvert. La perspective des cartes voisines est conservée. Aucun changement de fichier vidéo, de résolution, de permission ou de politique d'autoplay.
+- Diagnostic temporaire `getVideoPlaybackQuality()` sur huit secondes : 259 images, aucune image perdue pour la carte corrigée et pour l'environnement. Le même relevé avec l'ancien transform ne perd pas non plus d'image : la saccade signalée n'est **pas reproduite par ces compteurs** et sa cause n'est pas démontrée. Ces données ne mesurent pas toute la fluidité de composition à l'écran. Instrumentation retirée après comparaison ; confirmation sur l'affichage utilisateur encore nécessaire.
+- Recette sans donnée métier modifiée : sélection clavier Début/Fin, retour grille/rail, zéro vidéo dans la grille et après arrêt manuel ; reprise et entrée Music Studio avec un seul lecteur. Tests frontend, types, lint des styles modifiés et build vérifiés.
+
 Tests : toutes les cibles existantes, mondes futurs inertes, mémoire partagée, limites clavier, sélection par position, rendu des thèmes sans callbacks, lecteur absent avant détection des préférences, conditions de refus et persistance bornée du thème. Recette navigateur sur les composants réels sans écrire de donnée métier : autoplay Music Studio/Workspace, arrêt, navigation entre modules, palettes et stockage du thème.
 
 Ce n’est ni une validation de sécurité Internet ni une recette iPhone/Android physique. Les captures de l’aperçu sont partiellement tronquées dans l’environnement de test : ne pas confondre inspection fonctionnelle et validation visuelle multi-appareils complète.

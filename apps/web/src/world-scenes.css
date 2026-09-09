@@ -76,7 +76,6 @@
   background: url("/design/user-20260909/classic-atrium.png") center / cover;
 }
 .world-card {
-  min-height: 360px;
   color: #fff;
   background: #182a35;
   border-color: #eadbc299;
@@ -139,9 +138,6 @@
   .aurora-home[data-theme="classic"] {
     background-image: linear-gradient(#fff1, #ffffff35), url("/design/user-20260909/classic-atrium.png");
     background-position: center top;
-  }
-  .world-card {
-    min-height: 310px;
   }
   .world-environment {
     min-height: 560px;

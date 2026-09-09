@@ -263,18 +263,16 @@
   letter-spacing: 0.14em;
 }
 .ida-home-layout .world-rail {
-  --card-width: clamp(165px, 17vw, 220px);
   padding-top: 22px;
   padding-bottom: 18px;
 }
 .ida-home-layout .world-card {
-  min-height: 235px;
-  padding: 19px 14px;
-  gap: 11px;
-  border-radius: 27px;
+  padding: 26px 22px;
+  gap: 16px;
+  border-radius: 32px;
 }
 .ida-home-layout .world-card :where(strong) {
-  font-size: 1rem;
+  font-size: 1.25rem;
 }
 .ida-home-layout .world-selection {
   margin-top: 8px;
@@ -731,11 +729,7 @@
     top: 16px;
   }
   .ida-home-layout .world-rail {
-    --card-width: 205px;
     margin-inline: -18px;
-  }
-  .ida-home-layout .world-card {
-    min-height: 275px;
   }
   .ida-home-layout .world-selection {
     margin-inline: 0;

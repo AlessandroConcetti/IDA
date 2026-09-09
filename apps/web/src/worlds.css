@@ -44,11 +44,11 @@
   margin: 0 0 4px;
 }
 .world-rail {
-  --card-width: clamp(185px, 20vw, 245px);
+  --card-width: clamp(280px, 28vw, 360px);
   display: flex;
   position: relative;
   overflow-x: auto;
-  gap: 12px;
+  gap: 20px;
   padding: 28px calc(50% - var(--card-width) / 2) 24px;
   scroll-snap-type: x mandatory;
   scrollbar-width: thin;
@@ -58,7 +58,7 @@
 .world-card {
   flex: 0 0 var(--card-width);
   min-width: 0;
-  min-height: 280px;
+  min-height: 460px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -80,6 +80,9 @@
     border-color 180ms ease;
 }
 .world-card[aria-pressed="true"] {
+  /* Le lecteur actif reste sur un plan 2D, comme dans l'environnement ouvert. */
+  transform: none;
+  transition: border-color 180ms ease;
   border-color: var(--world-active);
   box-shadow:
     0 0 0 1px var(--world-active),
@@ -346,11 +349,11 @@
     margin-top: 30px;
   }
   .world-rail {
-    --card-width: 205px;
+    --card-width: clamp(230px, 72vw, 330px);
     padding-top: 25px;
   }
   .world-card {
-    min-height: 300px;
+    min-height: 420px;
   }
   .world-selection {
     margin-inline: 23px;
