@@ -134,6 +134,125 @@
   font-size: 0.875rem;
   min-height: 44px;
 }
+
+/* Un environnement occupe la scène existante, sans créer un second accueil. */
+.ida-home-layout:has(.worlds[data-opened="true"]) .home-intro :is(.aurora-signature, .aurora-greeting, .home-command-suggestions),
+.ida-home-layout:has(.worlds[data-opened="true"]) :is(.home-section-heading, .home-metrics) {
+  display: none;
+}
+.ida-home-layout:has(.worlds[data-opened="true"]) .home-intro {
+  padding: 0;
+}
+.ida-home-layout .worlds[data-opened="true"] {
+  max-width: none;
+  margin-top: 18px;
+  scroll-margin-top: 18px;
+}
+.world-environment-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.world-dialogue {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 44px;
+  padding: 12px 18px;
+  border: 1px solid var(--world-border);
+  border-radius: 24px;
+  background: var(--world-surface);
+  color: var(--world-ink);
+  font: inherit;
+  font-size: 0.875rem;
+}
+.world-environment[data-layout="immersive"] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(270px, 320px);
+  grid-template-rows: auto 1fr auto;
+  align-items: start;
+  column-gap: clamp(24px, 5vw, 72px);
+  row-gap: 44px;
+  min-height: max(650px, 75svh);
+  padding: clamp(24px, 3vw, 44px);
+  text-align: left;
+}
+.world-environment[data-layout="immersive"] .world-environment-toolbar {
+  grid-column: 1 / -1;
+}
+.world-environment[data-layout="immersive"] .world-environment-heading {
+  width: auto;
+  margin: 0;
+  padding: 24px;
+  background: linear-gradient(120deg, #0a172bba, #0a172b22);
+  color: #fff;
+  border-left: 1px solid #f8dfbba6;
+  border-radius: 0 24px 24px 0;
+  text-shadow: 0 2px 14px #000a;
+}
+.world-environment[data-layout="immersive"] .world-environment-heading h2 {
+  font-size: clamp(1.8rem, 3.5vw, 3.4rem);
+  font-weight: 300;
+  letter-spacing: 0.12em;
+  line-height: 1.2;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+  margin: 20px 0 18px;
+}
+.world-environment[data-layout="immersive"] .world-environment-heading p {
+  font-size: 0.875rem;
+  letter-spacing: 0.12em;
+}
+.world-environment[data-layout="immersive"] .world-spaces {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+.world-environment[data-layout="immersive"] .world-spaces button {
+  position: relative;
+  max-width: none;
+  width: 100%;
+  min-height: 104px;
+  padding: 22px 48px 22px 22px;
+  gap: 8px;
+  border-radius: 22px;
+  box-shadow: 0 8px 25px #0002;
+}
+.world-environment[data-layout="immersive"] .world-spaces span:last-child {
+  position: absolute;
+  right: 16px;
+  top: 20px;
+  font-size: 0;
+}
+.world-environment[data-layout="immersive"] .world-spaces span:last-child::after {
+  content: "→";
+  font-size: 1.2rem;
+}
+.world-environment[data-layout="immersive"] .world-video-pending {
+  grid-column: 1 / -1;
+  justify-self: start;
+  align-self: end;
+  margin: 60px 0 0;
+}
+.aurora-home[data-surface="solid"] .world-environment .world-spaces button {
+  backdrop-filter: none;
+}
+@media (max-width: 850px) {
+  .world-environment[data-layout="immersive"] {
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 75svh;
+    gap: 28px;
+  }
+  .world-environment[data-layout="immersive"] .world-environment-heading {
+    margin-bottom: clamp(70px, 18vw, 160px);
+  }
+  .world-environment[data-layout="immersive"] .world-spaces {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
 @media (max-width: 600px) {
   .aurora-home[data-theme="classic"] {
     background-image: linear-gradient(#fff1, #ffffff35), url("/design/user-20260909/classic-atrium.png");
@@ -141,5 +260,18 @@
   }
   .world-environment {
     min-height: 560px;
+  }
+  .world-environment[data-layout="immersive"] {
+    padding: 18px;
+    border-radius: 28px;
+  }
+  .world-environment-toolbar > button {
+    flex: 1 1 auto;
+  }
+  .world-environment[data-layout="immersive"] .world-environment-heading {
+    padding: 20px 16px;
+  }
+  .world-environment[data-layout="immersive"] .world-spaces {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

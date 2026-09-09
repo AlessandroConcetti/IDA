@@ -25,6 +25,10 @@ Artist Brain et Mémoire conduisent volontairement à l’écran partagé exista
 
 Le thème Sci-Fi conserve l’observatoire fourni comme décor d’accueil. Les cartes sans vidéo utilisent désormais les scènes fournies et portent « Vidéo à venir ». Les ambiances des environnements restent distinctes du choix de palette. Le vortex et un éditeur libre de thèmes ne sont pas implémentés ici.
 
+### Environnements immersifs — reprise frontend
+
+L'ouverture d'un monde réutilise `WorldWheel` : scène agrandie, titre à gauche, accès aux espaces sur la droite, puis composition empilée sur téléphone. Le décor central reste dégagé ; les vidéos utilisateur et leur politique d'arrêt sont inchangées. Un accès « Dialogue avec IDA » ouvre la conversation existante, sans prétendre connecter un nouveau modèle. L'introduction et les compteurs de l'accueil sont temporairement repliés dans un environnement ; le retour Accueil réaffiche la roue et ces éléments. IDA Home conserve son aperçu quotidien et ses connexions existantes. Aucun environnement futur ni outil métier n'est activé. Cette reprise est limitée au frontend : catalogue et campagne de tests laissés en pause à la demande de l'utilisateur.
+
 ## Médias locaux et provenance
 
 Fichiers utilisateur copiés sans transformation dans `apps/web/public/design/`, exclus explicitement de Git :

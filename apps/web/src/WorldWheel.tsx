@@ -26,6 +26,7 @@ export function WorldWheel({
   const [grid, setGrid] = useState(false);
   const [ambiencePaused, setAmbiencePaused] = useState(false);
   const rail = useRef<HTMLDivElement>(null);
+  const surface = useRef<HTMLElement>(null);
   const cards = useRef<(HTMLButtonElement | null)[]>([]);
   const title = useRef<HTMLHeadingElement>(null);
   const enter = useRef<HTMLButtonElement>(null);
@@ -50,17 +51,19 @@ export function WorldWheel({
     if (previousOpen.current !== opened) {
       if (opened) title.current?.focus({ preventScroll: true });
       else enter.current?.focus({ preventScroll: true });
+      surface.current?.scrollIntoView({ block: "start", behavior: "auto" });
     }
     previousOpen.current = opened;
     // Recentrage au changement de présentation, pas à chaque scroll tactile.
   }, [opened, grid]);
   if (!world) return null;
   return (
-    <section className="worlds" aria-label="La Roue des Mondes" data-theme={theme}>
+    <section ref={surface} className="worlds" aria-label="La Roue des Mondes" data-theme={theme} data-opened={opened}>
       {opened ? (
         <section
           className="world-environment"
           data-world={world.id}
+          data-layout={world.id === "home" ? "overview" : "immersive"}
           aria-label={`Environnement ${world.title}`}
           onKeyDown={(event) => {
             if (event.key === "Escape") {
@@ -69,9 +72,14 @@ export function WorldWheel({
             }
           }}
         >
-          <button className="world-back" type="button" onClick={() => setOpened(false)}>
-            ← La Roue des Mondes
-          </button>
+          <div className="world-environment-toolbar">
+            <button className="world-back" type="button" onClick={() => setOpened(false)}>
+              ← La Roue des Mondes
+            </button>
+            <button className="world-dialogue" type="button" onClick={() => onNavigate("ida")}>
+              <span aria-hidden="true">✦</span> Dialogue avec IDA <span aria-hidden="true">↗</span>
+            </button>
+          </div>
           <header className="world-environment-heading">
             <span aria-hidden="true" className="world-glyph">
               {world.glyph}
@@ -82,7 +90,7 @@ export function WorldWheel({
             <p>{world.description}</p>
           </header>
           {renderEnvironment?.(world.id)}
-          <div className="world-spaces">
+          <nav className="world-spaces" aria-label={`Espaces de ${world.title}`}>
             {world.spaces.map((space) => (
               <button key={space.title} type="button" onClick={() => onNavigate(space.target)}>
                 <strong>{space.title}</strong>
@@ -90,7 +98,7 @@ export function WorldWheel({
                 <span aria-hidden="true">Ouvrir →</span>
               </button>
             ))}
-          </div>
+          </nav>
           {world.video ? (
             <WorldAmbience key={world.id} src={world.video} paused={ambiencePaused} />
           ) : (

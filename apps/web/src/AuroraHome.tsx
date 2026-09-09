@@ -160,7 +160,11 @@ export function AuroraHome({
 
       <aside className="home-sidebar" aria-label="Raccourcis de l’accueil">
         <nav aria-label="Navigation IDA Home">
-          <a href="#aurora-start" aria-current="page">
+          <a
+            href="#aurora-start"
+            aria-current="page"
+            onClick={() => setWheelEntry((current) => ({ view: "worlds", revision: current.revision + 1 }))}
+          >
             <span aria-hidden="true">⌂</span>Accueil
           </a>
           <button type="button" onClick={showWorlds}>
@@ -349,7 +353,11 @@ export function AuroraHome({
         </button>
       </footer>
       <nav className="aurora-mobile-navigation" aria-label="Navigation mobile">
-        <a href="#aurora-start" aria-current="page">
+        <a
+          href="#aurora-start"
+          aria-current="page"
+          onClick={() => setWheelEntry((current) => ({ view: "worlds", revision: current.revision + 1 }))}
+        >
           <span aria-hidden="true">⌂</span>Accueil
         </a>
         <button type="button" onClick={() => onNavigate("ida")}>
