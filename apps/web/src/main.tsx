@@ -15,6 +15,7 @@ import "./fridge-scene.css";
 import "./classic-fridge.css";
 import "./reference-environments.css";
 import "./fabrique-environment.css";
+import "./weather-environment.css";
 import { applyTheme, readTheme } from "./theme";
 
 const rootElement = document.getElementById("root");

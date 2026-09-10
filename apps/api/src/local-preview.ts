@@ -7,6 +7,8 @@ const app = await createApp({
   storageDir: fileURLToPath(new URL("../../../tmp/ida-preview-relative-dates/media", import.meta.url)),
   seed: false,
   identityMode: "LOCAL_LOCK",
+  // Lecture météo personnelle uniquement, déclenchée et consentie dans l'écran Home.
+  weatherEnabled: true,
   localDialogueEnabled: process.env.IDA_LOCAL_DIALOGUE === "1" && process.env.OLLAMA_NO_CLOUD === "1",
 });
 await app.listen({ host: "127.0.0.1", port: 8787 });

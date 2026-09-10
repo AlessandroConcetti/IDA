@@ -1,5 +1,9 @@
 # Environnements plein écran — 9 septembre 2026
 
+## Reprise du 10 septembre : Météo
+
+IDA Home → Météo utilise maintenant la composition lac/panneaux de la référence, des contrôles HTML et l'API météo officielle côté serveur sur chargement explicite. Voir [METEO_HOME.md](METEO_HOME.md) : prévisions datées, air partiel, sources, limites et vérifications. Ce compte rendu remplace les mentions historiques « Météo à intégrer » ci-dessous.
+
 ## Reprise du 10 septembre : Frigo Classic et La Fabrique
 
 Les deux scènes dédiées sont désormais intégrées ; voir [Frigo Classic et La Fabrique](FRIGO_CLASSIC_FABRIQUE.md) pour les commandes disponibles, la réutilisation des tâches/inventaire et les limites. La Fabrique réutilise maintenant le rail, les fenêtres et icônes de Research/Travel/Music Studio. Les descriptions historiques de ces deux scènes ci-dessous sont remplacées par ce compte rendu.

@@ -1,4 +1,4 @@
-import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from "react";
+import { type CSSProperties, type ReactNode, lazy, Suspense, useEffect, useRef, useState } from "react";
 import { CareProfile } from "./CareProfile";
 import { ClassicFridge } from "./ClassicFridge";
 import { FabriqueEnvironment } from "./FabriqueEnvironment";
@@ -10,6 +10,8 @@ import { ReferenceEnvironment } from "./ReferenceEnvironment";
 import { useSceneViewport } from "./scene-viewport";
 import { ThemePicker } from "./ThemePicker";
 import { type HomeTheme, type IdaWorld, worlds } from "./worlds";
+
+const WeatherEnvironment = lazy(() => import("./WeatherEnvironment").then((module) => ({ default: module.WeatherEnvironment })));
 
 const sceneImages: Record<string, string> = {
   music: "/design/user-20260909/music-scene-v1.png",
@@ -35,6 +37,7 @@ export function EnvironmentLobby({ world, theme, onThemeChange, onBack, onSelect
   if (world.id === "music" || world.id === "research" || world.id === "travel") return <ReferenceEnvironment
     environment={world.id} titleRef={title} onBack={onBack} onSelect={onSelect} onNavigate={onNavigate} />;
   if (world.id === "fabrique") return <FabriqueEnvironment titleRef={title} onBack={onBack} onSelect={onSelect} onNavigate={onNavigate} />;
+  if (world.id === "home" && tab === "weather") return <Suspense fallback={<section className="environment-screen" aria-label="Ouverture de la météo"><div className="scene-panel"><button type="button" onClick={() => setTab("spaces")}>← IDA Home</button><p role="status">Ouverture de votre espace Météo…</p></div></section>}><WeatherEnvironment titleRef={title} onBack={() => setTab("spaces")} onFridge={() => setTab("fridge")} onNavigate={onNavigate} onSelectWorld={onSelect} /></Suspense>;
   if (world.id === "home" && tab === "fridge") return theme === "classic" ? <ClassicFridge items={items} onChange={setItems}
     titleRef={title} onBack={() => setTab("spaces")} onNavigate={onNavigate} onSelectWorld={onSelect} /> : <FridgeScene items={items} onChange={setItems}
     titleRef={title} theme={theme} onBack={() => setTab("spaces")} onNavigate={onNavigate} onSelectWorld={onSelect} />;
@@ -87,6 +90,7 @@ export function EnvironmentLobby({ world, theme, onThemeChange, onBack, onSelect
                 <p className="scene-kicker">{world.id === "home" ? "MA MAISON" : "VOS ESPACES"}</p>
                 {world.id === "home" ? <>
                   <button type="button" onClick={() => setTab("fridge")}><span aria-hidden="true">▣</span><span><strong>Mon frigo</strong><small>Produits et liste à racheter · brouillon</small></span><span>↗</span></button>
+                  <button type="button" onClick={() => setTab("weather")}><span aria-hidden="true">☼</span><span><strong>Météo</strong><small>Prévisions, qualité de l’air et cartes · chargement volontaire</small></span><span>↗</span></button>
                   <button type="button" onClick={() => setTab("connections")}><span aria-hidden="true">⌂</span><span><strong>Domotique</strong><small>Home Assistant · connexion à préparer</small></span><span>↗</span></button>
                   <button type="button" onClick={() => setTab("today")}><span aria-hidden="true">☼</span><span><strong>Ma journée</strong><small>Retrouver l’aperçu partagé d’IDA Home</small></span><span>↗</span></button>
                 </> : null}
@@ -110,6 +114,7 @@ export function EnvironmentLobby({ world, theme, onThemeChange, onBack, onSelect
           <button type="button" onClick={() => onNavigate("ida")}><span aria-hidden="true">◌</span>Dialogue</button>
           <button type="button" aria-pressed={tab === "spaces" || tab === "care"} onClick={() => setTab(world.id === "health" ? "care" : "spaces")}><span aria-hidden="true">◇</span>{world.id === "health" ? "Mon profil" : "Espaces"}</button>
           {world.id === "home" ? <button type="button" aria-pressed={tab === "fridge"} onClick={() => setTab("fridge")}><span aria-hidden="true">▣</span>Frigo</button> : null}
+          {world.id === "home" ? <button type="button" onClick={() => setTab("weather")}><span aria-hidden="true">☼</span>Météo</button> : null}
           <span className="scene-meta">Ambiance illustrée · vidéos sur la roue</span>
           <button type="button" aria-expanded={details} onClick={() => setDetails(!details)}><span aria-hidden="true">ⓘ</span>Confidentialité</button>
         </footer>

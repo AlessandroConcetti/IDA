@@ -1,5 +1,7 @@
 # Livraison frontend — 10 septembre 2026
 
+Mise à jour : Frigo Classic et La Fabrique ont été livrés ensuite ([compte rendu](FRIGO_CLASSIC_FABRIQUE.md)). Météo est désormais une section d'IDA Home avec lecture explicite de l'API officielle ([compte rendu](METEO_HOME.md)). Les anciennes mentions « à intégrer » ci-dessous ne décrivent plus ces trois parties.
+
 ## Réalisé dans cette tranche
 
 | Partie | Commandes implémentées | Limite explicite |

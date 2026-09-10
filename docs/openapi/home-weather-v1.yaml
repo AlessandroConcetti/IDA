@@ -1,0 +1,62 @@
+openapi: 3.1.0
+info:
+  title: IDA Home — lecture météo locale personnelle
+  version: 1.0.0
+servers:
+  - url: http://127.0.0.1:8787
+security:
+  - localSession: []
+paths:
+  /v1/home/weather/status:
+    get:
+      summary: État de configuration sans appel fournisseur
+      responses:
+        '200':
+          description: data.enabled, provider=OPEN_METEO, mode=PERSONAL_NON_COMMERCIAL, cityIds
+        '401':
+          description: Session requise ou révoquée
+        '403':
+          description: Identity ou outil HOME/READ refusé
+  /v1/home/weather:
+    post:
+      summary: Charger volontairement le bulletin d'une ville publique
+      description: >-
+        READ via Tool Gateway malgré POST. Corps limité à 1024 octets. Quota local de 30 consultations/heure,
+        une lecture simultanée, cache public de dix minutes. Identité et workspace viennent exclusivement
+        du serveur. Réponses no-store. Schéma exécutable de réponse dans packages/contracts/src/weather.ts.
+        Aucune activation implicite, géolocalisation, vigilance officielle ou appel LLM.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [cityId, consent]
+              properties:
+                cityId:
+                  type: string
+                  enum: [geneva, marseille, paris, lyon, london, new-york, tokyo, dubai]
+                consent:
+                  const: true
+      responses:
+        '200':
+          description: Bulletin normalisé version 1, source OPEN_METEO, fetchedAt/expiresAt UTC, current/hourly/daily/air ; air peut être null
+        '400':
+          description: Ville, corps ou consentement invalides
+        '401':
+          description: Session requise, expirée ou révoquée
+        '403':
+          description: Origine, Identity ou outil HOME/READ refusé
+        '413':
+          description: Corps trop volumineux
+        '429':
+          description: Occupé ou quota atteint, Retry-After fourni
+        '503':
+          description: Désactivé, audit ou bulletin indisponible ; erreur contrôlée sans détails externes
+components:
+  securitySchemes:
+    localSession:
+      type: apiKey
+      in: cookie
+      name: ida_local_session
