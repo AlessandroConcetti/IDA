@@ -1,0 +1,184 @@
+/* Les décors sont des images sans commandes. Toutes les interactions sont HTML. */
+#root .reference-environment, .reference-sheet {
+  --glass-base: #3333389c; --glass-panel: #252629a8; --glass-solid: #202329;
+  --glass-hover: #555258ba; --glass-selected: #655c52b0; --glass-edge: #e4e0d037;
+  --glass-highlight: #f7efe436; --glass-reflection: #f5e7dd16; --glass-sheen: #fce2c32b;
+  --glass-spotlight: #ffdfb535; --glass-ink: #f1f0ee; --glass-accent: #efcfad;
+  --glass-shadow: #0003; --glass-blur: blur(16px) saturate(110%);
+  color: var(--glass-ink); color-scheme: dark;
+}
+#root .reference-environment { grid-template-columns: clamp(144px, 10.5vw, 182px) minmax(0, 1fr); background: #15181d; }
+#root .reference-environment::after { background: linear-gradient(90deg, #06090e35, transparent 55%, #06090e15); }
+.reference-rail { padding: 36px 16px 26px; display: flex; flex-direction: column; border-right: 1px solid #e9d8bb25; background: linear-gradient(110deg, #0e1118b3, #13141855); }
+#root .reference-brand { padding: 6px 12px; font-size: 1.65rem; font-weight: 250; letter-spacing: .12em; text-align: left; border: 0; border-radius: 10px; }
+.reference-rail > p { padding: 8px 12px 22px; font-size: .58rem; letter-spacing: .28em; line-height: 2.1; color: #dbd8d5b0; }
+.reference-rail nav { display: grid; gap: 9px; margin-top: 12px; }
+#root .reference-rail nav button { text-align: left; display: flex; align-items: center; gap: 12px; min-height: 38px; padding: 8px 6px; border: 0; border-radius: 9px; font-size: .87rem; font-weight: 350; }
+#root .reference-rail nav button:not([aria-current]):not(:hover):not(:focus-visible), #root .reference-brand { background: transparent; box-shadow: none; }
+.reference-rail nav button > span { width: 20px; flex: none; font-size: 1.2rem; }
+#root .reference-rail nav button[aria-current="page"] { color: #fff4e6; background-color: #f1d1ad0d; box-shadow: inset 2px 0 #ebc898, -10px 0 25px -18px #ffd0a4; }
+.reference-rail nav button[aria-current="page"] > span { text-shadow: 0 0 10px #ffb668; }
+.reference-rail .reference-signature { margin-top: auto; margin-bottom: 0; padding-top: 35px; }
+.reference-main { position: relative; min-height: max(760px, 100svh); padding: 0; min-width: 0; }
+.reference-top { position: absolute; top: 18px; left: 30px; right: 25px; display: flex; justify-content: space-between; gap: 16px; z-index: 3; }
+#root .reference-top button { border: 1px solid #ece3d124; border-radius: 99px; padding: 8px 14px; min-height: 36px; font-size: .73rem; }
+.reference-intro { position: absolute; top: 14.5%; left: 4.2%; max-width: 29%; text-shadow: 0 2px 12px #0006; }
+#root .reference-intro h1 { margin: 0 0 12px; font-size: clamp(1.45rem, 2.15vw, 2.45rem); letter-spacing: .22em; font-weight: 300; line-height: 1.5; }
+.reference-subtitle { font-size: .65rem; letter-spacing: .34em; line-height: 2; margin: 0; }
+.reference-intro hr { border: 0; width: 28px; height: 1px; background: #cfc7bc; margin: 25px 0; }
+.reference-quote { font-size: .94rem; font-style: italic; line-height: 1.65; font-weight: 350; max-width: 290px; }
+.reference-intro > p:not(.reference-subtitle) { line-height: 1.7; font-weight: 350; }
+.reference-intro > small { font-size: .6rem; opacity: .65; }
+.reference-panels { position: relative; width: 23%; min-width: 264px; margin: 15% 1.7% 150px auto; display: grid; gap: 10px; z-index: 2; }
+.reference-glass { border: 1px solid var(--glass-edge); border-radius: 21px; padding: 16px; background: linear-gradient(125deg, #f4e7d80b, transparent 65%), var(--glass-panel); box-shadow: inset 0 1px #ffffff18, 0 8px 36px #0002; backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); }
+.reference-glass > h2, .reference-trip-heading h2 { font-size: 1rem; font-weight: 450; margin: 0 0 15px; }
+.reference-glass p { font-size: .8rem; line-height: 1.65; font-weight: 350; margin-bottom: 4px; }
+#root .reference-row { width: 100%; display: flex; gap: 13px; align-items: center; text-align: left; border: 0; padding: 13px 0; border-radius: 10px; background-color: transparent; box-shadow: none; }
+.reference-row svg { width: 27px; height: 27px; flex: none; }
+.reference-row > span:nth-child(2) { flex: 1; min-width: 0; }
+.reference-row strong { display: block; font-weight: 450; font-size: .84rem; }
+.reference-row small { display: block; margin-top: 6px; font-size: .7rem; line-height: 1.5; color: #e3dfd8b0; overflow-wrap: anywhere; }
+.reference-row + .reference-row { border-top: 1px solid #e4ded814 !important; }
+.reference-warm { background: linear-gradient(100deg, #8f66434d, #252629b8); }
+.reference-wave { height: 35px; display: flex; align-items: center; justify-content: center; gap: 2px; opacity: .7; padding-left: 38px; }
+.reference-wave span { display: block; width: 2px; background: #d8cdc0; }
+#root .reference-recent { display: flex; align-items: center; gap: 10px; border: 0; border-radius: 9px; width: 100%; padding: 9px 5px; text-align: left; background: transparent; box-shadow: none; font-size: .75rem; }
+.reference-recent > span:first-child { display: grid; place-items: center; background: #121f2d; width: 34px; height: 34px; flex: none; border: 1px solid #e7d6bb22; border-radius: 7px; }
+.reference-recent > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reference-dock { position: absolute; bottom: 5%; left: 46%; transform: translateX(-50%); width: max-content; max-width: 75%; display: flex; gap: 10px; padding: 10px 18px; background: linear-gradient(140deg, #49413caa, #1a1d21b8); border: 1px solid #efe1ce3d; border-radius: 24px; backdrop-filter: blur(16px); }
+#root .reference-dock button { border: 0; border-radius: 14px; padding: 10px 12px; min-width: 73px; display: grid; justify-items: center; gap: 12px; font-size: .75rem; font-weight: 350; background-color: transparent; box-shadow: none; }
+.reference-dock svg { width: 27px; height: 27px; }
+.reference-motto { position: absolute; bottom: 7%; right: 2%; width: 18%; font-size: .52rem; letter-spacing: .3em; line-height: 2.3; opacity: .65; }
+.reference-mini-actions { display: flex; margin: 25px -10px 0; gap: 6px; }
+#root .reference-mini-actions button { display: grid; justify-items: center; gap: 9px; padding: 9px; background: transparent; border: 0; box-shadow: none; border-radius: 12px; font-size: .67rem; }
+.reference-mini-actions svg { width: 27px; height: 27px; }
+.reference-search { display: flex; align-items: center; gap: 8px; padding: 4px 6px 4px 12px; border: 1px solid #e6e3dd8a; border-radius: 13px; background: #121c2440; }
+.reference-search svg { width: 20px; height: 20px; flex: none; }
+#root .reference-search input { min-width: 0; width: 100%; border: 0; outline-offset: 0; background: transparent; color: #eee; padding: 8px 0; font-size: .74rem; }
+#root .reference-search input::placeholder { color: #e3dfd69e; }
+#root .reference-search button { border: 0; background: transparent; box-shadow: none; border-radius: 8px; min-height: 34px; padding: 4px 8px; }
+#root .reference-topic { display: flex; align-items: center; gap: 10px; width: 100%; border: 0; border-radius: 10px; padding: 10px 4px; font-size: .74rem; text-align: left; background: transparent; box-shadow: none; }
+.reference-topic > span:last-child { margin-left: auto; }
+#root .reference-pill { margin-top: 14px; width: 100%; border: 1px solid var(--glass-edge); border-radius: 999px; padding: 12px; font-size: .8rem; }
+.reference-light { pointer-events: none; position: absolute; width: 25%; height: 28%; border-radius: 50%; top: 17%; left: 34%; background: radial-gradient(ellipse, #ffdeab09, transparent 67%); opacity: .4; animation: reference-breathe 7s ease-in-out infinite; }
+@keyframes reference-breathe { 50% { opacity: 1; transform: scale(1.05); } }
+#root .reference-environment[data-motion="false"] { --glass-intro-animation: none; --glass-drift-animation: none; --glass-touch-animation: none; }
+.reference-environment[data-motion="false"] .reference-light { animation: none; }
+.reference-error { border-radius: 16px; background: #23252dd9; padding: 14px; font-size: .78rem; line-height: 1.6; }
+#root .reference-error button { padding: 9px 12px; border-radius: 12px; margin-top: 8px; display: block; }
+
+/* Les six portes correspondent aux six photos architecturales fournies. */
+.reference-environment[data-world="travel"] .reference-intro { top: 10.5%; left: 3.7%; max-width: 20%; }
+.reference-environment[data-world="travel"] .reference-panels { margin-top: 39%; width: 28%; min-width: 300px; }
+.reference-environment[data-world="travel"] .reference-quote { font-size: 1.3rem; }
+.reference-destinations { position: absolute; top: 0; left: 22.8%; right: 10.5%; height: 48.5%; display: grid; grid-template-columns: repeat(6, 1fr); z-index: 1; }
+#root .reference-destinations .destination-door { align-self: stretch; display: flex; flex-direction: column; justify-content: end; gap: 15px; padding: 16px 13px 24px; border: 0; border-radius: 0 0 12px 12px; text-align: left; background: transparent; box-shadow: none; color: white; transition: background 160ms, box-shadow 160ms; }
+#root .reference-destinations .destination-door:hover, #root .reference-destinations .destination-door:focus-visible { background: linear-gradient(transparent 40%, #b6dcea22); box-shadow: inset 0 -2px #ffe3c3; }
+.destination-door strong { font-size: clamp(.75rem, 1.1vw, 1.25rem); font-weight: 550; text-transform: uppercase; }
+.destination-door > span { font-size: clamp(.65rem, .8vw, .84rem); line-height: 1.5; font-weight: 350; }
+.destination-door i { display: grid; place-items: center; width: 29px; height: 29px; border: 1px solid #d1dce37f; border-radius: 99px; font-style: normal; font-size: 1rem; }
+.travel-suggestion { display: grid; grid-template-columns: 38% minmax(0, 1fr); gap: 17px; padding: 5px 0 15px; border-bottom: 1px solid #e0d6c333; }
+.travel-thumb { min-height: 160px; border-radius: 12px; background: url('/design/user-20260909/travel-scene-v1.png') 45% 9% / 950% auto; }
+.travel-suggestion h2 { font-size: 1.1rem; font-weight: 450; letter-spacing: .08em; margin: 7px 0; }
+.travel-suggestion small { font-size: .74rem; color: #e4e0dabd; }
+.travel-suggestion p { font-style: italic; font-size: .75rem; }
+#root .travel-suggestion button { float: right; border: 1px solid var(--glass-edge); width: 36px; height: 36px; border-radius: 50%; margin-top: 10px; }
+.reference-trip-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 16px; }
+.reference-trip-heading h2 { font-size: .87rem; margin: 0; }
+#root .reference-trip-heading button { border: 0; padding: 8px; font-size: .68rem; border-radius: 8px; }
+.reference-trip-previews { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+#root .reference-trip-previews button { min-height: 90px; border-radius: 12px; padding: 12px; font-size: .8rem; overflow-wrap: anywhere; border: 1px solid var(--glass-edge); }
+.reference-trip-previews small { display: block; margin-top: 8px; font-size: .64rem; }
+
+/* Dialogues natifs : focus contenu, fermeture Escape, aucun média autoplay. */
+.reference-sheet { width: min(760px, calc(100vw - 32px)); max-height: calc(100svh - 40px); margin: auto; padding: 28px; background: #19212aef; border: 1px solid #d6c7b670; border-radius: 26px; box-shadow: 0 30px 100px #0008; backdrop-filter: blur(22px); overflow: auto; }
+.reference-sheet::backdrop { background: #06090ba6; backdrop-filter: blur(5px); }
+.reference-sheet > header { display: flex; justify-content: space-between; align-items: start; gap: 16px; margin-bottom: 22px; }
+.reference-sheet h2 { margin: 8px 0 0; font-size: 1.5rem; font-weight: 400; }
+.reference-sheet h3 { font-size: 1rem; font-weight: 450; overflow-wrap: anywhere; }
+#root .reference-sheet button { min-height: 44px; padding: 12px 17px; border: 1px solid var(--glass-edge); border-radius: 13px; }
+#root .reference-sheet > header > button { font-size: 1.5rem; padding: 2px; min-width: 44px; }
+.reference-sheet p { line-height: 1.65; font-size: .9rem; }
+.reference-sheet label { display: grid; gap: 10px; margin: 17px 0; font-size: .9rem; }
+.reference-sheet input:not([type="checkbox"]):not([type="range"]), .reference-sheet textarea { width: 100%; padding: 12px; min-width: 0; font: inherit; color: #f2efeb; background: #0b121957; border: 1px solid #d6cebe5c; border-radius: 12px; }
+.reference-sheet textarea { resize: vertical; }
+.reference-sheet input[type="range"] { accent-color: #e6c29e; width: 100%; }
+.reference-actions, .reference-link-grid { display: flex; gap: 10px; flex-wrap: wrap; margin: 18px 0; align-items: center; }
+.reference-sheet a { display: inline-block; color: #ffe1c3; padding: 12px 15px; border: 1px solid #eedcc647; border-radius: 13px; font-size: .88rem; text-underline-offset: 4px; }
+.reference-sheet .reference-primary { display: inline-block; margin: 12px 10px 8px 0; }
+.reference-sheet .reference-hint { font-size: .78rem; color: #c7c2bc; }
+.reference-form-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.reference-library { max-height: 270px; overflow: auto; display: grid; gap: 8px; margin: 20px 0; }
+#root .reference-library button { display: flex; gap: 14px; align-items: center; width: 100%; text-align: left; }
+.reference-library svg { width: 25px; height: 25px; flex: none; }
+.reference-library button > span:nth-child(2) { flex: 1; overflow-wrap: anywhere; }
+.reference-library small { display: block; font-size: .75rem; opacity: .7; margin-top: 5px; }
+.reference-player { border: 1px solid var(--glass-edge); border-radius: 18px; padding: 18px; }
+.reference-player audio { width: 100%; margin-top: 12px; }
+.studio-eq { border: 1px solid var(--glass-edge); padding: 16px; margin-top: 18px; border-radius: 16px; }
+.studio-eq:disabled { opacity: .5; }
+.music-folder-import { border-top: 1px solid var(--glass-edge); margin-top: 24px; padding-top: 10px; }
+.music-folder-import details { margin: 20px 0; max-height: 240px; overflow: auto; }
+.music-folder-import li { font-size: .8rem; overflow-wrap: anywhere; padding-block: 5px; }
+.reference-sheet select { min-height: 44px; color: #f0e9e0; background: #19212a; border: 1px solid var(--glass-edge); padding: 12px; border-radius: 12px; }
+.reference-check { display: flex !important; gap: 10px; align-items: center; }
+.reference-check input { width: 20px; height: 20px; }
+.reference-place-list { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+#root .reference-place-list button { display: grid; gap: 15px; text-align: left; min-height: 140px; }
+.reference-place-list button > span { font-size: .8rem; opacity: .8; }
+.reference-saved-trip { padding: 20px 0; border-bottom: 1px solid var(--glass-edge); }
+.reference-saved-trip p { white-space: pre-wrap; }
+.reference-idea-map { padding: 20px; border: 1px solid var(--glass-edge); border-radius: 18px; }
+.reference-idea-map > strong { border: 1px solid #eecdaa85; border-radius: 99px; padding: 10px 20px; display: inline-block; }
+.reference-idea-map ul { padding-left: 18px; margin-left: 20px; border-left: 1px solid #ebcba857; list-style: none; display: grid; gap: 8px; }
+.reference-idea-map li { padding: 10px 14px; background: #d3c3b00a; border: 1px solid var(--glass-edge); border-radius: 13px; overflow-wrap: anywhere; }
+.reference-feedback { padding: 15px; border-left: 2px solid #d9b185; background: #d9b1850a; }
+.ida-local-dialogue { grid-column: 1 / -1; }
+.ida-local-dialogue .local-dialogue { max-width: 880px; }
+.ida-local-dialogue label { display: grid; gap: 10px; }
+.ida-local-dialogue textarea { width: 100%; padding: 14px; font: inherit; color: var(--glass-ink); background: var(--glass-panel); border: 1px solid var(--glass-edge); border-radius: 14px; }
+.ida-local-dialogue button { padding: 12px 18px; border-radius: 13px; }
+.world-card[data-world="research"]::before { background: url('/design/user-20260909/research-scene-v1.png') center / cover; }
+.world-card[data-world="travel"]::before { background: url('/design/user-20260909/travel-scene-v1.png') center / cover; }
+@media (min-width: 1800px) { .reference-panels { margin-top: 170px; } .reference-environment[data-world="travel"] .reference-panels { margin-top: 440px; } }
+@media (max-width: 1100px) {
+  .reference-panels { width: 30%; margin-top: 160px; }
+  .reference-intro { max-width: 37%; }
+  .reference-environment[data-world="travel"] .reference-intro { top: 75px; max-width: 25%; }
+  .reference-environment[data-world="travel"] .reference-panels { margin-top: 420px; }
+  .reference-dock { left: 44%; gap: 2px; max-width: 94%; padding: 8px; }
+  #root .reference-dock button { min-width: 60px; padding-inline: 9px; }
+  .reference-motto { display: none; }
+  .reference-destinations { left: 27%; right: 0; height: 370px; }
+  #root .reference-destinations .destination-door { padding-inline: 7px; gap: 10px; }
+}
+@media (max-width: 800px) {
+  #root .reference-environment { display: block; }
+  .reference-rail { display: none; }
+  .reference-main { min-height: 100svh; padding: 20px 16px 30px; }
+  .reference-top { position: static; margin-bottom: 44px; }
+  .reference-intro, .reference-environment[data-world="travel"] .reference-intro { position: static; max-width: 360px; margin: 0 0 210px; }
+  #root .reference-intro h1 { font-size: 2rem; }
+  .reference-panels, .reference-environment[data-world="travel"] .reference-panels { width: min(100%, 480px); margin: 0 0 24px auto; min-width: 0; }
+  .reference-dock { position: static; transform: none; margin: 24px auto 0; max-width: 100%; flex-wrap: wrap; justify-content: center; border-radius: 21px; }
+  #root .reference-dock button { min-width: 78px; flex: 1; }
+  .reference-glass { padding: 20px; }
+  .reference-environment[data-world="travel"] .reference-intro { margin-bottom: 45px; }
+  .reference-destinations { position: static; height: auto; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 30px; gap: 10px; }
+  #root .reference-destinations .destination-door { min-height: 190px; background-color: #203c46d9; border: 1px solid #f0e0c752; padding: 14px; border-radius: 15px; }
+  .destination-door strong { font-size: .82rem; }
+  .destination-door > span { font-size: .75rem; }
+  .reference-sheet { padding: 20px; }
+  .reference-form-pair { grid-template-columns: 1fr; gap: 0; }
+  .reference-light { top: 170px; left: 33%; width: 55%; }
+}
+@media (max-width: 420px) { .reference-place-list { grid-template-columns: 1fr; } .reference-destinations { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (prefers-reduced-motion: reduce) { .reference-light { animation: none; } }
+@media (prefers-reduced-transparency: reduce) {
+  #root .reference-environment, .reference-sheet { --glass-panel: #252629; --glass-base: #333338; --glass-blur: none; }
+  .reference-dock, .reference-sheet, .reference-sheet::backdrop { backdrop-filter: none; background-color: #19212a; }
+}
+@media (forced-colors: active) {
+  #root .reference-environment::before, #root .reference-environment::after, .reference-light { display: none; }
+  #root .reference-environment, .reference-glass, .reference-rail, .reference-dock, .reference-sheet { background: Canvas; color: CanvasText; border-color: CanvasText; }
+}

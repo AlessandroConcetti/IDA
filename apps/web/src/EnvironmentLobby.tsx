@@ -1,11 +1,12 @@
-import { type CSSProperties, type ReactNode, useRef, useState } from "react";
+import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from "react";
 import { CareProfile } from "./CareProfile";
 import type { NavigationId } from "./data";
-import { type FridgeItem, FridgePanel } from "./FridgePanel";
+import type { FridgeItem } from "./FridgePanel";
+import { FridgeScene } from "./FridgeScene";
 import { HomeConnections } from "./HomeConnections";
+import { ReferenceEnvironment } from "./ReferenceEnvironment";
 import { useSceneViewport } from "./scene-viewport";
 import { ThemePicker } from "./ThemePicker";
-import { WorldAmbience } from "./WorldAmbience";
 import { type HomeTheme, type IdaWorld, worlds } from "./worlds";
 
 const sceneImages: Record<string, string> = {
@@ -16,7 +17,7 @@ const sceneImages: Record<string, string> = {
   workspace: "/design/scifi-observatory.png",
 };
 
-export function EnvironmentLobby({ world, theme, onThemeChange, onBack, onSelect, onNavigate, homeOverview, ambiencePaused, onAmbiencePausedChange }: {
+export function EnvironmentLobby({ world, theme, onThemeChange, onBack, onSelect, onNavigate, homeOverview }: {
   world: IdaWorld; theme: HomeTheme; onThemeChange?: ((theme: HomeTheme) => void) | undefined;
   onBack: () => void; onSelect: (id: string) => void; onNavigate: (id: NavigationId) => void;
   homeOverview?: ReactNode;
@@ -25,15 +26,18 @@ export function EnvironmentLobby({ world, theme, onThemeChange, onBack, onSelect
   const title = useSceneViewport();
   const content = useRef<HTMLDivElement>(null);
   const [tab, setTab] = useState(world.id === "health" ? "care" : "spaces");
-  const animated = !ambiencePaused;
   const [items, setItems] = useState<FridgeItem[]>([]);
   const [details, setDetails] = useState(false);
   const image = sceneImages[world.id];
+  useEffect(() => { title.current?.focus({ preventScroll: true }); }, [tab]);
+  if (world.id === "music" || world.id === "research" || world.id === "travel") return <ReferenceEnvironment
+    environment={world.id} titleRef={title} onBack={onBack} onSelect={onSelect} onNavigate={onNavigate} />;
+  if (world.id === "home" && tab === "fridge") return <FridgeScene items={items} onChange={setItems}
+    titleRef={title} theme={theme} onBack={() => setTab("spaces")} onNavigate={onNavigate} onSelectWorld={onSelect} />;
   return (
     <section className="world-environment environment-screen" data-world={world.id} data-section={tab}
       aria-label={`Environnement ${world.title}`} style={image ? { "--environment-image": `url("${image}")` } as CSSProperties : undefined}
       onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); if (tab !== "spaces" && world.id !== "health") setTab("spaces"); else onBack(); } }}>
-      {world.video ? <WorldAmbience src={world.video} paused={!animated} /> : null}
       <aside className="environment-rail">
         <button type="button" className="scene-wordmark" onClick={onBack} aria-label="Retour à la roue des mondes">I D A</button>
         <span className="scene-kicker">INTELLIGENT<br />DIGITAL<br />AGENT</span>
@@ -92,7 +96,6 @@ export function EnvironmentLobby({ world, theme, onThemeChange, onBack, onSelect
               </section>
             </> : <>
               {world.id !== "health" ? <button className="scene-section-back" type="button" onClick={() => setTab("spaces")}>← Les espaces de {world.title}</button> : null}
-              {tab === "fridge" ? <FridgePanel items={items} onChange={setItems} /> : null}
               {tab === "connections" ? <div className="scene-panel"><HomeConnections /></div> : null}
               {tab === "today" ? <div className="scene-panel scene-home-overview">{homeOverview}</div> : null}
               {tab === "care" ? <CareProfile /> : null}
@@ -103,9 +106,7 @@ export function EnvironmentLobby({ world, theme, onThemeChange, onBack, onSelect
           <button type="button" onClick={() => onNavigate("ida")}><span aria-hidden="true">◌</span>Dialogue</button>
           <button type="button" aria-pressed={tab === "spaces" || tab === "care"} onClick={() => setTab(world.id === "health" ? "care" : "spaces")}><span aria-hidden="true">◇</span>{world.id === "health" ? "Mon profil" : "Espaces"}</button>
           {world.id === "home" ? <button type="button" aria-pressed={tab === "fridge"} onClick={() => setTab("fridge")}><span aria-hidden="true">▣</span>Frigo</button> : null}
-          {world.video ? <button type="button" aria-pressed={animated} onClick={() => onAmbiencePausedChange(animated)}>
-            <span aria-hidden="true">{animated ? "Ⅱ" : "▷"}</span>{world.id === "music" ? animated ? "Décor spatial" : "Vidéo studio" : animated ? "Figer l’ambiance" : "Animer l’ambiance"}
-          </button> : <span className="scene-meta">Décor illustré · vidéo à venir</span>}
+          <span className="scene-meta">Ambiance illustrée · vidéos sur la roue</span>
           <button type="button" aria-expanded={details} onClick={() => setDetails(!details)}><span aria-hidden="true">ⓘ</span>Confidentialité</button>
         </footer>
         {details ? <p className="scene-panel scene-capability-note" role="status">Ce décor n’active aucun capteur. Caméra et microphone sont désactivés. Les actions métier conservent leurs permissions et validations ; les brouillons Care et Frigo ne sont pas enregistrés.</p> : null}

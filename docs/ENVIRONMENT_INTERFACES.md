@@ -1,5 +1,19 @@
 # Environnements plein écran — 9 septembre 2026
 
+## Mise à jour du 10 septembre — références nommées et dialogue local
+
+Cette section remplace les anciennes limites Research/Travel/Music décrites ci-dessous. Voir [la livraison détaillée](REFERENCE_ENVIRONMENTS_20260910.md) pour le périmètre exact et les prompts des nouveaux décors.
+
+- Research, Travel et Music Studio ont des compositions dédiées (`ReferenceEnvironment`) : rail, titres, commandes latérales et dock inspirés des fichiers nommés. Les interfaces sont des éléments HTML, jamais une capture avec de fausses commandes. Les versions mobiles réorganisent les contrôles ; fidélité pixel à pixel non attestée.
+- Les vidéos décoratives sont réservées aux cartes de la roue, avec l'exception déjà demandée du robot dans Immersive. Les accueils des environnements utilisent désormais des images fixes et des reflets animés désactivables.
+- Frigo dispose d'une scène indépendante dans IDA Home, avec inventaire, courses, historique temporaire, compteurs et paramètres. Cette version sombre correspond à la référence précédente ; le nouveau Frigo Classic vert/crème n'est pas encore intégré.
+- Le bouton Dialogue/Assistant des trois scènes ouvre la façade commune `LocalDialogue`. Elle utilise les nouvelles routes locales décrites dans [LOCAL_DIALOGUE.md](LOCAL_DIALOGUE.md), et n'injecte ni fichiers ni inventaire ni profil Care dans le prompt.
+- Les briefs Research/Studio et projets Travel peuvent être enregistrés via `createTask`, dans les tâches existantes du workspace. Les brouillons restent éphémères jusqu'à cette action. Aucune réservation ni invitation n'est effectuée.
+- Les contrôles Mix/Master proposent une écoute avec égaliseur 3 bandes et compression douce optionnelle, dans Web Audio après action explicite. Pas de mastering certifié, export audio traité, analyse spectrale ni mesure LUFS.
+- Les images nouvelles La Fabrique et Météo restent des références à intégrer ; aucun bulletin météo fictif n'est présenté comme actuel.
+
+Les anciens paragraphes « vidéo studio dans l'environnement » et « premier modèle à brancher » ci-dessous sont historiques. Le modèle est maintenant composé côté serveur ; une réponse réelle dans l'interface attend l'initialisation du verrou local par l'utilisateur.
+
 ## Parcours livré
 
 La carte de la roue ouvre directement son accueil d'environnement. `EnvironmentLobby` remplace la petite scène imbriquée de `WorldWheel` : décor plein viewport, navigation des mondes à gauche, titre et intention à gauche, véritables boutons des espaces à droite, dock de commandes en bas. Sur téléphone, un sélecteur repliable remplace la navigation latérale et le bouton « Accéder aux espaces » rejoint directement les contrôles en leur donnant le focus. Le retour à la roue reste présent et les panneaux suivent le décor dans une page défilable. Retour/Échap restaure la carte ; aucune deuxième application ni copie du Core.

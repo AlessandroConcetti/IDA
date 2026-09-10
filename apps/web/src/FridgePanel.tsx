@@ -1,7 +1,7 @@
 import { type FormEvent, useState } from "react";
 
 export type FridgeItem = { id: number; name: string; quantity: string; toBuy: boolean };
-export function FridgePanel({ items, onChange }: { items: FridgeItem[]; onChange: (items: FridgeItem[]) => void }) {
+export function FridgePanel({ items, onChange, compact = false }: { items: FridgeItem[]; onChange: (items: FridgeItem[]) => void; compact?: boolean }) {
   const [name, setName] = useState("");
   const [quantity, setQuantity] = useState("");
   function add(event: FormEvent<HTMLFormElement>) {
@@ -10,8 +10,8 @@ export function FridgePanel({ items, onChange }: { items: FridgeItem[]; onChange
     onChange([...items, { id: Math.max(0, ...items.map((item) => item.id)) + 1, name: name.trim(), quantity: quantity.trim(), toBuy: false }]);
     setName(""); setQuantity("");
   }
-  return <section className="scene-panel fridge-panel" aria-labelledby="fridge-title">
-    <p className="scene-kicker">IDA HOME / CUISINE</p><h2 id="fridge-title">Mon frigo</h2>
+  return <section className={compact ? "fridge-panel fridge-editor" : "scene-panel fridge-panel"} aria-label="Produits du frigo">
+    {!compact ? <><p className="scene-kicker">IDA HOME / CUISINE</p><h2>Mon frigo</h2></> : null}
     <p>Ajoutez un produit et marquez ce qu’il faut racheter.</p>
     <p className="scene-notice">Inventaire manuel de démonstration, effacé en quittant ce monde. Aucun frigo ni service de courses connecté.</p>
     <form onSubmit={add} className="fridge-form">

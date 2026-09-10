@@ -44,11 +44,14 @@ export function onAuthenticationRequired(listener: () => void): () => void {
 
 // Aucun token n'est lu par JavaScript. Le navigateur gère le cookie HttpOnly.
 // Une génération invalidée ne peut pas livrer une réponse à un nouveau hub.
-export async function requestApi(path: string, init: RequestInit = {}, accessRequest = false): Promise<unknown> {
+export async function requestApi(path: string, init: RequestInit = {}, accessRequest = false, timeoutMs = 12_000): Promise<unknown> {
   const generation = workspaceGeneration;
   const controller = new AbortController();
   if (!accessRequest) pendingWorkspaceRequests.add(controller);
-  const timeout = setTimeout(() => controller.abort(), 12_000);
+  const cancel = () => controller.abort();
+  init.signal?.addEventListener("abort", cancel, { once: true });
+  if (init.signal?.aborted) controller.abort();
+  const timeout = setTimeout(cancel, Math.max(1000, Math.min(timeoutMs, 120_000)));
 
   try {
     const response = await fetch(`${apiBaseUrl}${path}`, {
@@ -95,6 +98,7 @@ export async function requestApi(path: string, init: RequestInit = {}, accessReq
     throw new IdaApiError("IDA est momentanément indisponible. Réessaie dans un instant.");
   } finally {
     clearTimeout(timeout);
+    init.signal?.removeEventListener("abort", cancel);
     pendingWorkspaceRequests.delete(controller);
   }
 }

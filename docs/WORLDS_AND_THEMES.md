@@ -1,5 +1,9 @@
 # Roue des Mondes — première tranche cliente
 
+## Mise à jour du 10 septembre 2026
+
+Les vidéos restent maintenant sur les cartes uniquement, sauf présence robot Immersive. Research, Travel et Music Studio utilisent des scènes HTML dédiées et des décors nettoyés des faux boutons. Détails et limites : [interfaces d'environnement](ENVIRONMENT_INTERFACES.md) et [livraison du 10 septembre](REFERENCE_ENVIRONMENTS_20260910.md). Le traitement Glass respecte la réduction de mouvement/transparence et peut être arrêté depuis « Reflets ».
+
 ## Portée livrée — mise à jour du 9 septembre 2026
 
 **Mise à jour frontend :** les cartes ouvrent maintenant leurs environnements plein écran. IDA Care, La Fabrique, Frigo dans IDA Home et thème Immersive robot sont décrits dans [Environnements plein écran](ENVIRONMENT_INTERFACES.md), avec les limites de démonstration et la provenance des décors. Les descriptions et recettes ci-dessous retracent les tranches antérieures ; leurs tests ne valident pas automatiquement ces nouveaux écrans.

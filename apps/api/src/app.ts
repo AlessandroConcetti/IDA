@@ -112,12 +112,14 @@ import {
   serializeLocalSessionCookie,
 } from "./local-auth.js";
 import { resolveIdentityMode } from "./runtime-config.js";
+import { registerLocalDialogue } from "./local-dialogue.js";
 import { defaultCalendarRange, getWorkspaceDayRange, type ResolvedCalendarRange } from "./workspace-time.js";
 
 export type CreateAppOptions = DemoDatabaseOptions & {
   storageDir?: string;
   identityMode?: LocalAuthMode;
   secureLocalAuthCookies?: boolean;
+  localDialogueEnabled?: boolean;
 };
 
 type AppError = Error & {
@@ -2510,6 +2512,8 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   app.post("/v1/ida/commands", async (request) => ({
     data: await core.execute(getRequestIdentityContext(request), request.body),
   }));
+
+  registerLocalDialogue(app, database, { enabled: options.localDialogueEnabled === true, locked: identityMode === "LOCAL_LOCK" });
 
   return app;
 }

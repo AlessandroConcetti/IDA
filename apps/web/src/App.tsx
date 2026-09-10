@@ -1,6 +1,7 @@
 import { type DragEvent, type FormEvent, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { AuroraHome } from "./AuroraHome";
 import { ThemePicker } from "./ThemePicker";
+import { LocalDialogue } from "./LocalDialogue";
 import {
   type ActivityLogRecord,
   type AgentManifestRecord,
@@ -4239,6 +4240,7 @@ function IdaView({
 }) {
   return (
     <div className="page-grid ida-view">
+      <section className="panel ida-local-dialogue"><h2>Dialoguer avec IDA · IA locale</h2><LocalDialogue /></section>
       <ConversationPanel messages={messages} limit={24} contextLabel="Historique privé" onOpenCatalog={onOpenCatalog} />
       <section className="panel helper-panel">
         <p className="eyebrow">RÈGLES D’EXÉCUTION</p>

@@ -1,0 +1,186 @@
+/* Scène cuisine dédiée : même entrée Home, habillage du brouillon existant. */
+#root .fridge-screen {
+  --glass-base: #20242bba;
+  --glass-panel: #171b24c7;
+  --glass-solid: #20252e;
+  --glass-hover: #3e424beb;
+  --glass-selected: #67554bcc;
+  --glass-edge: #e2dbd03d;
+  --glass-highlight: #fff5dc55;
+  --glass-lowlight: #03081355;
+  --glass-reflection: #ede5d523;
+  --glass-sheen: #fae6c950;
+  --glass-spotlight: #f2dcc644;
+  --glass-accent: #e5c09b;
+  --glass-ink: #f3f3f7;
+  --ida-muted: #b6bac4;
+  --ida-focus: #f3d0a9;
+  --glass-blur: blur(10px);
+  grid-template-columns: 180px minmax(0, 1fr);
+  color: var(--glass-ink);
+  background: #10151d;
+  color-scheme: dark;
+}
+#root .fridge-screen::before { background-position: center; }
+#root .fridge-screen::after { background: linear-gradient(90deg, #050a1280, #050a1222 38%, #050a1210 58%, #050a1299), linear-gradient(0deg, #080d1659, transparent 38%); }
+.fridge-screen svg { width: 23px; height: 23px; flex: none; }
+.fridge-sidebar { display: flex; flex-direction: column; gap: 26px; padding: 22px 12px; border-right: 1px solid #e1d8c527; background: linear-gradient(110deg, #10151def, #10151db8); }
+#root .fridge-sidebar .fridge-brand { display: grid; justify-items: start; align-content: center; padding: 0 30px; min-height: 62px; border: 0; background: none; box-shadow: none; animation: none; }
+.fridge-brand strong { font-size: 2.1rem; font-weight: 600; letter-spacing: -.03em; line-height: 1.2; }
+.fridge-brand > span { font-size: .75rem; letter-spacing: .18em; }
+.fridge-sidebar nav { display: grid; gap: 8px; }
+#root .fridge-sidebar nav button { display: flex; align-items: center; gap: 13px; width: 100%; min-height: 44px; text-align: left; padding: 11px 12px; border: 1px solid transparent; border-radius: 11px; background-color: transparent; box-shadow: none; }
+#root .fridge-sidebar nav button[aria-current="page"] { background-color: var(--glass-selected); box-shadow: inset 0 1px 0 var(--glass-highlight), inset 3px 0 0 var(--glass-accent); }
+.fridge-nav-divider { height: 1px; background: #eee5d626; margin: 8px 12px; }
+.fridge-badge { margin-left: auto; display: grid; place-items: center; min-width: 20px; height: 20px; padding: 2px 5px; font-size: .75rem; background: #d3ae8959; border-radius: 50%; }
+.fridge-sidebar-footer { margin: auto 16px 0; padding-top: 30px; }
+.fridge-sidebar-footer > span { font-size: 2.4rem; color: #e0c5a4; }
+.fridge-sidebar-footer p { font-size: .9375rem; line-height: 1.5; }
+.fridge-sidebar-footer small { font-size: .75rem; letter-spacing: .14em; color: #b9b8b6; }
+.fridge-workspace { padding: 22px 28px 20px; min-width: 0; }
+.fridge-header { display: flex; justify-content: space-between; gap: 24px; align-items: center; }
+.fridge-title { display: flex; gap: 20px; align-items: flex-start; text-shadow: 0 2px 16px #000a; }
+.fridge-title > svg { width: 43px; height: 43px; margin-top: 3px; }
+#root .fridge-title h1 { margin: 0; font-size: clamp(1.6rem, 2.2vw, 2.3rem); font-weight: 550; letter-spacing: -.025em; line-height: 1.3; }
+.fridge-title p { margin: 4px 0 0; font-size: .9375rem; color: #d3d5db; }
+.fridge-search-row { display: flex; align-items: center; gap: 10px; width: min(43%, 470px); }
+.fridge-search { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; padding: 9px 14px; border: 1px solid var(--glass-edge); border-radius: 99px; background: #10131b9c; box-shadow: inset 0 1px 0 #ffffff15; }
+.fridge-search svg { width: 19px; height: 19px; }
+#root .fridge-search input { min-width: 0; width: 100%; border: 0; padding: 3px 0; background: none; color: #f5f5fa; font: inherit; font-size: .875rem; }
+.fridge-search input::placeholder { color: #d0d1d8; }
+#root .fridge-round-button { width: 44px; height: 44px; min-height: 44px; flex: none; display: inline-flex; align-items: center; justify-content: center; padding: 9px; border: 1px solid var(--glass-edge); border-radius: 50%; font-size: 1.3rem; }
+.fridge-mobile-nav { display: none; }
+.fridge-composition { display: grid; grid-template-columns: minmax(0, 1fr) minmax(360px, 440px); column-gap: 24px; padding-top: 18px; }
+.fridge-character-stage { position: relative; min-height: calc(100svh - 146px); }
+.fridge-speech { position: absolute; top: 9%; left: clamp(0px, 13vw, 190px); max-width: 235px; padding: 18px 20px; margin: 0; border: 1px solid #f5e5d538; border-radius: 19px 19px 19px 4px; font-size: 1rem; line-height: 1.6; background: linear-gradient(125deg, #48454ddd, #181d27ed); box-shadow: 0 8px 30px #0002; }
+.fridge-speech strong { font-weight: 550; }
+.fridge-holograms { position: absolute; top: 42%; right: 4%; width: clamp(170px, 15vw, 226px); display: grid; gap: 18px; }
+#root .fridge-holograms button { --glass-base: #203f6166; --glass-edge: #c3def8a8; display: flex; gap: 14px; align-items: center; padding: 17px 14px; border: 1px solid var(--glass-edge); border-radius: 13px; text-align: left; box-shadow: inset 0 0 18px #c2dfff15, 0 0 16px #9ad5ff22; }
+.fridge-holograms button > span { flex: 1; font-size: .875rem; }
+.fridge-holograms strong { display: block; font-size: .8125rem; margin-top: 6px; font-weight: 400; }
+.fridge-holograms button > svg:last-child { width: 15px; }
+.fridge-art-label { position: absolute; bottom: 10px; left: 0; font-size: .75rem; letter-spacing: .025em; padding: 7px 11px; border-radius: 99px; background: #0c111ca6; color: #e0e1e4; }
+.fridge-panels { display: grid; gap: 16px; align-content: start; min-width: 0; }
+.fridge-local-state { display: flex; align-items: center; justify-content: end; gap: 8px; font-size: .75rem; color: #d9d8d6; margin: 0 0 6px; min-height: 26px; }
+.fridge-local-state > span { width: 6px; height: 6px; border-radius: 50%; background: #e1b28a; }
+.fridge-glass { background: linear-gradient(135deg, var(--glass-reflection), transparent 56%), var(--glass-panel); border: 1px solid var(--glass-edge); border-radius: 20px; box-shadow: inset 0 1px 0 #ffffff0f, 0 18px 45px #0002; -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); padding: 22px; }
+.fridge-panel-heading { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-bottom: 22px; }
+.fridge-glass h2 { font-weight: 500; font-size: 1.2rem; letter-spacing: -.02em; margin: 0; }
+.fridge-glass p { line-height: 1.6; font-size: 1rem; }
+.fridge-panel-heading p { font-size: .875rem; margin: 5px 0 0; color: #c9cbd3; }
+.fridge-manual-indicator { font-size: .75rem; color: #dcb58e; border: 1px solid #cbb39559; border-radius: 99px; padding: 5px 9px; }
+.fridge-product-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+#root .fridge-product-card { padding: 0 0 8px; min-width: 0; text-align: left; border: 0; border-radius: 12px; background: transparent; box-shadow: none; }
+.fridge-product-tile { display: grid; place-items: center; min-height: 90px; position: relative; margin-bottom: 9px; background: linear-gradient(145deg, #bfb6b34a, #45525f6b); border-radius: 11px; border: 1px solid #d7dce32b; }
+.fridge-product-tile > svg { width: 36px; height: 36px; opacity: .9; }
+.fridge-product-tile > span { position: absolute; bottom: 6px; font-size: .75rem; padding: 3px 6px; background: #433729ed; border-radius: 7px; }
+.fridge-product-card > strong { display: block; font-size: .875rem; font-weight: 500; overflow-wrap: anywhere; }
+.fridge-product-card > small { display: block; margin-top: 5px; font-size: .75rem; line-height: 1.5; color: #bfc4cf; overflow-wrap: anywhere; }
+.fridge-screen[data-cards="large"] .fridge-product-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.fridge-screen[data-cards="large"] .fridge-product-tile { min-height: 125px; }
+.fridge-empty { text-align: center; padding: 22px 10px; }
+.fridge-empty > svg { width: 42px; height: 42px; opacity: .72; }
+.fridge-empty p { margin-bottom: 7px; }
+.fridge-empty small { font-size: .8125rem; line-height: 1.6; color: #bfc4cf; }
+.fridge-primary-actions { display: grid; gap: 10px; margin-top: 22px; }
+#root .fridge-glass button:not(.fridge-product-card):not(.fridge-round-button):not([role="switch"]) { display: flex; align-items: center; justify-content: center; gap: 12px; min-height: 44px; padding: 12px; border: 1px solid var(--glass-edge); border-radius: 11px; }
+#root .fridge-primary-actions button { text-align: left; }
+.fridge-primary-actions button > svg:last-child { margin-left: auto; width: 18px; }
+.fridge-primary-actions button > span { flex: 1; }
+.fridge-primary-actions small { display: block; font-size: .75rem; color: #bbc2cd; margin-top: 4px; }
+#root .fridge-screen .fridge-accent { --glass-base: #7f645a87; --glass-edge: #efcaa477; }
+.fridge-panel-tabs { display: flex; flex-wrap: wrap; margin: 20px -22px -22px; border-top: 1px solid var(--glass-edge); padding: 10px; gap: 4px; }
+#root .fridge-panel-tabs button { flex: 1 1 100px; gap: 7px; padding: 10px 5px; border: 0; background-color: transparent; box-shadow: none; font-size: .8125rem; }
+.fridge-panel-tabs svg { width: 19px; height: 19px; }
+.fridge-see-all { margin: 12px auto 0; }
+.fridge-suggestions h2 { display: flex; gap: 13px; align-items: center; margin-bottom: 14px; }
+.fridge-suggestions h2 svg { color: #e5ba82; }
+#root .fridge-suggestions > button { justify-content: start; text-align: left; width: 100%; border: 0; border-top: 1px solid #eee5d619; border-radius: 0; background-color: transparent; box-shadow: none; padding: 16px 0; }
+.fridge-suggestions > button > span { flex: 1; line-height: 1.5; }
+.fridge-suggestions > button > svg:last-child { width: 17px; }
+.fridge-suggestions small { display: block; color: #b8bdc8; margin-top: 4px; font-size: .8125rem; }
+.fridge-bottom-note { display: flex; align-items: center; gap: 15px; padding: 16px 22px; background: linear-gradient(120deg, #82695692, #152131d9); }
+.fridge-bottom-note > span { font-size: 2rem; color: #f2d8b5; }
+.fridge-bottom-note p { flex: 1; margin: 0; }
+.fridge-bottom-note small { color: #d1c4be; font-size: .875rem; }
+.fridge-feedback { margin: 0; min-height: 36px; font-size: .75rem; line-height: 1.6; color: #c5c8d1; }
+.fridge-editor > p { margin-top: 0; }
+.fridge-editor .scene-notice { font-size: .8125rem; color: #c2c6d1; }
+.fridge-editor label { display: grid; gap: 8px; font-size: .875rem; }
+.fridge-editor input:not([type="checkbox"]) { width: 100%; min-width: 0; padding: 12px; min-height: 46px; font: inherit; font-size: 1rem; border: 1px solid var(--glass-edge); border-radius: 10px; color: #f3f3f7; background: #0f15228c; }
+.fridge-editor input::placeholder { color: #b3b9c5; }
+.fridge-editor .fridge-items label { display: flex; }
+.fridge-shopping-list, .fridge-history { list-style: none; padding: 0; margin: 22px 0; }
+.fridge-shopping-list li { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 15px 0; border-bottom: 1px solid var(--glass-edge); }
+.fridge-shopping-list li > div { flex: 1 1 100px; overflow-wrap: anywhere; }
+.fridge-shopping-list small { display: block; margin-top: 6px; color: #b9c0cd; }
+.fridge-history li { display: flex; gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--glass-edge); font-size: .875rem; line-height: 1.5; }
+.fridge-history li > span { min-width: 0; overflow-wrap: anywhere; }
+.fridge-history time { display: block; margin-top: 6px; font-size: .75rem; color: #b9c0cd; }
+.fridge-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 24px 0; }
+.fridge-stats > div { display: grid; justify-items: center; align-content: start; gap: 10px; padding: 12px 6px; text-align: center; border: 1px solid var(--glass-edge); border-radius: 12px; }
+.fridge-stats strong { font-size: 1.8rem; font-weight: 450; }
+.fridge-stats span { font-size: .8125rem; line-height: 1.5; }
+.fridge-setting-row { display: flex; align-items: center; gap: 15px; padding: 18px 0; border-bottom: 1px solid var(--glass-edge); }
+.fridge-setting-row > span { flex: 1; font-size: .9375rem; }
+.fridge-setting-row small { display: block; margin-top: 6px; font-size: .8125rem; line-height: 1.5; color: #c3c7d1; }
+#root .fridge-setting-row button[role="switch"] { width: 48px; height: 28px; min-height: 28px; border: 1px solid var(--glass-edge); border-radius: 99px; padding: 4px; }
+.fridge-setting-row button > span { display: block; width: 18px; height: 18px; border-radius: 50%; background: #e9e3de; transition: transform 150ms ease; }
+.fridge-setting-row button[aria-checked="true"] > span { transform: translateX(19px); background: #efc89d; }
+.fridge-scan-info { text-align: center; padding: 20px 0; }
+.fridge-scan-info > svg { width: 44px; height: 44px; color: #e6c3a2; }
+.fridge-scan-info button { width: 100%; }
+#root .fridge-screen[data-surface="solid"] { --glass-panel: #181e29; --glass-base: #272e3c; --glass-reflection: transparent; --glass-sheen: transparent; --glass-blur: none; --glass-intro-animation: none; --glass-touch-animation: none; --glass-drift-animation: none; }
+@media (min-width: 1500px) {
+  .fridge-composition { grid-template-columns: minmax(0, 1fr) minmax(440px, 31vw); }
+}
+@media (max-width: 1100px) {
+  #root .fridge-screen { grid-template-columns: 150px minmax(0, 1fr); }
+  .fridge-sidebar { padding-inline: 8px; }
+  .fridge-workspace { padding-inline: 20px; }
+  .fridge-composition { grid-template-columns: minmax(0, 1fr) minmax(320px, 390px); gap: 18px; }
+  .fridge-speech { left: 0; max-width: 200px; }
+  .fridge-holograms { right: 0; width: 160px; }
+  .fridge-search-row { width: 50%; }
+  .fridge-title { gap: 12px; }
+  .fridge-title > svg { width: 30px; }
+}
+@media (max-width: 800px) {
+  #root .fridge-screen { display: block; }
+  #root .fridge-screen::before { background-position: 36% top; }
+  .fridge-sidebar { display: none; }
+  .fridge-workspace { padding: max(18px, env(safe-area-inset-top)) 16px max(20px, env(safe-area-inset-bottom)); }
+  .fridge-header { align-items: start; flex-direction: column; gap: 18px; }
+  .fridge-search-row { width: 100%; }
+  #root .fridge-search input { font-size: 1rem; }
+  .fridge-mobile-nav { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+  #root .fridge-mobile-nav button { min-height: 44px; border: 1px solid var(--glass-edge); border-radius: 13px; padding: 10px 13px; }
+  .fridge-mobile-nav button:last-child { margin-left: auto; display: inline-flex; }
+  .fridge-composition { display: flex; flex-direction: column; padding-top: 16px; }
+  .fridge-character-stage { min-height: 330px; }
+  .fridge-speech { top: 8px; left: 0; width: 205px; font-size: .9375rem; }
+  .fridge-holograms { top: 142px; right: 0; width: 170px; gap: 12px; }
+  .fridge-art-label { bottom: 0; }
+  .fridge-panels { max-width: 620px; width: 100%; align-self: center; }
+  .fridge-glass { padding: 20px; }
+  .fridge-panel-tabs { margin: 20px -20px -20px; }
+}
+@media (max-width: 380px) {
+  .fridge-glass { padding: 16px; }
+  .fridge-panel-tabs { margin-inline: -16px; margin-bottom: -16px; }
+  .fridge-product-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .fridge-stats { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fridge-setting-row button > span { transition: none; }
+}
+#root .fridge-screen[data-surface="solid"] :is(.fridge-holograms button, .fridge-bottom-note, .fridge-speech) { background: #202631; backdrop-filter: none; }
+@media (prefers-reduced-transparency: reduce) {
+  #root .fridge-screen { --glass-panel: #181e29; --glass-base: #272e3c; --glass-blur: none; }
+  #root .fridge-screen :is(.fridge-holograms button, .fridge-bottom-note, .fridge-speech) { background: #202631; backdrop-filter: none; }
+}
+@media (forced-colors: active) {
+  #root .fridge-screen::before, #root .fridge-screen::after { display: none; }
+  #root .fridge-screen { background: Canvas; color: CanvasText; }
+  .fridge-glass, .fridge-sidebar, .fridge-speech { background: Canvas; color: CanvasText; border: 1px solid CanvasText; }
+}
