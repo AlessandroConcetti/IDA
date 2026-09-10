@@ -1,5 +1,7 @@
 import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from "react";
 import { CareProfile } from "./CareProfile";
+import { ClassicFridge } from "./ClassicFridge";
+import { FabriqueEnvironment } from "./FabriqueEnvironment";
 import type { NavigationId } from "./data";
 import type { FridgeItem } from "./FridgePanel";
 import { FridgeScene } from "./FridgeScene";
@@ -32,7 +34,9 @@ export function EnvironmentLobby({ world, theme, onThemeChange, onBack, onSelect
   useEffect(() => { title.current?.focus({ preventScroll: true }); }, [tab]);
   if (world.id === "music" || world.id === "research" || world.id === "travel") return <ReferenceEnvironment
     environment={world.id} titleRef={title} onBack={onBack} onSelect={onSelect} onNavigate={onNavigate} />;
-  if (world.id === "home" && tab === "fridge") return <FridgeScene items={items} onChange={setItems}
+  if (world.id === "fabrique") return <FabriqueEnvironment titleRef={title} onBack={onBack} onSelect={onSelect} onNavigate={onNavigate} />;
+  if (world.id === "home" && tab === "fridge") return theme === "classic" ? <ClassicFridge items={items} onChange={setItems}
+    titleRef={title} onBack={() => setTab("spaces")} onNavigate={onNavigate} onSelectWorld={onSelect} /> : <FridgeScene items={items} onChange={setItems}
     titleRef={title} theme={theme} onBack={() => setTab("spaces")} onNavigate={onNavigate} onSelectWorld={onSelect} />;
   return (
     <section className="world-environment environment-screen" data-world={world.id} data-section={tab}

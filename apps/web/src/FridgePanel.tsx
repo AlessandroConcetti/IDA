@@ -1,13 +1,15 @@
 import { type FormEvent, useState } from "react";
 
-export type FridgeItem = { id: number; name: string; quantity: string; toBuy: boolean };
+export type FridgeCategory = "vegetables" | "meat" | "dairy" | "fruit" | "other";
+export type FridgeItem = { id: number; name: string; quantity: string; toBuy: boolean; category?: FridgeCategory };
 export function FridgePanel({ items, onChange, compact = false }: { items: FridgeItem[]; onChange: (items: FridgeItem[]) => void; compact?: boolean }) {
   const [name, setName] = useState("");
   const [quantity, setQuantity] = useState("");
+  const [category, setCategory] = useState<FridgeCategory>("other");
   function add(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!name.trim() || items.length >= 100) return;
-    onChange([...items, { id: Math.max(0, ...items.map((item) => item.id)) + 1, name: name.trim(), quantity: quantity.trim(), toBuy: false }]);
+    onChange([...items, { id: Math.max(0, ...items.map((item) => item.id)) + 1, name: name.trim(), quantity: quantity.trim(), toBuy: false, category }]);
     setName(""); setQuantity("");
   }
   return <section className={compact ? "fridge-panel fridge-editor" : "scene-panel fridge-panel"} aria-label="Produits du frigo">
@@ -17,6 +19,9 @@ export function FridgePanel({ items, onChange, compact = false }: { items: Fridg
     <form onSubmit={add} className="fridge-form">
       <label>Produit<input value={name} onChange={(event) => setName(event.target.value)} required maxLength={100} autoComplete="off" placeholder="Ex. Yaourts" /></label>
       <label>Quantité<input value={quantity} onChange={(event) => setQuantity(event.target.value)} maxLength={40} autoComplete="off" placeholder="Ex. 4 pots" /></label>
+      <label>Rayon<select value={category} onChange={(event) => setCategory(event.target.value as FridgeCategory)}>
+        <option value="vegetables">Légumes</option><option value="meat">Viandes</option><option value="dairy">Produits laitiers</option><option value="fruit">Fruits</option><option value="other">Autres</option>
+      </select></label>
       <button type="submit" disabled={!name.trim() || items.length >= 100}>Ajouter au frigo +</button>
     </form>
     {items.length ? <ul className="fridge-items">{items.map((item) => <li key={item.id}>

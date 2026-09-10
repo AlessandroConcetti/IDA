@@ -22,7 +22,7 @@ type SceneIcon =
   | "box"
   | "mic"
   | "heart";
-function Icon({ name }: { name: SceneIcon }) {
+export function FridgeIcon({ name }: { name: SceneIcon }) {
   const paths: Record<SceneIcon, string> = {
     home: "m3 10 9-7 9 7M5 9v12h5v-7h4v7h5V9",
     chat: "M21 11a9 9 0 0 1-9 9H4l-2 2v-10a9 9 0 1 1 19-1ZM7 11h.01M12 11h.01M17 11h.01",
@@ -57,6 +57,7 @@ function Icon({ name }: { name: SceneIcon }) {
     </svg>
   );
 }
+const Icon = FridgeIcon;
 
 const viewNames: Record<FridgeView, string> = {
   inventory: "Aujourd’hui",

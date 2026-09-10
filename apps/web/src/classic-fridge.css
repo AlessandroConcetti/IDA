@@ -1,0 +1,203 @@
+/* Classic : même maison et inventaire, composition crème/verte de la référence. */
+#root .classic-fridge {
+  --glass-base: #fff9eee3; --glass-panel: #fffaf1df; --glass-solid: #fff9ef;
+  --glass-hover: #f9f4e9; --glass-selected: #deebd1; --glass-edge: #ffffff9c;
+  --glass-highlight: #fffdf8c9; --glass-lowlight: #a0774812; --glass-reflection: #ffffff85;
+  --glass-sheen: #fffdf9b3; --glass-spotlight: #ffffffc7; --glass-shadow: #71491615;
+  --glass-accent: #386b2e; --glass-ink: #262924; --glass-blur: blur(14px) saturate(115%);
+  color-scheme: light; color: var(--glass-ink); background: #eed6b4;
+  grid-template-columns: 16.6% minmax(0, 1fr); align-items: start; font-size: 1rem;
+  font-family: "Aptos", "Segoe UI", system-ui, sans-serif;
+}
+#root .classic-fridge::before { position: absolute; width: 100%; height: max(105vw, 100svh); inset: 0 auto auto 0; background: var(--environment-image) center top / 100% auto no-repeat; }
+#root .classic-fridge::after { display: none; }
+#root .classic-fridge svg { width: 24px; height: 24px; flex-shrink: 0; vertical-align: middle; }
+#root .classic-fridge :is(h1, h2, h3, p) { color: inherit; text-transform: none; letter-spacing: normal; }
+#root .classic-fridge h2 { font-size: 1.03rem; font-weight: 650; margin: 0; line-height: 1.45; }
+#root .classic-fridge h3 { font-size: 1.06rem; margin: 24px 0 12px; }
+#root .classic-fridge p { line-height: 1.6; }
+#root .classic-fridge button { font: inherit; cursor: pointer; border-radius: 16px; border: 1px solid var(--glass-edge); padding: 11px 15px; min-height: 44px; line-height: 1.45; }
+#root .classic-fridge button:disabled { cursor: default; opacity: .55; }
+#root .classic-fridge :is(button, input, select, a):focus-visible { outline: 3px solid #316730; outline-offset: 4px; }
+#root .classic-fridge :is(input, select) { color: #262924; font: inherit; background: #fffaf5; border: 1px solid #6d694557; min-height: 44px; padding: 9px 12px; border-radius: 10px; max-width: 100%; box-sizing: border-box; }
+#root .classic-fridge input[type="checkbox"] { width: 20px; height: 20px; min-height: 20px; padding: 0; flex: none; accent-color: #4d883d; cursor: pointer; }
+.cf-sidebar { position: sticky; top: 0; z-index: 2; padding: 24px 14px; background: #fffaf1ed; border-radius: 0 0 27px 0; min-width: 0; box-shadow: 0 12px 26px #735a1812; backdrop-filter: blur(12px); }
+#root .cf-sidebar .cf-brand { background: none; border: 0; box-shadow: none; font-size: 2rem; font-weight: 750; padding-left: 15px; text-align: left; }
+.cf-brand span { margin-left: 6px; color: #519146; font-size: 1.8rem; }
+.cf-sidebar nav { display: grid; gap: 12px; margin: 32px 0 34px; }
+#root .cf-sidebar nav button { display: flex; align-items: center; gap: 14px; font-size: .9rem; text-align: left; padding: 12px; }
+#root .cf-sidebar nav button:not([aria-current]):not(:hover):not(:focus-visible) { background: none; box-shadow: none; border-color: transparent; }
+.cf-sidebar nav button > span { width: 24px; font-size: 1.4rem; text-align: center; }
+#root .cf-sidebar nav button[aria-current="page"] { color: #285e26; background: #dcebcfe8; font-weight: 650; }
+.cf-sidebar-note { padding: 14px; font-size: .86rem; color: #4d5549; }
+.cf-sidebar-note > span { font-size: 1.6rem; display: block; color: #4a7f37; }
+.cf-sidebar-note small { display: block; font-size: .7rem; margin-top: 8px; letter-spacing: .06em; }
+#root .cf-motion { font-size: .8rem; padding: 8px; }
+.cf-main { min-width: 0; position: relative; min-height: 100svh; padding: 0 2vw 20px 3.2vw; }
+.cf-hero { position: relative; height: 64.5vw; min-height: 660px; }
+.cf-heading { position: absolute; left: 0; right: 34%; top: 2.4vw; }
+#root .cf-heading h1 { font-size: clamp(2rem, 3vw, 3.2rem); line-height: 1.1; font-weight: 720; margin: 0 0 8px; }
+.cf-heading > p { font-size: 1.1rem; margin: 0; color: #554d45; }
+#root .cf-organize { position: absolute; right: 0; top: 10px; font-size: .83rem; background-color: #ffe4d6ec; color: #714337; display: flex; align-items: center; gap: 8px; }
+.cf-search { position: absolute; left: 0; top: 10vw; right: 36%; display: flex; align-items: center; gap: 10px; padding: 4px 12px; background: #fffaf1e8; border-radius: 23px; box-shadow: inset 0 1px #fff8, 0 8px 28px #73552610; backdrop-filter: blur(12px); }
+#root .cf-search input { min-width: 0; flex: 1; border: 0; background: transparent; padding-inline: 0; font-size: .94rem; }
+#root .cf-search button { padding: 8px; border-radius: 12px; box-shadow: none; background-color: transparent; border-color: transparent; }
+.cf-shelves { position: absolute; inset: 0; pointer-events: none; }
+#root .cf-shelves button { position: absolute; pointer-events: auto; display: flex; align-items: center; gap: 16px; padding: 5px 12px; min-height: 36px; border-radius: 12px; background-color: #fffef2eb; font-size: .88rem; box-shadow: 0 3px 12px #523c2426, inset 0 1px #fff; transition: transform 160ms ease, box-shadow 160ms ease; }
+#root .cf-shelves button:hover { transform: translateY(-3px); box-shadow: 0 7px 22px #58734550; }
+.cf-shelves button[data-category="vegetables"] { left: 18%; top: 41%; }
+.cf-shelves button[data-category="meat"] { left: 18%; top: 56%; }
+.cf-shelves button[data-category="dairy"] { left: 37%; top: 56%; }
+.cf-shelves button[data-category="fruit"] { left: 18%; top: 70%; }
+.cf-shelves button[data-category="other"] { left: 18%; top: 85%; }
+.cf-glass { background: linear-gradient(140deg, #fffffff0, #fff6e8dd); border: 1px solid #fff7; border-radius: 24px; box-shadow: 0 12px 34px #99632815, inset 0 1px #ffff; backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); }
+.cf-welcome { position: absolute; top: 5vw; right: 0; width: 31%; padding: 18px 12px 12px; }
+.cf-welcome header { display: flex; align-items: center; gap: 16px; padding: 0 8px 16px; }
+.cf-welcome header > span { font-size: 2.5rem; color: #c27b00; }
+.cf-welcome p { margin: 3px 0 0; font-size: .88rem; }
+#root .cf-recipe-count { display: flex; align-items: center; gap: 10px; text-align: left; width: 100%; background-color: #e8efd9e8; padding: 16px; }
+.cf-recipe-count strong { display: block; font-size: 1rem; }
+.cf-recipe-count small { display: block; font-size: .84rem; color: #555c45; line-height: 1.65; margin-top: 8px; }
+.cf-shopping-preview { position: absolute; top: max(26vw, 305px); right: 0; width: 28%; padding: 18px; }
+.cf-shopping-preview header { display: flex; align-items: center; gap: 10px; }
+.cf-shopping-preview header svg { color: #3d7733; }
+.cf-shopping-preview header > span { margin-left: auto; border-radius: 50%; background: #f7d8be; width: 30px; height: 30px; display: grid; place-items: center; }
+.cf-shopping-preview ul { margin: 20px 0; padding: 0; list-style: none; display: grid; gap: 12px; }
+.cf-shopping-preview label { display: flex; align-items: center; gap: 12px; cursor: pointer; }
+.cf-shopping-preview label span { overflow-wrap: anywhere; }
+.cf-shopping-preview > p { font-size: .9rem; }
+#root .classic-fridge .cf-green { background-color: #4f8c3f; color: white; border-color: #88ac6a; box-shadow: inset 0 1px #b6d3a488, 0 4px 12px #49773318; display: inline-flex; align-items: center; justify-content: center; gap: 10px; }
+#root .classic-fridge .cf-green:hover { background-color: #3d7531; }
+#root .cf-shopping-preview .cf-green { width: 100%; font-size: .9rem; }
+.cf-speech { position: absolute; right: 0; top: max(48vw, 550px); padding: 18px 24px; margin: 0; font-size: 1.05rem; line-height: 1.5; }
+.cf-speech span { color: #4c853c; }
+.cf-draft { position: absolute; left: 0; bottom: 4px; font-size: .78rem; color: #51422f; padding: 6px 12px; background: #fff9e6e6; border-radius: 12px; }
+.cf-recipes { margin-left: 4.5vw; padding: 20px; scroll-margin-top: 16px; }
+.cf-recipes > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+#root .cf-recipes > header button { display: flex; align-items: center; gap: 8px; font-size: .82rem; padding: 6px 10px; }
+.cf-recipe-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.cf-recipe-card { position: relative; min-width: 0; }
+#root .cf-recipe-card .cf-recipe-open { display: block; padding: 0 0 12px; text-align: left; width: 100%; height: 100%; border-radius: 17px; overflow: hidden; background: #fffaf0f5; box-shadow: 0 2px 8px #80623918; }
+.cf-recipe-photo { display: block; background: url('/design/user-20260909/fridge-recipes-v1.png') var(--recipe-x, 0%) 50% / 400% auto no-repeat; aspect-ratio: 1.5; }
+.cf-recipe-open > strong { display: block; font-size: .9rem; padding: 10px 10px 8px; line-height: 1.4; }
+.cf-recipe-open > small { display: flex; align-items: center; gap: 5px; font-size: .76rem; padding: 0 10px; color: #626052; }
+#root .cf-recipe-open small svg { width: 16px; height: 16px; }
+.cf-missing { display: block; font-size: .74rem; padding: 9px 10px 0; color: #455e36; }
+#root .cf-favorite { position: absolute; top: 8px; right: 8px; border-radius: 50%; min-height: 38px; width: 38px; height: 38px; padding: 8px; background-color: #fffaf0ee; }
+#root .cf-favorite svg { width: 20px; height: 20px; }
+#root .cf-favorite[aria-pressed="true"] { color: #a94b56; --glass-selected: #ffe6dd; --glass-accent: #a94b56; }
+#root .cf-favorite[aria-pressed="true"] svg { fill: #b547523b; }
+.cf-quick-actions { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin: 18px 0 0 3.5vw; }
+#root .cf-quick-actions button { display: flex; flex-direction: column; align-items: center; font-size: .84rem; gap: 12px; padding: 16px 8px; background-color: #fff8edf0; }
+.cf-quick-actions button > span { display: grid; place-items: center; color: #33732c; background: #e9eedc; border-radius: 50%; width: 47px; height: 47px; }
+.cf-quick-actions small { color: #7e6746; margin-top: -7px; }
+.cf-footer { padding: 14px 0 0 4vw; }
+.cf-footer p { font-size: .78rem; margin: 5px 0; color: #4e483c; }
+#root .cf-dialog { color: #262924; background: #fffaf2fa; border: 1px solid #fff9; border-radius: 24px; width: min(690px, calc(100vw - 32px)); max-height: calc(100svh - 40px); padding: 26px; box-sizing: border-box; box-shadow: 0 30px 100px #1f30134d; }
+.cf-dialog::backdrop { background: #342c2066; backdrop-filter: blur(6px); }
+.cf-dialog > header { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 24px; }
+.cf-dialog > header p { font-size: .72rem; letter-spacing: .18em; margin: 0 0 7px; }
+#root .cf-dialog > header h2 { font-size: 1.5rem; }
+#root .cf-dialog > header button { border-radius: 50%; width: 44px; font-size: 1.4rem; flex: none; }
+.cf-dialog label { color: #363c2d; }
+.cf-dialog p { font-size: .95rem; }
+.cf-filters, .cf-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
+#root .cf-filters button { font-size: .84rem; padding: 8px 12px; }
+.cf-filter-search { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: center; }
+.cf-inventory-list { list-style: none; padding: 0; display: grid; gap: 4px; }
+.cf-inventory-list li { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 0; border-bottom: 1px solid #7b815326; }
+.cf-inventory-list small, .cf-ingredients small { display: block; margin-top: 3px; font-size: .86rem; color: #656659; }
+.cf-inventory-list strong { overflow-wrap: anywhere; }
+.cf-inventory-list label { display: flex; align-items: center; gap: 15px; cursor: pointer; }
+.cf-recipe-detail-photo { aspect-ratio: 2.3; border-radius: 16px; }
+.cf-ingredients { list-style: none; padding: 0; }
+.cf-ingredients li { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 10px 0; border-bottom: 1px solid #7b815326; }
+.cf-ingredients strong { color: #426637; font-size: .84rem; }
+.cf-steps li { padding: 0 0 15px 8px; line-height: 1.65; }
+.cf-week { display: grid; gap: 12px; margin: 20px 0; }
+.cf-week label { display: grid; align-items: center; grid-template-columns: 100px minmax(0, 1fr); gap: 10px; }
+.cf-organize-list { list-style: none; padding: 0; }
+.cf-organize-list li { display: flex; align-items: center; gap: 12px; margin: 10px 0; }
+.cf-organize-list button { margin-left: auto; }
+.cf-feedback { color: #315c27; min-height: 1.5em; }
+#root .cf-dialog .fridge-panel { background: transparent; border: none; padding: 0; color: #262924; box-shadow: none; }
+#root .cf-dialog .fridge-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+#root .cf-dialog .fridge-form label { display: grid; gap: 8px; }
+#root .cf-dialog .fridge-form button { align-self: end; }
+#root .cf-dialog .scene-notice, #root .cf-dialog .scene-empty { color: #635b4a; font-size: .87rem; }
+#root .cf-dialog .fridge-items { padding: 0; }
+#root .cf-dialog .fridge-items li { color: #262924; background: #f0ead95c; }
+#root .cf-dialog .fridge-items span { color: #646151; }
+#root .classic-fridge[data-still="false"] :is(.cf-organize, .cf-shopping-preview > .cf-green) { animation: glass-drift 9s ease-in-out infinite; animation-play-state: var(--glass-play-state, running); }
+#root .classic-fridge[data-still="true"] { --glass-intro-animation: none; --glass-touch-animation: none; --glass-play-state: paused; --glass-spotlight: transparent; --glass-blur: none; }
+#root .classic-fridge[data-still="true"] .cf-glass { background: #fff9ef; }
+@media (min-width: 1600px) { .cf-shopping-preview { top: 24vw; } .cf-speech { top: 47vw; } }
+@media (max-width: 1150px) and (min-width: 801px) {
+  #root .classic-fridge { grid-template-columns: 17% minmax(0, 1fr); }
+  .cf-sidebar { padding: 16px 7px; } .cf-sidebar nav { gap: 6px; }
+  #root .cf-sidebar nav button { padding: 10px 5px; gap: 8px; font-size: .8rem; }
+  #root .cf-organize { position: static; margin-top: 12px; }
+  .cf-search { top: 165px; right: 34%; }
+  .cf-welcome { top: 20px; width: 30%; } .cf-welcome header { gap: 5px; padding-inline: 0; }
+  .cf-welcome header > span { font-size: 1.6rem; } .cf-welcome p { font-size: .8rem; }
+  #root .cf-recipe-count { padding: 10px; } .cf-recipe-count strong { font-size: .9rem; }
+  .cf-shopping-preview { width: 28%; padding: 14px; top: 290px; }
+  .cf-speech { top: 540px; right: 0; font-size: .9rem; padding: 12px; }
+  .cf-recipes { margin-left: 0; padding: 16px; } .cf-recipe-grid { gap: 8px; }
+  .cf-quick-actions { margin-left: 0; gap: 8px; }
+}
+@media (max-width: 800px) {
+  #root .classic-fridge { display: block; }
+  #root .classic-fridge::before { height: 106vw; background-size: 100% auto; top: 84px; }
+  .cf-sidebar { position: relative; padding: 10px 16px; border-radius: 0; display: flex; align-items: center; gap: 12px; overflow-x: auto; background: #fff8eaf5; }
+  #root .cf-sidebar .cf-brand { font-size: 1.6rem; flex: none; padding-left: 0; }
+  .cf-sidebar nav { display: flex; gap: 6px; margin: 0; } #root .cf-sidebar nav button { white-space: nowrap; font-size: .8rem; padding: 10px; gap: 8px; }
+  .cf-sidebar-note, #root .cf-motion { display: none; }
+  .cf-main { padding: 0 16px 20px; }
+  .cf-hero { height: auto; min-height: 0; padding-top: 18px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .cf-heading { position: relative; inset: auto; grid-column: 1 / -1; min-height: 64px; padding: 0; }
+  #root .cf-heading h1 { font-size: 2.05rem; } .cf-heading > p { font-size: .95rem; }
+  #root .cf-organize { position: static; margin-top: 12px; font-size: .78rem; }
+  .cf-search { position: relative; inset: auto; grid-column: 1 / -1; padding-inline: 9px; }
+  #root .cf-search input { font-size: .86rem; }
+  .cf-shelves { position: relative; inset: auto; height: max(52vw, 215px); grid-column: 1 / -1; }
+  #root .cf-shelves button { font-size: .74rem; padding: 4px 8px; gap: 8px; min-height: 40px; left: 29%; }
+  .cf-shelves button[data-category="vegetables"] { top: 0; }
+  .cf-shelves button[data-category="meat"] { top: 22%; }
+  #root .cf-shelves button[data-category="dairy"] { top: 22%; left: 57%; }
+  .cf-shelves button[data-category="fruit"] { top: 46%; }
+  .cf-shelves button[data-category="other"] { top: 70%; }
+  .cf-welcome, .cf-shopping-preview { position: relative; inset: auto; width: auto; padding: 12px; }
+  .cf-welcome header { gap: 8px; padding: 0 0 10px; }
+  .cf-welcome header > span { font-size: 1.8rem; }
+  .cf-welcome h2, .cf-shopping-preview h2 { font-size: .9rem; }
+  #root .cf-recipe-count { padding: 10px; gap: 5px; } .cf-recipe-count strong { font-size: .88rem; } .cf-recipe-count small { font-size: .78rem; }
+  .cf-shopping-preview header { gap: 6px; } .cf-shopping-preview p, .cf-shopping-preview li { font-size: .85rem; }
+  #root .cf-shopping-preview .cf-green { font-size: .8rem; padding: 9px; }
+  .cf-speech { display: none; } .cf-draft { position: static; grid-column: 1 / -1; margin: 0; }
+  .cf-recipes { margin: 18px 0 0; padding: 14px; }
+  .cf-recipes > header { align-items: flex-start; } #root .cf-recipes > header h2 { font-size: .98rem; }
+  #root .cf-recipes > header button { font-size: .73rem; min-width: 94px; padding: 5px; }
+  .cf-recipe-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cf-quick-actions { margin-left: 0; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .cf-footer { padding-left: 0; }
+  #root .cf-dialog { padding: 20px; width: calc(100vw - 22px); max-height: calc(100svh - 24px); }
+}
+@media (max-width: 420px) {
+  .cf-hero { grid-template-columns: 1fr; } .cf-quick-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cf-welcome, .cf-shopping-preview { grid-column: 1 / -1; }
+  .cf-week label { grid-template-columns: 1fr; gap: 5px; }
+  #root .cf-dialog .fridge-form { grid-template-columns: 1fr; }
+  .cf-inventory-list li { align-items: flex-start; flex-wrap: wrap; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #root .classic-fridge { --glass-intro-animation: none; --glass-touch-animation: none; --glass-play-state: paused; --glass-spotlight: transparent; }
+  #root .classic-fridge button { animation: none; transition: none; } #root .cf-shelves button:hover { transform: none; }
+}
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  #root .classic-fridge { --glass-blur: none; --glass-base: #fffaf0; --glass-play-state: paused; }
+  #root .classic-fridge :is(.cf-glass, .cf-sidebar, .cf-search) { background: #fffaf0; backdrop-filter: none; }
+}
+@media (forced-colors: active) {
+  #root .classic-fridge::before { display: none; } #root .classic-fridge :is(button, input, select, .cf-glass) { border: 1px solid ButtonText; }
+}

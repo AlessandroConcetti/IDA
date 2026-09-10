@@ -1,5 +1,9 @@
 # Roue des Mondes — première tranche cliente
 
+## Reprise du 10 septembre : variantes d’environnement
+
+IDA Home → Mon frigo emploie désormais la maquette crème/verte en thème Classic (`ClassicFridge`) et conserve la scène sombre existante pour Sci-Fi/Immersive. Le brouillon d’inventaire vient toujours du même parent. La carte La Fabrique ouvre la nouvelle scène de référence, réutilisant la navigation commune et les tâches IDA pour ses briefs. Voir [fonctions et limites](FRIGO_CLASSIC_FABRIQUE.md). Ni nouveaux agents activés, ni seconde page d’accueil indépendante, ni vidéos supplémentaires dans les environnements.
+
 ## Mise à jour du 10 septembre 2026
 
 Les vidéos restent maintenant sur les cartes uniquement, sauf présence robot Immersive. Research, Travel et Music Studio utilisent des scènes HTML dédiées et des décors nettoyés des faux boutons. Détails et limites : [interfaces d'environnement](ENVIRONMENT_INTERFACES.md) et [livraison du 10 septembre](REFERENCE_ENVIRONMENTS_20260910.md). Le traitement Glass respecte la réduction de mouvement/transparence et peut être arrêté depuis « Reflets ».

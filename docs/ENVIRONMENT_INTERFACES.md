@@ -1,5 +1,9 @@
 # Environnements plein écran — 9 septembre 2026
 
+## Reprise du 10 septembre : Frigo Classic et La Fabrique
+
+Les deux scènes dédiées sont désormais intégrées ; voir [Frigo Classic et La Fabrique](FRIGO_CLASSIC_FABRIQUE.md) pour les commandes disponibles, la réutilisation des tâches/inventaire et les limites. La Fabrique réutilise maintenant le rail, les fenêtres et icônes de Research/Travel/Music Studio. Les descriptions historiques de ces deux scènes ci-dessous sont remplacées par ce compte rendu.
+
 ## Mise à jour du 10 septembre — références nommées et dialogue local
 
 Cette section remplace les anciennes limites Research/Travel/Music décrites ci-dessous. Voir [la livraison détaillée](REFERENCE_ENVIRONMENTS_20260910.md) pour le périmètre exact et les prompts des nouveaux décors.

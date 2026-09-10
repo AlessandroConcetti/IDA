@@ -1,4 +1,4 @@
-import { type CSSProperties, type ReactNode, type RefObject, useEffect, useRef, useState } from "react";
+import { type CSSProperties, type RefObject, useEffect, useRef, useState } from "react";
 import {
   createTask,
   fetchMediaAssets,
@@ -9,6 +9,7 @@ import {
 } from "./api";
 import type { MediaAsset, NavigationId } from "./data";
 import { LocalDialogue } from "./LocalDialogue";
+import { LineIcon, Sheet, ReferenceRail } from "./ReferenceChrome";
 import { StudioPlayer } from "./StudioPlayer";
 import { MusicFolderImport } from "./MusicFolderImport";
 
@@ -59,71 +60,6 @@ const toolNames: Record<Tool, string> = {
   trips: "Mes voyages",
   inspirations: "Inspirations",
 };
-
-function LineIcon({ kind }: { kind: string }) {
-  const paths: Record<string, string> = {
-    search: "M16 10a6 6 0 1 1-12 0 6 6 0 0 1 12 0Zm-1 5 6 6",
-    book: "M12 5C8 2 4 3 2 4v15c4-2 7-1 10 1 3-2 6-3 10-1V4c-3-1-7-2-10 1Zm0 0v15M5 7h4M5 10h4m6-3h4m-4 3h4",
-    ideas: "M10 21h4M9 18h6M8 14a6 6 0 1 1 8 0l-1 2H9l-1-2ZM12 1v1M1 7h2m18 0h2",
-    map: "m2 5 6-3 8 3 6-3v17l-6 3-8-3-6 3V5Zm6-3v17m8-14v17",
-    globe: "M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM3 12h18M12 3c-5 5-5 13 0 18 5-5 5-13 0-18Z",
-    music: "M2 10v4m4-8v12m4-15v18m4-15v12m4-10v8m4-6v4",
-    sliders: "M5 2v8m0 4v8M12 2v3m0 4v13M19 2v12m0 4v6M2 10h6v4H2v-4Zm7-5h6v4H9V5Zm7 9h6v4h-6v-4Z",
-    users: "M15 8a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM3 22v-3a6 6 0 0 1 12 0v3m1-19a4 4 0 0 1 0 8m2 3a6 6 0 0 1 4 5v3",
-    export: "M12 16V2m-5 5 5-5 5 5M3 10v12h18V10",
-    chat: "M21 11a9 9 0 0 1-9 9H4l-2 2V11a9 9 0 1 1 19 0ZM7 11h.01M12 11h.01M17 11h.01",
-    case: "M3 7h18v14H3V7Zm5 0V3h8v4M3 12h18",
-    plus: "M12 3v18M3 12h18",
-    clock: "M3 8V3m0 5h5m-5 0a9 9 0 1 1 0 8M12 6v6l4 2",
-  };
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.25"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d={paths[kind] ?? paths.book} />
-    </svg>
-  );
-}
-
-function Sheet({ title, close, children }: { title: string; close: () => void; children: ReactNode }) {
-  const dialog = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    const previous = document.activeElement;
-    dialog.current?.showModal();
-    return () => {
-      dialog.current?.close();
-      if (previous instanceof HTMLElement && previous.isConnected) previous.focus({ preventScroll: true });
-    };
-  }, []);
-  return (
-    <dialog
-      className="reference-sheet"
-      ref={dialog}
-      onCancel={(event) => {
-        event.preventDefault();
-        close();
-      }}
-      aria-labelledby="reference-sheet-title"
-    >
-      <header>
-        <div>
-          <span className="scene-kicker">VOTRE ESPACE DE TRAVAIL</span>
-          <h2 id="reference-sheet-title">{title}</h2>
-        </div>
-        <button type="button" onClick={close} aria-label="Fermer l’espace de travail">
-          ×
-        </button>
-      </header>
-      {children}
-    </dialog>
-  );
-}
 
 function exportText(filename: string, content: string) {
   const url = URL.createObjectURL(new Blob([content], { type: "text/plain;charset=utf-8" }));
@@ -216,10 +152,16 @@ export function ReferenceEnvironment({
   const library = media.filter((item) => item.filename.toLocaleLowerCase("fr").includes(query.toLocaleLowerCase("fr")));
   async function saveTask(title: string, description: string) {
     if (saving) return;
+    if (description.length > 4000) {
+      setSaved(
+        "Le texte dépasse les 4 000 caractères d’une tâche. Réduisez-le ou exportez le brief pour le conserver intégralement.",
+      );
+      return;
+    }
     setSaving(true);
     setSaved("");
     try {
-      await createTask({ title: title.slice(0, 200), description: description.slice(0, 5000) });
+      await createTask({ title: title.slice(0, 200), description });
       if (mounted.current) {
         setSaved("Enregistré dans les tâches partagées d’IDA.");
         setRefresh((value) => value + 1);
@@ -283,55 +225,15 @@ export function ReferenceEnvironment({
       data-world={environment}
       data-motion={motion}
       aria-label={`Environnement ${title}`}
-      onKeyDown={(event) => { if (event.key === "Escape" && !tool) { event.preventDefault(); onBack(); } }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && !tool) {
+          event.preventDefault();
+          onBack();
+        }
+      }}
       style={{ "--environment-image": `url("/design/user-20260909/${environment}-scene-v1.png")` } as CSSProperties}
     >
-      <aside className="reference-rail">
-        <button type="button" className="reference-brand" onClick={onBack}>
-          I D A
-        </button>
-        <p>
-          INTELLIGENT
-          <br />
-          DIGITAL
-          <br />
-          AGENT
-        </p>
-        <nav aria-label="Environnements">
-          {[
-            ["home", "Home", "⌂"],
-            ["health", "Care", "♡"],
-            ["music", "Music Studio", "♫"],
-            ["creative", "Creative Lab", "✧"],
-            ["research", "Knowledge", "▣"],
-            ["workspace", "Productivity", "◇"],
-            ["finance", "Finance", "▥"],
-            ["social", "Social", "◌"],
-            ["travel", "Explorer", "↗"],
-            ["fabrique", "La Fabrique", "⬡"],
-          ].map(([id, label, icon]) => (
-            <button
-              type="button"
-              key={id}
-              aria-current={id === environment ? "page" : undefined}
-              onClick={() => onSelect(id!)}
-            >
-              <span aria-hidden="true">{icon}</span>
-              {label}
-            </button>
-          ))}
-          <button type="button" onClick={() => onNavigate("system")}>
-            <span aria-hidden="true">◎</span>System
-          </button>
-        </nav>
-        <p className="reference-signature">
-          HUMAN
-          <br />
-          AI
-          <br />
-          TOGETHER
-        </p>
-      </aside>
+      <ReferenceRail active={environment} onBack={onBack} onSelect={onSelect} onNavigate={onNavigate} />
       <main className="reference-main">
         <div className="reference-top">
           <button type="button" onClick={onBack}>
@@ -686,9 +588,11 @@ export function ReferenceEnvironment({
               <button type="button" className="reference-primary" onClick={() => onNavigate("content")}>
                 Importer / gérer les fichiers privés →
               </button>
-              {environment === "music" ? <button type="button" onClick={() => onNavigate("music")}>
-                Ouvrir les morceaux et releases →
-              </button> : null}
+              {environment === "music" ? (
+                <button type="button" onClick={() => onNavigate("music")}>
+                  Ouvrir les morceaux et releases →
+                </button>
+              ) : null}
             </>
           ) : null}
           {tool === "research" || tool === "sources" ? (
