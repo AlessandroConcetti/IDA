@@ -42,4 +42,10 @@ Téléphone : `127.0.0.1` désigne le téléphone, pas ce PC. Vite, l'API et LOC
 
 ## Vérification de cette tranche
 
-Revue ciblée des flux et du scope ; démarrage runtime, chargement des modules frontend, refus HTTP sans authentification. Aucune suite de tests, lint, typecheck, build complet ou recette navigateur exécutée, conformément à la pause demandée. Les chemins authentifiés, annulations réelles, expiration de session, rendu mobile et traitement audio devront être recettés avant une qualification plus large.
+### Reprise du 10 septembre — statut concurrent
+
+Le statut dispose désormais de son propre transport d'inventaire ; les demandes simultanées partagent une seule vérification en vol, sans cache permanent. L'inférence conserve son transport exclusif et vérifie toujours le digest avant l'appel. Ainsi, ouvrir deux dialogues ne produit plus un faux état hors ligne et la lecture du statut ne peut plus consommer un essai de génération. Les deux transports sont fermés à l'arrêt serveur. Le client affiche les messages d'erreur contrôlés du serveur (quota, saisie refusée, modèle indisponible).
+
+Vérification complémentaire : 7 tests de composition de statut, 78 tests existants du transport et 9 tests Frigo passent (94 au total). Types Web et API vérifiés, lint des fichiers de cette tranche propre. Les tests de statut utilisent des transports simulés et ne prouvent ni l'authentification de bout en bout ni une réponse réelle du modèle. La saisie et la confirmation du premier verrou restent une action de l'utilisateur dans IDA ; aucune phrase reçue dans la conversation n'est enregistrée dans le projet.
+
+Lors de la livraison initiale : revue ciblée des flux et du scope, démarrage runtime, chargement des modules frontend et refus HTTP sans authentification. Aucun test/lint/typecheck/build ou recette navigateur n'avait alors été exécuté, conformément à la pause demandée. Les vérifications complémentaires de la reprise sont indiquées ci-dessus. Les chemins authentifiés, annulations réelles, expiration de session, rendu mobile et traitement audio devront être recettés avant une qualification plus large.

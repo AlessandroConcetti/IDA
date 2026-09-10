@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { requestApi } from "./api-transport";
+import { IdaApiError, requestApi } from "./api-transport";
 
 function payloadData(value: unknown): Record<string, unknown> | undefined {
   if (!value || typeof value !== "object" || !("data" in value) || !value.data || typeof value.data !== "object")
@@ -67,10 +67,12 @@ export function LocalDialogue() {
       );
       if (!current.signal.aborted)
         setReply(typeof data?.text === "string" ? data.text : "Réponse incomplète. Réessayez.");
-    } catch {
+    } catch (error) {
       if (!current.signal.aborted)
         setReply(
-          "IDA n’a pas reçu de réponse complète du modèle local. Aucun appel cloud n’a été effectué. Réessayez avec une demande plus courte.",
+          error instanceof IdaApiError
+            ? error.message
+            : "IDA n’a pas reçu de réponse complète du modèle local. Aucun appel cloud n’a été effectué. Réessayez avec une demande plus courte.",
         );
     } finally {
       if (!current.signal.aborted) setBusy(false);

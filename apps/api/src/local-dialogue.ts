@@ -25,6 +25,25 @@ export function registerLocalDialogue(
     timeoutMs: 110_000,
     contextTokens: 4096,
   });
+  // Le statut ne concurrence jamais l'opération exclusive d'inférence.
+  const inventoryTransport = new OllamaLoopbackTransport({
+    enabled,
+    localOnlyDeploymentApproved: enabled,
+    models: [{ name: localPilot.name, digest: localPilot.digest }],
+    timeoutMs: 2500,
+  });
+  let inventoryCheck: Promise<boolean> | undefined;
+  function checkInstalled(): Promise<boolean> {
+    if (!inventoryCheck) {
+      inventoryCheck = inventoryTransport
+        .inspectInstalledModels(AbortSignal.timeout(2500))
+        .then((models) => models.some((model) => model.name === localPilot.name && model.digest === localPilot.digest))
+        .finally(() => {
+          inventoryCheck = undefined;
+        });
+    }
+    return inventoryCheck;
+  }
   const registry = new ProviderRegistry([
     {
       manifest: {
@@ -68,6 +87,7 @@ export function registerLocalDialogue(
   app.addHook("onClose", async () => {
     for (const controller of controllers) controller.abort();
     transport.dispose();
+    inventoryTransport.dispose();
   });
 
   app.get("/v1/intelligence/local/status", async () => {
@@ -75,11 +95,10 @@ export function registerLocalDialogue(
     if (!enabled) return { data: { state: "DISABLED", model: localPilot.name, locality: "LOCAL", experimental: true } };
     if (busy) return { data: { state: "BUSY", model: localPilot.name, locality: "LOCAL", experimental: true } };
     try {
-      const models = await transport.inspectInstalledModels(AbortSignal.timeout(2500));
-      const ready = models.some((model) => model.name === localPilot.name && model.digest === localPilot.digest);
+      const ready = await checkInstalled();
       return {
         data: {
-          state: ready ? "READY" : "MODEL_MISSING",
+          state: busy ? "BUSY" : ready ? "READY" : "MODEL_MISSING",
           model: localPilot.name,
           locality: "LOCAL",
           experimental: true,
@@ -92,25 +111,21 @@ export function registerLocalDialogue(
 
   app.post("/v1/intelligence/local/reply", { bodyLimit: 16_384 }, async (request, reply) => {
     if (!enabled)
-      return reply
-        .code(503)
-        .send({
-          error: { code: "LOCAL_AI_DISABLED", message: "Le dialogue IA local n’est pas activé sur ce serveur." },
-        });
+      return reply.code(503).send({
+        error: { code: "LOCAL_AI_DISABLED", message: "Le dialogue IA local n’est pas activé sur ce serveur." },
+      });
     const parsed = bodySchema.safeParse(request.body);
     if (!parsed.success || parsed.data.prompt.length > 3000)
       return reply
         .code(400)
         .send({ error: { code: "INVALID_REQUEST", message: "Saisissez une demande de 1 à 3 000 caractères." } });
     if (/\bsk-[a-zA-Z0-9_-]{16,}|(?:api[_ -]?key|password|mot de passe)\s*[:=]\s*\S+/iu.test(parsed.data.prompt))
-      return reply
-        .code(400)
-        .send({
-          error: {
-            code: "SECRET_INPUT_REJECTED",
-            message: "Retirez les identifiants, mots de passe et clés de votre demande.",
-          },
-        });
+      return reply.code(400).send({
+        error: {
+          code: "SECRET_INPUT_REJECTED",
+          message: "Retirez les identifiants, mots de passe et clés de votre demande.",
+        },
+      });
     // Rien ne choisit un provider, une permission, un scope ou une classe depuis le body.
     const identity = getRequestIdentityContext(request);
     const scope = {
@@ -181,15 +196,13 @@ export function registerLocalDialogue(
         },
       };
     } catch {
-      return reply
-        .code(503)
-        .send({
-          error: {
-            code: "LOCAL_AI_UNAVAILABLE",
-            message:
-              "Le modèle local n’a pas fourni de réponse complète. Aucun fournisseur cloud n’a été appelé. Réessayez avec une demande plus courte.",
-          },
-        });
+      return reply.code(503).send({
+        error: {
+          code: "LOCAL_AI_UNAVAILABLE",
+          message:
+            "Le modèle local n’a pas fourni de réponse complète. Aucun fournisseur cloud n’a été appelé. Réessayez avec une demande plus courte.",
+        },
+      });
     } finally {
       busy = false;
       controllers.delete(controller);
