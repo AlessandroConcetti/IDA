@@ -1,0 +1,350 @@
+.reference-sheet:has(.travel-notebook) {
+  width: min(960px, calc(100vw - 28px));
+  padding: 24px;
+  background: linear-gradient(125deg, #213244f5, #101b27f5);
+}
+.travel-notebook {
+  min-width: 0;
+  color: #f1efe9;
+  font-size: 1rem;
+}
+.notebook-banner {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 22px;
+  border: 1px solid #e8cda946;
+  border-radius: 18px;
+  background: linear-gradient(100deg, #bc92752c, #29486155);
+}
+.notebook-banner svg {
+  width: 54px;
+  height: 54px;
+  flex: none;
+  color: #f1cfa9;
+}
+.notebook-eyebrow {
+  font-size: 0.75rem;
+  letter-spacing: 0.17em;
+  color: #eacaa8;
+}
+.reference-sheet .notebook-banner h3 {
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  font-weight: 400;
+  margin: 12px 0;
+}
+.notebook-banner p {
+  margin: 0;
+}
+.notebook-facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 14px 0 22px;
+}
+.notebook-facts > span {
+  border: 1px solid #e6d2b928;
+  border-radius: 13px;
+  padding: 14px;
+  font-size: 0.8rem;
+  background: #e6d2b909;
+}
+.notebook-facts strong {
+  display: block;
+  font-size: 1.35rem;
+  font-weight: 400;
+  margin-bottom: 5px;
+  color: #ffe1bc;
+}
+.notebook-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-bottom: 24px;
+}
+#root .notebook-tabs button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  white-space: nowrap;
+  padding: 12px;
+  font-size: 0.875rem;
+}
+.notebook-tabs svg {
+  width: 21px;
+  height: 21px;
+}
+#root .notebook-tabs button[aria-pressed="true"] {
+  background: #d6b18c38;
+  color: #ffe8ca;
+  border-color: #ebcaa278;
+}
+.notebook-editor {
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.notebook-editor:disabled {
+  opacity: 0.85;
+}
+.reference-sheet .notebook-editor h3,
+.reference-sheet .notebook-review h3 {
+  font-size: 1.15rem;
+}
+.notebook-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+.travel-notebook label {
+  font-size: 0.9rem;
+}
+.travel-notebook input,
+.travel-notebook textarea,
+.travel-notebook select {
+  font-size: 1rem;
+}
+.reference-sheet .notebook-hint {
+  font-size: 0.85rem;
+  color: #d2d0ce;
+}
+.notebook-section-heading {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+  justify-content: space-between;
+}
+.notebook-section-heading > span {
+  font-size: 0.8rem;
+  color: #e7c9a7;
+}
+.notebook-empty {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 26px;
+  border: 1px dashed #d9c3a747;
+  border-radius: 16px;
+  margin: 15px 0;
+}
+.notebook-empty svg {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  color: #e5c39e;
+}
+.notebook-route {
+  list-style: none;
+  display: grid;
+  gap: 16px;
+  margin: 15px 0;
+  padding: 0;
+}
+.notebook-route li {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid #e1c6a62f;
+  border-radius: 17px;
+  background: #adc9e407;
+}
+.notebook-step-number {
+  font-size: 1.05rem;
+  color: #f5cfa4;
+  border-bottom: 1px solid #e4c296;
+  align-self: start;
+  padding: 16px 0 8px;
+  text-align: center;
+}
+.notebook-route label {
+  margin-top: 8px;
+}
+.notebook-row-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.notebook-budget-lines > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.75fr) auto;
+  gap: 12px;
+  align-items: end;
+  margin: 16px 0;
+}
+.notebook-budget-lines label {
+  margin: 0;
+}
+.notebook-budget-summary {
+  display: grid;
+  gap: 12px;
+  margin: 25px 0 0;
+}
+.notebook-budget-summary > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 15px;
+  padding: 18px;
+  border: 1px solid #e3c5a340;
+  background: #edc69b0a;
+  border-radius: 14px;
+}
+.notebook-budget-summary strong {
+  white-space: nowrap;
+  font-weight: 500;
+  color: #f4d1ab;
+}
+.notebook-budget-summary [data-over="true"] {
+  border-color: #f0ac737d;
+}
+.notebook-checklist {
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 12px;
+}
+.notebook-checklist li {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 12px;
+}
+.notebook-checklist input[type="checkbox"] {
+  width: 23px;
+  height: 23px;
+  accent-color: #e8c89f;
+}
+.travel-notebook progress {
+  width: 100%;
+  height: 8px;
+  accent-color: #e8c89f;
+}
+.notebook-review {
+  border: 1px solid #e7c9a52e;
+  padding: 22px;
+  border-radius: 17px;
+  background: #e2cfac08;
+}
+.notebook-review h4 {
+  font-size: 0.9rem;
+  letter-spacing: 0.04em;
+  color: #f3cfa7;
+  margin-bottom: 12px;
+}
+.notebook-review ol {
+  padding-left: 20px;
+}
+.notebook-review li {
+  padding: 6px;
+}
+.notebook-review li > span {
+  display: block;
+  font-size: 0.8rem;
+  margin-top: 7px;
+  color: #d1d3d7;
+}
+.notebook-review li p {
+  margin-top: 6px;
+}
+.notebook-review strong {
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.notebook-notes,
+.notebook-legacy {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.notebook-legacy {
+  font: inherit;
+  line-height: 1.7;
+}
+.notebook-status,
+.notebook-errors {
+  margin: 18px 0;
+  padding: 16px;
+  border-left: 2px solid #e5c19c;
+  border-radius: 0 12px 12px 0;
+  background: #edc9a510;
+}
+.notebook-errors {
+  border-color: #ffc388;
+}
+.notebook-errors li {
+  margin-top: 10px;
+  line-height: 1.5;
+}
+.notebook-footer {
+  border-top: 1px solid #dcc3a342;
+  padding-top: 18px;
+  margin-top: 28px;
+}
+.notebook-footer > span {
+  font-size: 0.8rem;
+  color: #d3d5d8;
+}
+.notebook-footer > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 14px 0;
+}
+#root .notebook-save {
+  background: linear-gradient(120deg, #d2aa855e, #eed4b124);
+  border-color: #efc9a378;
+  color: #ffeddb;
+}
+.reference-sheet .notebook-footer p {
+  font-size: 0.8rem;
+  color: #d0d1d2;
+}
+@media (max-width: 600px) {
+  .reference-sheet:has(.travel-notebook) {
+    padding: 18px;
+  }
+  .notebook-facts {
+    grid-template-columns: 1fr 1fr;
+  }
+  .notebook-pair {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+  .notebook-budget-lines > div {
+    grid-template-columns: minmax(0, 1fr) 44px;
+  }
+  .notebook-budget-lines label:first-child {
+    grid-column: 1 / -1;
+  }
+  .notebook-banner {
+    padding: 16px;
+  }
+  .notebook-banner svg {
+    width: 36px;
+    height: 36px;
+  }
+  .notebook-route li {
+    grid-template-columns: 28px minmax(0, 1fr);
+    padding: 10px;
+  }
+  .notebook-budget-summary > div {
+    flex-direction: column;
+    gap: 8px;
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .reference-sheet:has(.travel-notebook) {
+    background: #152332;
+    backdrop-filter: none;
+  }
+}
+@media (forced-colors: active) {
+  .reference-sheet:has(.travel-notebook),
+  .notebook-banner,
+  .notebook-review {
+    background: Canvas;
+    color: CanvasText;
+    border-color: CanvasText;
+  }
+}

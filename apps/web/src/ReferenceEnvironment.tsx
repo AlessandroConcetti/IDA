@@ -1,5 +1,12 @@
 import { type CSSProperties, type RefObject, useEffect, useRef, useState } from "react";
 import {
+  newTravelDraft,
+  notebookErrors,
+  readNotebook,
+  serializeNotebook,
+  travelDate,
+} from "../../../packages/contracts/src/travel-notebook";
+import {
   createTask,
   fetchMediaAssets,
   fetchTasks,
@@ -7,11 +14,15 @@ import {
   type TaskRecord,
   type TrackReference,
 } from "./api";
+import { IdaApiError } from "./api-transport";
+import { DestinationMenu } from "./DestinationMenu";
 import type { MediaAsset, NavigationId } from "./data";
 import { LocalDialogue } from "./LocalDialogue";
-import { LineIcon, Sheet, ReferenceRail } from "./ReferenceChrome";
-import { StudioPlayer } from "./StudioPlayer";
 import { MusicFolderImport } from "./MusicFolderImport";
+import { LineIcon, ReferenceRail, Sheet } from "./ReferenceChrome";
+import { StudioPlayer } from "./StudioPlayer";
+import { TravelNotebook, type TravelSession } from "./TravelNotebook";
+import { travelDestinations as destinations } from "./travel-destinations";
 
 type Environment = "music" | "research" | "travel";
 type Tool =
@@ -29,14 +40,6 @@ type Tool =
   | "plan"
   | "trips"
   | "inspirations";
-const destinations = [
-  { name: "Japon", detail: "Tradition · Modernité · Émotions", city: "Tokyo" },
-  { name: "Thaïlande", detail: "Nature · Aventure · Inspiration", city: "Bangkok" },
-  { name: "Italie", detail: "Culture · Gastronomie · Art de vivre", city: "Positano" },
-  { name: "Islande", detail: "Nature brute · Grands espaces · Liberté", city: "Reykjavik" },
-  { name: "États-Unis", detail: "Villes iconiques · Road trips · Expériences", city: "New York" },
-  { name: "Bali", detail: "Spiritualité · Détente · Équilibre", city: "Ubud" },
-] as const;
 const topics = [
   "Intelligence artificielle",
   "Sciences & Univers",
@@ -56,7 +59,7 @@ const toolNames: Record<Tool, string> = {
   research: "Recherche",
   sources: "Mes sources",
   map: "Carte du monde",
-  plan: "Préparer mon voyage",
+  plan: "Mon carnet de voyage",
   trips: "Mes voyages",
   inspirations: "Inspirations",
 };
@@ -68,6 +71,18 @@ function exportText(filename: string, content: string) {
   link.download = filename;
   link.click();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function freshTravelSession(destination: string): TravelSession {
+  const draft = newTravelDraft(destination);
+  return { draft, initial: serializeNotebook(draft), source: null, pending: false, uncertain: false, notice: "" };
+}
+
+function tripPreview(task: TaskRecord): string {
+  const draft = readNotebook(task.description);
+  return draft
+    ? `${travelDate(draft.start)} — ${travelDate(draft.end)} · ${draft.stops.length} étapes`
+    : task.description || "Aucune note.";
 }
 
 /** Une scène de la roue existante ; les écritures passent par l'API partagée. */
@@ -100,6 +115,9 @@ export function ReferenceEnvironment({
   const [currentTrack, setCurrentTrack] = useState<TrackReference | null>(null);
   const [motion, setMotion] = useState(true);
   const [refresh, setRefresh] = useState(0);
+  const [travel, setTravel] = useState<TravelSession>(() => freshTravelSession(""));
+  const [pendingTravel, setPendingTravel] = useState<TravelSession | null>(null);
+  const travelSaving = useRef(false);
   const requestGeneration = useRef(0);
   const mounted = useRef(true);
   useEffect(() => {
@@ -130,7 +148,11 @@ export function ReferenceEnvironment({
     void job
       .catch(() => {
         if (generation === requestGeneration.current)
-          setError("Bibliothèque indisponible. Vérifiez la connexion à IDA puis réessayez.");
+          setError(
+            environment === "travel"
+              ? "Vos voyages sont indisponibles. Vérifiez la connexion à IDA puis réessayez."
+              : "Bibliothèque indisponible. Vérifiez la connexion à IDA puis réessayez.",
+          );
       })
       .finally(() => {
         if (generation === requestGeneration.current) setLoading(false);
@@ -141,14 +163,71 @@ export function ReferenceEnvironment({
   }, [environment, refresh]);
 
   const title = environment === "music" ? "MUSIC STUDIO" : environment === "research" ? "KNOWLEDGE" : "EXPLORER";
+  const upcomingTrips = tasks.filter((task) => task.status !== "DONE" && task.status !== "CANCELLED");
   const open = (next: Tool) => {
     setSaved("");
+    if (next !== "plan") setPendingTravel(null);
     setTool(next);
   };
   const plan = (name: string) => {
     setDestination(name);
+    if (travel.draft.destination !== name || travel.source) requestTravel(freshTravelSession(name));
     open("plan");
   };
+  function requestTravel(next: TravelSession) {
+    if (travelSaving.current) return;
+    if (!travel.source && (travel.uncertain || serializeNotebook(travel.draft) !== travel.initial))
+      setPendingTravel(next);
+    else {
+      setTravel(next);
+      setPendingTravel(null);
+    }
+  }
+  function openTrip(task: TaskRecord) {
+    if (task.id !== travel.source?.id) {
+      const next = freshTravelSession(task.title.replace("Voyage · ", ""));
+      next.source = task;
+      next.draft = readNotebook(task.description) ?? next.draft;
+      next.initial = serializeNotebook(next.draft);
+      requestTravel(next);
+    }
+    open("plan");
+  }
+  async function saveTravel() {
+    if (travelSaving.current || travel.source || travel.uncertain || notebookErrors(travel.draft).length) return;
+    travelSaving.current = true;
+    const snapshot = travel.draft;
+    const description = serializeNotebook(snapshot);
+    setTravel((previous) => ({ ...previous, pending: true, notice: "" }));
+    try {
+      const row = await createTask({ title: `Voyage · ${snapshot.destination.trim()}`, description });
+      if (mounted.current) {
+        setTravel((previous) => ({
+          ...previous,
+          draft: snapshot,
+          source: row,
+          initial: description,
+          pending: false,
+          notice: "Carnet enregistré. Vous le retrouverez dans Mes voyages et dans les tâches d’IDA.",
+        }));
+        setTasks((previous) => [row, ...previous.filter((task) => task.id !== row.id)]);
+        setRefresh((value) => value + 1);
+      }
+    } catch (error) {
+      const rejected = error instanceof IdaApiError && [400, 403, 404, 413, 422, 429].includes(error.status ?? 0);
+      if (mounted.current)
+        setTravel((previous) => ({
+          ...previous,
+          pending: false,
+          uncertain: !rejected,
+          notice: rejected
+            ? "Le serveur a refusé l’enregistrement. Votre brouillon est conservé. Vérifiez vos droits et les champs ; attendez si la limite de demandes est atteinte, puis réessayez."
+            : "Enregistrement non confirmé. Votre brouillon est conservé ici. Consultez et actualisez Mes voyages avant toute nouvelle création : le serveur a peut-être reçu le carnet. Aucun renvoi automatique.",
+        }));
+    } finally {
+      travelSaving.current = false;
+    }
+  }
   const library = media.filter((item) => item.filename.toLocaleLowerCase("fr").includes(query.toLocaleLowerCase("fr")));
   async function saveTask(title: string, description: string) {
     if (saving) return;
@@ -301,7 +380,7 @@ export function ReferenceEnvironment({
                 ["globe", "Sources", "sources"],
               ].map(([icon, label, next]) => (
                 <button key={label} type="button" onClick={() => open(next as Tool)}>
-                  <LineIcon kind={icon!} />
+                  <LineIcon kind={icon ?? "book"} />
                   {label}
                 </button>
               ))}
@@ -309,28 +388,7 @@ export function ReferenceEnvironment({
           ) : null}
         </header>
         {environment === "travel" ? (
-          <div className="reference-destinations" aria-label="Destinations">
-            {destinations.map((place, index) => (
-              <button
-                key={place.name}
-                type="button"
-                className="destination-door"
-                style={{ "--destination-index": index } as CSSProperties}
-                onClick={() => plan(place.name)}
-              >
-                <strong>{place.name}</strong>
-                <span>
-                  {place.detail.split(" · ").map((line) => (
-                    <span key={line}>
-                      {line}
-                      <br />
-                    </span>
-                  ))}
-                </span>
-                <i aria-hidden="true">→</i>
-              </button>
-            ))}
-          </div>
+          <DestinationMenu motion={motion} suspended={tool !== null} onSelect={plan} />
         ) : (
           <div className="reference-light" aria-hidden="true" />
         )}
@@ -481,14 +539,22 @@ export function ReferenceEnvironment({
                 </button>
               </div>
               <div className="reference-trip-previews">
-                {tasks.slice(0, 3).map((task) => (
-                  <button type="button" key={task.id} onClick={() => onNavigate("tasks")}>
+                {upcomingTrips.slice(0, 3).map((task) => (
+                  <button type="button" key={task.id} onClick={() => openTrip(task)}>
                     {task.title.replace("Voyage · ", "")}
                     <small>{task.status === "DONE" ? "Terminé" : "En préparation"}</small>
                   </button>
                 ))}
               </div>
-              {!tasks.length ? <p>Aucun voyage enregistré. Choisissez votre destination pour commencer.</p> : null}
+              {!upcomingTrips.length ? (
+                <p>
+                  {loading
+                    ? "Chargement de vos voyages…"
+                    : error
+                      ? "Impossible de charger les voyages pour le moment."
+                      : "Aucun voyage enregistré. Choisissez votre destination pour commencer."}
+                </p>
+              ) : null}
             </section>
           )}
           {error ? (
@@ -500,14 +566,14 @@ export function ReferenceEnvironment({
             </p>
           ) : null}
         </aside>
-        <footer className="reference-dock" aria-label="Outils">
+        <nav className="reference-dock" aria-label="Outils">
           {dock.map(([icon, label, action]) => (
             <button type="button" key={label} onClick={action}>
               <LineIcon kind={icon} />
               <span>{label}</span>
             </button>
           ))}
-        </footer>
+        </nav>
         <p className="reference-motto">
           {environment === "music"
             ? "LES IDÉES D’AUJOURD’HUI FAÇONNENT LES MONDES DE DEMAIN"
@@ -517,7 +583,13 @@ export function ReferenceEnvironment({
         </p>
       </main>
       {tool ? (
-        <Sheet title={toolNames[tool]} close={() => setTool(null)}>
+        <Sheet
+          title={toolNames[tool]}
+          close={() => {
+            setTool(null);
+            setPendingTravel(null);
+          }}
+        >
           {tool === "dialogue" ? (
             <>
               <LocalDialogue />
@@ -718,80 +790,90 @@ export function ReferenceEnvironment({
             </div>
           ) : null}
           {tool === "plan" ? (
-            <form
-              onSubmit={(event) => {
-                event.preventDefault();
-                const fields = new FormData(event.currentTarget);
-                const start = String(fields.get("start") || "");
-                const end = String(fields.get("end") || "");
-                if (start && end && end < start) {
-                  setSaved("La date de retour doit suivre le départ.");
-                  return;
+            pendingTravel ? (
+              <div className="notebook-status">
+                <h3>Un carnet est déjà en cours</h3>
+                <p>
+                  Votre brouillon pour {travel.draft.destination || "ce voyage"} n’est pas enregistré. Le remplacer
+                  effacera uniquement ce brouillon de l’écran.
+                </p>
+                {travel.uncertain ? (
+                  <p>
+                    Un enregistrement précédent reste non confirmé. Vérifiez Mes voyages avant de créer une autre
+                    version.
+                  </p>
+                ) : null}
+                <div className="reference-actions">
+                  <button type="button" onClick={() => setPendingTravel(null)}>
+                    Continuer mon brouillon
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTravel(pendingTravel);
+                      setPendingTravel(null);
+                    }}
+                  >
+                    Remplacer et ouvrir {pendingTravel.draft.destination}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <TravelNotebook
+                session={travel}
+                onChange={(draft) =>
+                  setTravel((previous) =>
+                    previous.source || previous.pending || previous.uncertain
+                      ? previous
+                      : { ...previous, draft, notice: "" },
+                  )
                 }
-                void saveTask(
-                  `Voyage · ${destination.trim()}`,
-                  `Départ : ${start || "à définir"}\nRetour : ${end || "à définir"}\nBudget prévu : ${fields.get("budget") || "à définir"}\n${note}`,
-                );
-              }}
-            >
-              <label>
-                Destination
-                <input
-                  value={destination}
-                  required
-                  maxLength={120}
-                  onChange={(event) => setDestination(event.target.value)}
-                />
-              </label>
-              <div className="reference-form-pair">
-                <label>
-                  Départ
-                  <input name="start" type="date" />
-                </label>
-                <label>
-                  Retour
-                  <input name="end" type="date" />
-                </label>
-              </div>
-              <label>
-                Budget prévu (montant et devise)
-                <input name="budget" maxLength={60} placeholder="À définir" />
-              </label>
-              <label>
-                Envies et étapes
-                <textarea rows={5} value={note} maxLength={4000} onChange={(event) => setNote(event.target.value)} />
-              </label>
-              <div className="reference-actions">
-                <button type="submit" disabled={saving || !destination.trim()}>
-                  {saving ? "Enregistrement…" : "Enregistrer mon projet de voyage"}
-                </button>
-                <a
-                  href={`https://www.openstreetmap.org/search?query=${encodeURIComponent(destination)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Voir la destination ↗
-                </a>
-              </div>
-              <p className="reference-hint">
-                Projet enregistré dans les tâches existantes. Aucun vol ni hôtel réservé.
-              </p>
-            </form>
+                onSave={() => void saveTravel()}
+                onCopy={() =>
+                  setTravel((previous) => ({
+                    ...previous,
+                    source: null,
+                    initial: serializeNotebook(newTravelDraft()),
+                    uncertain: false,
+                    notice:
+                      "Copie en préparation. Son enregistrement créera une nouvelle tâche, sans modifier le carnet original.",
+                  }))
+                }
+                onTasks={() => open("trips")}
+              />
+            )
           ) : null}
           {tool === "trips" ? (
             <>
+              <div className="reference-actions">
+                <button type="button" onClick={() => setRefresh((value) => value + 1)} disabled={loading}>
+                  {loading ? "Actualisation…" : "Actualiser mes voyages"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPendingTravel(null);
+                    open("plan");
+                  }}
+                >
+                  Reprendre le carnet ouvert
+                </button>
+              </div>
               {tasks.length ? (
                 tasks.map((task) => (
                   <div className="reference-saved-trip" key={task.id}>
                     <strong>{task.title.replace("Voyage · ", "")}</strong>
-                    <p>{task.description}</p>
+                    <p>{tripPreview(task)}</p>
+                    <button type="button" onClick={() => openTrip(task)}>
+                      Ouvrir le carnet →
+                    </button>
                     <button type="button" onClick={() => onNavigate("tasks")}>
                       Gérer dans mes tâches →
                     </button>
                   </div>
                 ))
               ) : (
-                <p>Aucun projet de voyage enregistré.</p>
+                <p>{loading ? "Chargement…" : error || "Aucun projet de voyage enregistré."}</p>
               )}
               <button type="button" onClick={() => open("inspirations")}>
                 Préparer un voyage →
