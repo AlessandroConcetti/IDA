@@ -44,6 +44,30 @@ const panelTitles: Record<Exclude<Panel, null>, string> = {
 };
 const scene = "/design/user-20260909/home-hologram-v1.png";
 
+// Une identité de composant stable conserve les boutons/focus aux ticks de l'horloge.
+function RoomCards({ rooms, onOpen }: { rooms: HomeSpace[]; onOpen: (room: HomeSpace) => void }) {
+  return (
+    <div className="house-room-grid">
+      {rooms.map((item) => (
+        <button key={item.id} type="button" className="house-room" onClick={() => onOpen(item)}>
+          <span
+            className="house-room-photo"
+            style={{ backgroundImage: `url(${scene})`, backgroundPosition: item.crop }}
+            aria-hidden="true"
+          />
+          <span>
+            <strong>{item.title}</strong>
+            <small>{item.detail}</small>
+          </span>
+          <span className="house-room-arrow" aria-hidden="true">
+            ↗
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function HomeEnvironment({
   titleRef,
   theme,
@@ -113,28 +137,6 @@ export function HomeEnvironment({
   function preview(id: typeof ambience) {
     setAmbience(id);
     setFeedback("Ambiance de l’écran modifiée. Aucun appareil de la maison n’a été commandé.");
-  }
-  function RoomCards() {
-    return (
-      <div className="house-room-grid">
-        {filtered.map((item) => (
-          <button key={item.id} type="button" className="house-room" onClick={() => openRoom(item)}>
-            <span
-              className="house-room-photo"
-              style={{ backgroundImage: `url(${scene})`, backgroundPosition: item.crop }}
-              aria-hidden="true"
-            />
-            <span>
-              <strong>{item.title}</strong>
-              <small>{item.detail}</small>
-            </span>
-            <span className="house-room-arrow" aria-hidden="true">
-              ↗
-            </span>
-          </button>
-        ))}
-      </div>
-    );
   }
   return (
     <section
@@ -368,7 +370,7 @@ export function HomeEnvironment({
                   {filtered.length} espace{filtered.length > 1 ? "s" : ""} pour « {query} »
                 </p>
               ) : null}
-              <RoomCards />
+              <RoomCards rooms={filtered} onOpen={openRoom} />
               {!filtered.length ? (
                 <div className="house-empty">
                   <p>Aucun espace correspondant. Essayez « frigo », « musique » ou « météo ».</p>

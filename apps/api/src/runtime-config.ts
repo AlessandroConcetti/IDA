@@ -17,3 +17,22 @@ export function assertLocalOnlyHost(host: string): void {
     throw new Error("Ce runtime IDA local refuse toute écoute hors boucle locale.");
   }
 }
+
+/** A second local entry point is not authorization to expose LOCAL_LOCK online. */
+export function resolveLocalWebOrigin(value: string): string {
+  let origin: URL;
+  try {
+    origin = new URL(value);
+  } catch {
+    throw new Error("Origine web locale invalide.");
+  }
+  if (
+    origin.origin !== value ||
+    origin.protocol !== "http:" ||
+    origin.username ||
+    origin.password ||
+    !["127.0.0.1", "localhost", "[::1]"].includes(origin.hostname)
+  )
+    throw new Error("Le frontend compilé reste limité à une origine HTTP loopback exacte.");
+  return origin.origin;
+}

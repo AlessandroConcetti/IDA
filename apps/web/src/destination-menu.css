@@ -280,7 +280,29 @@
     min-height: 300px;
   }
 }
-@media (max-width: 420px) {
+@media (max-width: 600px) {
+  .destination-menu,
+  .destination-menu-body,
+  .destination-menu-track {
+    min-width: 0;
+    max-width: 100%;
+  }
+  #root .destination-menu-toggle {
+    padding-inline: 14px;
+    gap: 8px;
+  }
+  .destination-menu-toggle > span:first-child,
+  .destination-menu-toggle > span:first-child > span {
+    min-width: 0;
+  }
+  .destination-menu-toggle svg,
+  .destination-chevron {
+    flex-shrink: 0;
+  }
+  .destination-menu-toggle strong,
+  .destination-menu-toggle small {
+    overflow-wrap: anywhere;
+  }
   .destination-menu-filters {
     flex-wrap: wrap;
   }
@@ -289,6 +311,29 @@
   }
   .destination-menu-controls {
     flex-wrap: wrap;
+  }
+  .destination-menu-filters label:last-child {
+    flex: 1;
+    min-width: 0;
+  }
+  #root .destination-menu-filters input,
+  #root .destination-menu-filters select {
+    font-size: 1rem;
+  }
+  #root .destination-menu-filters select {
+    width: 100%;
+    max-width: 100%;
+  }
+  .destination-menu-track {
+    scroll-padding-inline: 6px;
+  }
+  .destination-menu-controls > div {
+    width: 100%;
+    justify-content: space-between;
+  }
+  #root .destination-menu-empty button {
+    min-height: 44px;
+    padding: 10px 14px;
   }
 }
 @media (prefers-reduced-motion: reduce) {

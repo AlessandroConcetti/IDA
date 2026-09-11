@@ -173,6 +173,60 @@
   .reference-light { top: 170px; left: 33%; width: 55%; }
 }
 @media (max-width: 420px) { .reference-place-list { grid-template-columns: 1fr; } .reference-destinations { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* Téléphone : commandes toujours accessibles, marges d'encoche et clavier. */
+@media (max-width: 800px) {
+  #root .reference-environment { height: 100dvh; overflow-x: clip; scroll-padding-block: 20px 180px; }
+  .reference-main {
+    min-height: 100dvh;
+    padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) calc(180px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  }
+  .reference-top { gap: 8px; margin-bottom: 30px; }
+  #root .reference-top button, #root .reference-search button, #root .reference-topic,
+  #root .reference-recent, #root .reference-trip-heading button { min-height: 44px; }
+  #root .reference-top button { padding-inline: 12px; font-size: .875rem; }
+  #root .reference-search button, #root .travel-suggestion button { min-width: 44px; min-height: 44px; }
+  #root .travel-suggestion button { width: 44px; height: 44px; }
+  #root .reference-search input { min-height: 44px; font-size: 1rem; }
+  .reference-intro { margin-bottom: clamp(70px, 16svh, 140px); overflow-wrap: anywhere; }
+  #root .reference-intro h1 { font-size: clamp(1.5rem, 7vw, 1.85rem); }
+  .reference-mini-actions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-inline: 0; }
+  #root .reference-mini-actions button { min-width: 0; min-height: 64px; padding-inline: 3px; overflow-wrap: anywhere; font-size: .875rem; }
+  .reference-panels, .reference-glass, .travel-suggestion > div, .reference-trip-heading > * { min-width: 0; }
+  .reference-glass { padding: 16px; }
+  .reference-row strong, .travel-suggestion h2, .reference-trip-heading h2 { overflow-wrap: anywhere; }
+  .reference-row strong, #root .reference-topic, #root .reference-recent { font-size: .875rem; }
+  .reference-row small { font-size: .8rem; }
+  .reference-trip-previews { grid-template-columns: repeat(auto-fit, minmax(min(100%, 120px), 1fr)); }
+  .reference-dock {
+    position: fixed; z-index: 6; top: auto;
+    bottom: max(10px, env(safe-area-inset-bottom));
+    left: max(12px, env(safe-area-inset-left)); right: max(12px, env(safe-area-inset-right));
+    width: auto; max-width: none; transform: none; margin: 0;
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px; padding: 8px; background-color: #19212aed;
+  }
+  #root .reference-dock button { width: 100%; min-width: 0; min-height: 58px; padding: 7px 4px; gap: 5px; overflow-wrap: anywhere; font-size: .8rem; }
+  .reference-dock svg { width: 23px; height: 23px; }
+  #root .reference-sheet {
+    box-sizing: border-box;
+    width: calc(100% - max(12px, env(safe-area-inset-left)) - max(12px, env(safe-area-inset-right)));
+    max-width: 760px;
+    max-height: calc(var(--ida-visible-height, 100dvh) - max(12px, env(safe-area-inset-top)) - max(12px, env(safe-area-inset-bottom)));
+    padding: 18px; overflow-x: hidden; overscroll-behavior: contain; scroll-padding-block: 90px 24px;
+  }
+  .reference-sheet > header { position: sticky; top: 0; z-index: 3; padding-block: 8px; background: #19212af5; }
+  .reference-sheet > header > div { min-width: 0; }
+  .reference-sheet > header > button { flex-shrink: 0; }
+  .reference-sheet h2 { font-size: 1.25rem; overflow-wrap: anywhere; }
+  .reference-sheet :is(input, select, textarea) { min-width: 0; max-width: 100%; font-size: 1rem; }
+  .reference-sheet fieldset, .reference-player, .reference-library button > span { min-inline-size: 0; }
+  .reference-sheet .reference-check, .reference-sheet a { min-height: 44px; }
+  .reference-actions > *, .reference-link-grid > * { max-width: 100%; overflow-wrap: anywhere; }
+}
+@media (max-width: 800px) and (max-height: 500px) {
+  .reference-main { padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
+  .reference-dock { position: static; margin-top: 24px; }
+}
 @media (prefers-reduced-motion: reduce) { .reference-light { animation: none; } }
 @media (prefers-reduced-transparency: reduce) {
   #root .reference-environment, .reference-sheet { --glass-panel: #252629; --glass-base: #333338; --glass-blur: none; }

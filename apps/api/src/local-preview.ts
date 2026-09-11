@@ -9,6 +9,14 @@ const app = await createApp({
   storageDir: fileURLToPath(new URL("../../../tmp/ida-preview-relative-dates/media", import.meta.url)),
   seed: false,
   identityMode: "LOCAL_LOCK",
+  ...(process.env.IDA_BUILT_WEB === "1"
+    ? {
+        localBuiltWeb: {
+          root: fileURLToPath(new URL("../../web/dist", import.meta.url)),
+          origin: "http://127.0.0.1:8787",
+        },
+      }
+    : {}),
   // Lecture météo personnelle uniquement, déclenchée et consentie dans l'écran Home.
   weatherEnabled: true,
   homeAssistant: await loadHomeAssistantBinding(

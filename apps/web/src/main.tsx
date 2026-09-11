@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import { LocalAccessGate } from "./LocalAccessGate";
 import { LivingGlass } from "./LivingGlass";
+import { MobileViewport } from "./MobileViewport";
 import "./styles.css";
 import "./aurora.css";
 import "./worlds.css";
@@ -16,6 +17,7 @@ import "./classic-fridge.css";
 import "./reference-environments.css";
 import "./fabrique-environment.css";
 import "./weather-environment.css";
+import "./mobile-viewport.css";
 import { applyTheme, readTheme } from "./theme";
 
 const rootElement = document.getElementById("root");
@@ -31,6 +33,7 @@ if (!rootElement) {
 
 createRoot(rootElement).render(
   <StrictMode>
+    <MobileViewport />
     <LivingGlass root={rootElement} />
     <LocalAccessGate>{(onLock) => <App onLock={onLock} />}</LocalAccessGate>
   </StrictMode>,

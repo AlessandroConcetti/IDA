@@ -1,0 +1,36 @@
+@media (max-width: 800px) {
+  html {
+    scroll-padding-block: 24px 150px;
+  }
+  /* Keep native focus zoom, selection and browser zoom available. */
+  #root :is(input, textarea, select):not([type="checkbox"]):not([type="radio"]):not([type="range"]) {
+    font-size: max(1rem, 16px);
+    scroll-margin-block: 80px;
+  }
+  #root :is(.reference-sheet, .house-dialog, .care-dialog, .local-dialogue) {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+  #root dialog {
+    max-height: calc(
+      var(--ida-visible-height, 100dvh) -
+      max(24px, env(safe-area-inset-top)) -
+      max(24px, env(safe-area-inset-bottom))
+    );
+    overscroll-behavior: contain;
+  }
+  .access-shell {
+    padding-top: max(24px, env(safe-area-inset-top));
+    padding-bottom: max(24px, env(safe-area-inset-bottom));
+  }
+  .access-recovery summary {
+    min-height: 44px;
+  }
+  /* Do not cover the editor with fixed navigation while the keyboard is open. */
+  html[data-soft-keyboard]
+    #root
+    :is(.mobile-bottom-bar, .aurora-mobile-navigation, .house-command-bar, .reference-dock) {
+    visibility: hidden;
+    pointer-events: none;
+  }
+}

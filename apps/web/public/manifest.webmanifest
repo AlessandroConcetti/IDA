@@ -1,0 +1,13 @@
+{
+  "id": "/",
+  "name": "IDA — Intelligent Digital Assistant",
+  "short_name": "IDA",
+  "description": "Ton assistant personnel et tes environnements, reliés au même cœur IDA.",
+  "lang": "fr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#08121e",
+  "theme_color": "#08121e",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

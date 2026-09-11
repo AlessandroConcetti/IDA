@@ -1,5 +1,7 @@
 # SECURITY — principes de sécurité et d’exploitation
 
+Complément local du 11 septembre : [livraison compilée et préparation téléphone](docs/PHONE_READINESS_20260911.md). Une origine HTTP loopback supplémentaire exacte peut servir le build et l’API ensemble. Cela ne constitue ni une identité mobile ni une autorisation d’exposition réseau ; Host non loopback et origines étrangères restent refusés.
+
 Complément ciblé du 8 septembre : [audit persistant IA](docs/INTELLIGENCE_AUDIT.md), scope serveur lié, champs stricts sans prompt/secret et écriture historique permise après révocation pour conserver les refus. Les triggers append-only protègent les opérations SQL ordinaires, pas un propriétaire de base ou compte OS compromis. Pas d'exposition réseau ni de qualification sécurité globale supplémentaire.
 
 > **Statut :** architecture complétée et première tranche locale implémentée ; aucune donnée réelle ni intégration externe n’est active.

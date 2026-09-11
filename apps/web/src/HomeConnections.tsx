@@ -30,6 +30,7 @@ export function homeConnectionAdvice(setup: HomeSetup): { title: string; next: s
 export function HomeConnections() {
   const [setup, setSetup] = useState<HomeSetup>("home-assistant");
   const [status, setStatus] = useState<HomeDeviceStatus | null>(null);
+  const [statusPhase, setStatusPhase] = useState<"loading" | "ready" | "unavailable" | "paused">("loading");
   const [result, setResult] = useState<HomeDeviceResult | null>(null);
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
@@ -37,36 +38,58 @@ export function HomeConnections() {
   const pending = useRef<AbortController | null>(null);
   const statusPending = useRef<AbortController | null>(null);
   useEffect(() => {
+    setStatus(null);
+    setNotice("");
+    if (document.hidden) {
+      setStatusPhase("paused");
+      return;
+    }
     const controller = new AbortController();
     statusPending.current = controller;
-    setStatus(null);
+    setStatusPhase("loading");
     void requestApi("/v1/home/device/status", { signal: controller.signal })
       .then((payload) => {
         const parsed = homeDeviceStatusSchema.safeParse((payload as { data?: unknown })?.data);
-        if (!controller.signal.aborted) {
+        if (!controller.signal.aborted && statusPending.current === controller) {
           setStatus(parsed.success ? parsed.data : null);
+          setStatusPhase(parsed.success ? "ready" : "unavailable");
           setNotice(parsed.success ? "" : "Statut de connexion non reconnu.");
         }
       })
       .catch(() => {
-        if (!controller.signal.aborted)
+        if (!controller.signal.aborted && statusPending.current === controller) {
+          setStatusPhase("unavailable");
           setNotice("Le statut domotique n’est pas accessible. Déverrouillez IDA puis vérifiez la connexion.");
+        }
+      })
+      .finally(() => {
+        if (statusPending.current === controller) statusPending.current = null;
       });
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+      if (statusPending.current === controller) statusPending.current = null;
+    };
   }, [revision]);
   useEffect(() => {
-    const hide = () => {
-      if (!document.hidden) return;
+    const updateVisibility = () => {
+      if (!document.hidden) {
+        setRevision((value) => value + 1);
+        return;
+      }
       pending.current?.abort();
       pending.current = null;
       statusPending.current?.abort();
+      statusPending.current = null;
+      setStatus(null);
+      setStatusPhase("paused");
+      setNotice("");
       setBusy(false);
       setResult(null);
     };
-    document.addEventListener("visibilitychange", hide);
+    document.addEventListener("visibilitychange", updateVisibility);
     return () => {
       pending.current?.abort();
-      document.removeEventListener("visibilitychange", hide);
+      document.removeEventListener("visibilitychange", updateVisibility);
     };
   }, []);
   useEffect(() => {
@@ -78,7 +101,7 @@ export function HomeConnections() {
     return () => clearTimeout(timer);
   }, [result]);
   async function read() {
-    if (pending.current || status?.state !== "CONFIGURED") return;
+    if (document.hidden || pending.current || statusPhase !== "ready" || status?.state !== "CONFIGURED") return;
     const controller = new AbortController();
     pending.current = controller;
     setBusy(true);
@@ -97,9 +120,9 @@ export function HomeConnections() {
         16_000,
       );
       const data = homeDeviceResultSchema.parse((payload as { data?: unknown })?.data);
-      if (!controller.signal.aborted) setResult(data);
+      if (!controller.signal.aborted && pending.current === controller) setResult(data);
     } catch (error) {
-      if (!controller.signal.aborted)
+      if (!controller.signal.aborted && pending.current === controller)
         setNotice(
           error instanceof IdaApiError ? error.message : "Lecture indisponible. Aucun appareil n’a été commandé.",
         );
@@ -119,7 +142,11 @@ export function HomeConnections() {
         SECRET_REQUIRED: "Token serveur chiffré à enregistrer localement dans le coffre Windows.",
         CONFIGURED: "Configuration prête. La connexion réelle sera vérifiée uniquement au clic de lecture.",
       }[status.state]
-    : "Vérification de la configuration IDA…";
+    : statusPhase === "loading"
+      ? "Vérification de la configuration IDA…"
+      : statusPhase === "paused"
+        ? "Vérification suspendue. Elle reprendra au retour dans IDA, sans contacter la lampe."
+        : "Configuration indisponible. Choisissez « Vérifier la configuration » pour réessayer.";
   const advice = homeConnectionAdvice(setup);
   return (
     <section className="home-connections home-daily-card" aria-labelledby="home-connections-title">
@@ -129,7 +156,15 @@ export function HomeConnections() {
         </span>
         <h2 id="home-connections-title">Domotique</h2>
         <span className="home-card-note">
-          {result ? "Observation reçue" : status?.state === "CONFIGURED" ? "Prête à lire" : "À préparer"}
+          {result
+            ? "Observation reçue"
+            : statusPhase === "paused"
+              ? "À revérifier"
+              : statusPhase === "unavailable"
+                ? "Indisponible"
+                : status?.state === "CONFIGURED"
+                  ? "Prête à lire"
+                  : "À préparer"}
         </span>
       </header>
       <p>Préparons la connexion de vos appareils, en commençant par la lecture de l’état d’une lampe.</p>
@@ -142,7 +177,11 @@ export function HomeConnections() {
           d’allumage et pas de rafraîchissement automatique.
         </p>
         <div className="reference-actions">
-          <button type="button" disabled={busy || status?.state !== "CONFIGURED"} onClick={() => void read()}>
+          <button
+            type="button"
+            disabled={busy || statusPhase !== "ready" || status?.state !== "CONFIGURED"}
+            onClick={() => void read()}
+          >
             {busy ? "Lecture en cours…" : "Lire l’état de ma lampe"}
           </button>
           {busy ? (
@@ -160,6 +199,7 @@ export function HomeConnections() {
           ) : (
             <button
               type="button"
+              disabled={statusPhase === "loading"}
               onClick={() => {
                 setResult(null);
                 setRevision((value) => value + 1);

@@ -111,7 +111,8 @@ import {
   serializeClearedLocalSessionCookie,
   serializeLocalSessionCookie,
 } from "./local-auth.js";
-import { resolveIdentityMode } from "./runtime-config.js";
+import { resolveIdentityMode, resolveLocalWebOrigin } from "./runtime-config.js";
+import { registerBuiltWeb } from "./built-web.js";
 import { registerLocalDialogue } from "./local-dialogue.js";
 import { homeWeatherTool, registerHomeWeather } from "./home-weather.js";
 import { type HomeAssistantBinding, homeDeviceTool, registerHomeDevice } from "./home-device.js";
@@ -124,6 +125,7 @@ export type CreateAppOptions = DemoDatabaseOptions & {
   localDialogueEnabled?: boolean;
   weatherEnabled?: boolean;
   homeAssistant?: HomeAssistantBinding | undefined;
+  localBuiltWeb?: { root: string; origin: string };
 };
 
 type AppError = Error & {
@@ -214,7 +216,7 @@ const maximumCalendarWindowMilliseconds = 62 * 24 * 60 * 60 * 1_000;
 const localWebOrigin = "http://127.0.0.1:5173";
 const loopbackHostPattern = /^(?:127\.0\.0\.1|localhost)(?::[0-9]{1,5})?$|^\[::1\](?::[0-9]{1,5})?$/u;
 
-function assertLocalLockHttpBoundary(request: FastifyRequest): void {
+function assertLocalLockHttpBoundary(request: FastifyRequest, allowedOrigins: readonly string[]): void {
   const host = request.headers.host;
 
   if (!host || !loopbackHostPattern.test(host.toLocaleLowerCase("en-US"))) {
@@ -229,7 +231,7 @@ function assertLocalLockHttpBoundary(request: FastifyRequest): void {
   const fetchSiteHeader = request.headers["sec-fetch-site"];
   const fetchSite = typeof fetchSiteHeader === "string" ? fetchSiteHeader : undefined;
 
-  if ((origin !== undefined && origin !== localWebOrigin) || fetchSite === "cross-site") {
+  if ((origin !== undefined && !allowedOrigins.includes(origin)) || fetchSite === "cross-site") {
     throw new IdentityPolicyError("CLIENT_PERMISSION_DENIED", "L’origine HTTP n’est pas autorisée.");
   }
 }
@@ -1064,6 +1066,9 @@ function toInternalPostScheduleResponse(schedule: InternalPostSchedule) {
 
 export async function createApp(options: CreateAppOptions = {}): Promise<FastifyInstance> {
   const configuredIdentityMode = resolveIdentityMode(options.identityMode);
+  const allowedLocalOrigins = options.localBuiltWeb
+    ? [...new Set([localWebOrigin, resolveLocalWebOrigin(options.localBuiltWeb.origin)])]
+    : [localWebOrigin];
   const app = Fastify({ logger: false });
   const database = await DemoDatabase.open(options);
   const storageDir = options.storageDir ?? defaultStorageDir;
@@ -1161,7 +1166,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   };
 
   await app.register(cors, {
-    origin: localWebOrigin,
+    origin: allowedLocalOrigins,
     methods: ["GET", "PATCH", "POST", "OPTIONS"],
     credentials: identityMode === "LOCAL_LOCK",
   });
@@ -1188,7 +1193,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
       reply.header("Cache-Control", "no-store");
 
       if (identityMode === "LOCAL_LOCK") {
-        assertLocalLockHttpBoundary(request);
+        assertLocalLockHttpBoundary(request, allowedLocalOrigins);
       }
 
       const pathname = request.url.split("?", 1)[0];
@@ -2535,5 +2540,13 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     now: serverNow,
   });
 
+  if (options.localBuiltWeb) {
+    try {
+      await registerBuiltWeb(app, { root: options.localBuiltWeb.root });
+    } catch (error) {
+      await app.close();
+      throw error;
+    }
+  }
   return app;
 }
