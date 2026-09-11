@@ -1,0 +1,79 @@
+.voice-controls {
+  border: 1px solid var(--glass-edge, #d6c6b04d);
+  border-radius: 18px;
+  padding: 18px;
+  margin: 20px 0;
+  background: linear-gradient(120deg, #a6c6e712, #e7be9211);
+}
+.voice-controls header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.voice-controls strong {
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+.voice-indicator {
+  width: 12px;
+  height: 12px;
+  border: 1px solid #cabda7;
+  border-radius: 50%;
+  background: #72808b;
+}
+.voice-controls[data-voice="LISTENING"] .voice-indicator {
+  background: #ffb980;
+  box-shadow: 0 0 0 5px #ffb98018;
+}
+.voice-controls[data-voice="SPEAKING"] .voice-indicator {
+  background: #a8d8ed;
+  box-shadow: 0 0 0 5px #a8d8ed18;
+}
+.voice-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 16px 0;
+}
+#root .voice-buttons button {
+  min-height: 44px;
+  border: 1px solid var(--glass-edge, #d6c6b04d);
+  padding: 12px;
+  border-radius: 12px;
+}
+.voice-controls label {
+  display: grid;
+  gap: 10px;
+  font-size: 0.9rem;
+}
+.voice-controls select,
+.voice-controls textarea {
+  width: 100%;
+  min-width: 0;
+  font: inherit;
+  color: var(--glass-ink, #eee);
+  background: var(--glass-panel, #1d2734);
+  border: 1px solid var(--glass-edge, #d6c6b04d);
+  border-radius: 12px;
+  padding: 12px;
+}
+.voice-controls .voice-status {
+  font-size: 0.8rem;
+  line-height: 1.6;
+}
+.voice-transcript {
+  padding-top: 15px;
+  border-top: 1px solid #d6c6b03d;
+}
+.immersive-presence[data-voice-state="LISTENING"] .presence-intro h1 {
+  text-shadow: 0 0 30px #efb88380;
+}
+.immersive-presence[data-voice-state="SPEAKING"] .presence-intro h1 {
+  text-shadow: 0 0 30px #a8d8ed80;
+}
+@media (forced-colors: active) {
+  .voice-indicator {
+    background: Highlight !important;
+    border-color: CanvasText;
+  }
+}

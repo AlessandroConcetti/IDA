@@ -1,5 +1,7 @@
 # Dialogue IA local — expérimental, 10 septembre 2026
 
+**Reprise du 10–11 septembre :** le verrou est désormais initialisé (statut observé `LOCAL_LOCK / LOCKED`), sans intervention de l'agent sur le credential. Le même dialogue est accessible dans le robot Immersive avec dictée française strictement locale à relire, puis lecture volontaire de la réponse via voix locale. Aucun capteur implicite ni changement des accès Core. Voir [parcours et limites voix/domotique](VOICE_HOME_CONNECTIONS.md). Les constats `UNINITIALIZED` plus bas appartiennent à la livraison initiale.
+
 ## Branchement réel dans le code
 
 `LocalDialogue` → API authentifiée → `DeterministicIdaCore.generateProposal` → `CoreIntelligence` → `ProviderRegistry` → `ProviderRouter` → `OllamaAdapter` → `OllamaLoopbackTransport` → modèle local épinglé `qwen3:4b-instruct-2507-q4_K_M`.

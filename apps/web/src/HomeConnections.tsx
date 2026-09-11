@@ -1,4 +1,12 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import {
+  type HomeDeviceResult,
+  type HomeDeviceStatus,
+  homeDeviceResultSchema,
+  homeDeviceStatusSchema,
+} from "../../../packages/contracts/src/home-device";
+import { IdaApiError, requestApi } from "./api-transport";
+import "./home-connections.css";
 
 export type HomeSetup = "unknown" | "home-assistant" | "voice-apps";
 
@@ -20,7 +28,98 @@ export function homeConnectionAdvice(setup: HomeSetup): { title: string; next: s
 }
 
 export function HomeConnections() {
-  const [setup, setSetup] = useState<HomeSetup>("unknown");
+  const [setup, setSetup] = useState<HomeSetup>("home-assistant");
+  const [status, setStatus] = useState<HomeDeviceStatus | null>(null);
+  const [result, setResult] = useState<HomeDeviceResult | null>(null);
+  const [notice, setNotice] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [revision, setRevision] = useState(0);
+  const pending = useRef<AbortController | null>(null);
+  const statusPending = useRef<AbortController | null>(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    statusPending.current = controller;
+    setStatus(null);
+    void requestApi("/v1/home/device/status", { signal: controller.signal })
+      .then((payload) => {
+        const parsed = homeDeviceStatusSchema.safeParse((payload as { data?: unknown })?.data);
+        if (!controller.signal.aborted) {
+          setStatus(parsed.success ? parsed.data : null);
+          setNotice(parsed.success ? "" : "Statut de connexion non reconnu.");
+        }
+      })
+      .catch(() => {
+        if (!controller.signal.aborted)
+          setNotice("Le statut domotique n’est pas accessible. Déverrouillez IDA puis vérifiez la connexion.");
+      });
+    return () => controller.abort();
+  }, [revision]);
+  useEffect(() => {
+    const hide = () => {
+      if (!document.hidden) return;
+      pending.current?.abort();
+      pending.current = null;
+      statusPending.current?.abort();
+      setBusy(false);
+      setResult(null);
+    };
+    document.addEventListener("visibilitychange", hide);
+    return () => {
+      pending.current?.abort();
+      document.removeEventListener("visibilitychange", hide);
+    };
+  }, []);
+  useEffect(() => {
+    if (!result) return;
+    const timer = setTimeout(() => {
+      setResult(null);
+      setNotice("L’observation a expiré après une minute. Relancez une lecture si nécessaire.");
+    }, 60_000);
+    return () => clearTimeout(timer);
+  }, [result]);
+  async function read() {
+    if (pending.current || status?.state !== "CONFIGURED") return;
+    const controller = new AbortController();
+    pending.current = controller;
+    setBusy(true);
+    setResult(null);
+    setNotice("");
+    try {
+      const payload = await requestApi(
+        "/v1/home/device/read",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ consent: true }),
+          signal: controller.signal,
+        },
+        false,
+        16_000,
+      );
+      const data = homeDeviceResultSchema.parse((payload as { data?: unknown })?.data);
+      if (!controller.signal.aborted) setResult(data);
+    } catch (error) {
+      if (!controller.signal.aborted)
+        setNotice(
+          error instanceof IdaApiError ? error.message : "Lecture indisponible. Aucun appareil n’a été commandé.",
+        );
+    } finally {
+      if (pending.current === controller) {
+        pending.current = null;
+        setBusy(false);
+      }
+    }
+  }
+  const readiness = status
+    ? {
+        DISABLED: "Lecture désactivée sur ce serveur.",
+        CONNECTION_REQUIRED: "Connexion privée à configurer côté serveur.",
+        TLS_REQUIRED: "HTTPS vérifié requis. Aucun token ne sera transmis en HTTP.",
+        TARGET_REQUIRED: "Désignez une seule lampe Home Assistant dans la configuration serveur.",
+        SECRET_REQUIRED: "Token serveur chiffré à enregistrer localement dans le coffre Windows.",
+        CONFIGURED: "Configuration prête. La connexion réelle sera vérifiée uniquement au clic de lecture.",
+      }[status.state]
+    : "Vérification de la configuration IDA…";
   const advice = homeConnectionAdvice(setup);
   return (
     <section className="home-connections home-daily-card" aria-labelledby="home-connections-title">
@@ -29,9 +128,66 @@ export function HomeConnections() {
           ⌂
         </span>
         <h2 id="home-connections-title">Domotique</h2>
-        <span className="home-card-note">Non connectée</span>
+        <span className="home-card-note">
+          {result ? "Observation reçue" : status?.state === "CONFIGURED" ? "Prête à lire" : "À préparer"}
+        </span>
       </header>
       <p>Préparons la connexion de vos appareils, en commençant par la lecture de l’état d’une lampe.</p>
+      <div className="home-device-pilot">
+        <span className="scene-kicker">HOME ASSISTANT · LECTURE SEULE</span>
+        <h3>Votre première lampe</h3>
+        <p role="status">{readiness}</p>
+        <p>
+          « Lire l’état » consulte uniquement la lampe autorisée pour votre espace. Pas d’inventaire de la maison, pas
+          d’allumage et pas de rafraîchissement automatique.
+        </p>
+        <div className="reference-actions">
+          <button type="button" disabled={busy || status?.state !== "CONFIGURED"} onClick={() => void read()}>
+            {busy ? "Lecture en cours…" : "Lire l’état de ma lampe"}
+          </button>
+          {busy ? (
+            <button
+              type="button"
+              onClick={() => {
+                pending.current?.abort();
+                pending.current = null;
+                setBusy(false);
+                setNotice("Lecture annulée.");
+              }}
+            >
+              Annuler
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                setResult(null);
+                setRevision((value) => value + 1);
+              }}
+            >
+              Vérifier la configuration
+            </button>
+          )}
+        </div>
+        {result ? (
+          <div className="home-device-observation" role="status">
+            <strong>
+              {
+                {
+                  ON: "Allumée",
+                  OFF: "Éteinte",
+                  UNKNOWN: "État inconnu",
+                  UNAVAILABLE: "Indisponible dans Home Assistant",
+                }[result.state]
+              }
+            </strong>
+            <span>Consulté le {new Date(result.observedAt).toLocaleString("fr-FR")}</span>
+            <span>Dernière mise à jour du hub : {new Date(result.providerUpdatedAt).toLocaleString("fr-FR")}</span>
+            <small>Observation temporaire, pas une preuve de joignabilité de la lampe à cet instant.</small>
+          </div>
+        ) : null}
+        {notice ? <p role="status">{notice}</p> : null}
+      </div>
       <label htmlFor="home-connection-setup">Votre installation actuelle</label>
       <select
         id="home-connection-setup"
@@ -83,8 +239,9 @@ export function HomeConnections() {
         </ul>
       </details>
       <p className="home-connection-safety">
-        Ce choix guide la préparation uniquement : aucun compte associé, recherche réseau ou appareil activé. Aucun mot
-        de passe ni token à saisir ici.
+        Le choix d’installation guide la préparation uniquement. Seul le bouton de lecture contacte le hub configuré,
+        après contrôle des permissions serveur. Aucun mot de passe ni token à saisir ici. Utilisez vos applications
+        habituelles pour commander les appareils.
       </p>
     </section>
   );

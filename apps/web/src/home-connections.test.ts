@@ -18,16 +18,17 @@ describe("IDA Home — préparer sans connecter implicitement", () => {
     expect(homeConnectionAdvice("home-assistant").next).toContain("apparaît déjà");
     expect(homeConnectionAdvice("unknown").next).toContain("N’installez pas");
   });
-  it("ne collecte aucun secret, ne fait aucune lecture réseau ni seconde page", () => {
+  it("ne collecte aucun secret, n'active aucun appareil au rendu serveur et garde la lecture fermée", () => {
     const fetch = vi.fn();
     const getUserMedia = vi.fn();
     vi.stubGlobal("fetch", fetch);
     vi.stubGlobal("navigator", { mediaDevices: { getUserMedia } });
     try {
       const html = renderToStaticMarkup(createElement(HomeConnections));
-      expect(html).toContain("Non connectée");
+      expect(html).toContain("À préparer");
       expect(html).toContain("Votre installation actuelle");
-      expect(html).toContain('value="unknown" selected');
+      expect(html).toContain('value="home-assistant" selected');
+      expect(html).toContain('disabled="">Lire l’état de ma lampe');
       expect(html).toContain("état d’une lampe");
       expect(html).not.toMatch(/<main|<form|<input|<iframe|<video|autoplay/iu);
       expect(html).not.toMatch(/Connecter Alexa|Connecter Google Home|Allumer|Éteindre/iu);

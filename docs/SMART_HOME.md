@@ -1,5 +1,7 @@
 # Domotique — compatibilité, limites et prochaines étapes
 
+**Mise à jour du 10–11 septembre 2026 :** le pilote READ est désormais enregistré dans le Core, avec statut authentifié, transport HTTPS épinglé, coffre Windows DPAPI et commande de lecture volontaire depuis IDA Home. L'installation réelle reste bloquée avant HTTPS vérifié, token et lampe désignée. Voir [contrat et configuration livrés](VOICE_HOME_CONNECTIONS.md) et [OpenAPI du pilote](openapi/home-device-pilot.yaml). Les paragraphes « non enregistré » ci-dessous décrivent la préparation antérieure, désormais remplacée par ce pilote ; aucun contrôle physique n'est activé.
+
 Vérification documentaire : **9 septembre 2026**. L’utilisateur a fourni l’adresse exacte de son instance. Une requête GET sans credential à cette adresse a reçu **HTTP 200**, avec le titre « Home Assistant ». L’interface est joignable depuis le PC ; cela ne prouve pas l’accès authentifié à l’API ou la présence d’appareils. Aucun compte, état d’appareil ou service domotique n’a été consulté.
 
 L’adresse fournie utilise HTTP. Aucun token n’a été envoyé. Avant une lecture réelle : définir un trajet protégé (HTTPS correctement vérifié ou tunnel chiffré), un credential serveur dédié et révocable, puis une lampe pilote autorisée. L’adresse privée reste dans la configuration locale et la conversation, pas dans le code versionné. Aucun changement réseau, certificat, permission ou association d’appareil n’a été effectué.

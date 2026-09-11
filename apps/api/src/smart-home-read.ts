@@ -10,9 +10,7 @@ export interface SmartHomeReadProvider {
   readState(signal?: AbortSignal): Promise<SmartHomeReadResult>;
 }
 
-/** À implémenter seulement après validation du coffre, de l’hôte et des droits.
- * Aucun transport réel ni provider n’est enregistré dans le runtime actuel.
- */
+/** Port interne : transport HTTPS borné, appelé seulement par home-device après Gateway et audit. */
 export interface HomeAssistantReadTransport {
   getState(request: { method: "GET"; path: `/api/states/${string}`; signal?: AbortSignal }): Promise<unknown>;
 }

@@ -1,0 +1,71 @@
+openapi: 3.1.0
+info:
+  title: IDA — extension locale Home Assistant READ
+  version: 0.1.0
+paths:
+  /v1/home/device/status:
+    get:
+      summary: Configuration locale sans appel Home Assistant
+      security: [{ localSession: [] }]
+      responses:
+        '200':
+          description: Statut sans adresse, token ou entité technique
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [provider, mode, state]
+                    additionalProperties: false
+                    properties:
+                      provider: { const: HOME_ASSISTANT }
+                      mode: { const: READ_ONLY_PILOT }
+                      state: { enum: [DISABLED, CONNECTION_REQUIRED, TLS_REQUIRED, TARGET_REQUIRED, SECRET_REQUIRED, CONFIGURED] }
+        '401': { description: Session locale requise }
+        '403': { description: Permission ou workspace refusé }
+  /v1/home/device/read:
+    post:
+      summary: Lire volontairement la seule lampe liée au workspace
+      security: [{ localSession: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [consent]
+              properties:
+                consent: { const: true }
+      responses:
+        '200':
+          description: Observation éphémère, non mise en cache
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    additionalProperties: false
+                    required: [state, observedAt, providerUpdatedAt]
+                    properties:
+                      state: { enum: ['ON', 'OFF', UNKNOWN, UNAVAILABLE] }
+                      observedAt: { type: string, format: date-time }
+                      providerUpdatedAt: { type: string, format: date-time }
+        '400': { description: Corps non conforme }
+        '401': { description: Session requise ou révoquée }
+        '403': { description: Permission, origine ou workspace refusé }
+        '413': { description: Plus de 512 octets }
+        '429': { description: Une requête en vol ou quota de 30 lectures horaires }
+        '503': { description: Configuration, audit ou fournisseur indisponible, sans détails privés }
+components:
+  securitySchemes:
+    localSession:
+      type: apiKey
+      in: cookie
+      name: ida_local_session

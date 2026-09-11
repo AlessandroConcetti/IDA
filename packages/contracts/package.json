@@ -4,6 +4,14 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./home-device": {
+      "types": "./src/home-device.ts",
+      "import": "./dist/home-device.js"
+    },
+    "./travel-notebook": {
+      "types": "./src/travel-notebook.ts",
+      "import": "./dist/travel-notebook.js"
+    },
     "./open-meteo": {
       "types": "./src/open-meteo.ts",
       "import": "./dist/open-meteo.js"

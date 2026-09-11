@@ -1,8 +1,14 @@
 # Livraison frontend — 10 septembre 2026
 
+État courant au 11 septembre : [nouvelle interface IDA Home, desktop et mobile](HOME_COCKPIT.md) et [bilan transversal des branchements](FINALIZATION_STATUS_20260911.md). Ce document conserve aussi les constats historiques ; les mentions de verrou non initialisé et d'absence de tests ne décrivent pas l'état courant.
+
 Mise à jour : Frigo Classic et La Fabrique ont été livrés ensuite ([compte rendu](FRIGO_CLASSIC_FABRIQUE.md)). Météo est désormais une section d'IDA Home avec lecture explicite de l'API officielle ([compte rendu](METEO_HOME.md)). Les anciennes mentions « à intégrer » ci-dessous ne décrivent plus ces trois parties.
 
 ## Réalisé dans cette tranche
+
+Reprise Travel : le bandeau des pays est désormais un menu dépliant animé et filtrable ; les destinations ouvrent un carnet (étapes, budget, checklist, sauvegarde/réouverture via tâches et export texte). Voir [les fonctions et limites du carnet](TRAVEL_NOTEBOOK.md). Les projets anciens restent intacts.
+
+Reprise branchements : [voix locale et dialogue dans le robot, pilote Home Assistant READ](VOICE_HOME_CONNECTIONS.md). Le verrou a été initialisé par l'utilisateur depuis les constats initiaux ci-dessous. La connexion physique HA attend encore HTTPS, secret et lampe ; aucune commande d'appareil.
 
 | Partie | Commandes implémentées | Limite explicite |
 |---|---|---|

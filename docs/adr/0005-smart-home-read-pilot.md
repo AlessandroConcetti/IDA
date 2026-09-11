@@ -1,5 +1,9 @@
 # ADR 0005 — Préparer la domotique en lecture seule
 
+## Amendement du 10–11 septembre 2026
+
+Sur demande de branchement explicite, le port existant est relié à un transport HTTPS/IP privée épinglée et au Gateway `read_home_device`. Routes, coffre DPAPI CurrentUser, binding workspace, consentement, audit, quotas et revalidation sont documentés dans [VOICE_HOME_CONNECTIONS](../VOICE_HOME_CONNECTIONS.md). Aucun état persistant ni nouvel agent. Observation client purgée après une minute ; audit append-only selon le journal existant. L'origine HTTP fournie reste refusée avant le coffre et le réseau. Activation effective du pilote subordonnée aux prérequis manquants (TLS vérifié, secret volontaire, lampe), aucune commande physique. Les mentions historiques « non enregistré » ci-dessous sont supersédées uniquement pour cette lecture bornée. Les autres barrières et la gouvernance restent inchangées.
+
 - Date : 7 septembre 2026.
 - Statut : Home Assistant retenu par l’utilisateur, installation en cours ; préparation technique livrée, activation réelle encore à valider.
 - Portée : IDA Home existant, aucun nouveau Core ni accueil.

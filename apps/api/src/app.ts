@@ -114,6 +114,7 @@ import {
 import { resolveIdentityMode } from "./runtime-config.js";
 import { registerLocalDialogue } from "./local-dialogue.js";
 import { homeWeatherTool, registerHomeWeather } from "./home-weather.js";
+import { type HomeAssistantBinding, homeDeviceTool, registerHomeDevice } from "./home-device.js";
 import { defaultCalendarRange, getWorkspaceDayRange, type ResolvedCalendarRange } from "./workspace-time.js";
 
 export type CreateAppOptions = DemoDatabaseOptions & {
@@ -122,6 +123,7 @@ export type CreateAppOptions = DemoDatabaseOptions & {
   secureLocalAuthCookies?: boolean;
   localDialogueEnabled?: boolean;
   weatherEnabled?: boolean;
+  homeAssistant?: HomeAssistantBinding | undefined;
 };
 
 type AppError = Error & {
@@ -1091,6 +1093,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   const modules = createModuleRegistry();
   const toolGateway = new ToolGateway(undefined, [
     homeWeatherTool,
+    homeDeviceTool,
     { toolKey: "update_artist_profile", moduleKey: "MEMORY", permission: "WRITE" },
     { toolKey: "propose_preference_memory", moduleKey: "MEMORY", permission: "WRITE" },
     { toolKey: "confirm_memory", moduleKey: "MEMORY", permission: "WRITE" },
@@ -2522,6 +2525,13 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     locked: identityMode === "LOCAL_LOCK",
     authorize: (request) => assertToolAuthorized(request, homeWeatherTool),
     revalidate: (request) => revalidateCatalogRead(request, homeWeatherTool),
+    now: serverNow,
+  });
+  registerHomeDevice(app, database, {
+    locked: identityMode === "LOCAL_LOCK",
+    binding: options.homeAssistant,
+    authorize: (request) => assertToolAuthorized(request, homeDeviceTool),
+    revalidate: (request) => revalidateCatalogRead(request, homeDeviceTool),
     now: serverNow,
   });
 

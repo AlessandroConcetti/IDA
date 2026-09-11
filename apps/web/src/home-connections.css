@@ -1,0 +1,37 @@
+.home-device-pilot {
+  margin: 20px 0;
+  padding: 20px;
+  border: 1px solid var(--glass-edge, #aebcce40);
+  border-radius: 22px;
+  background: linear-gradient(120deg, #c6d9e914, #e9bc9210);
+}
+.home-device-pilot h3 {
+  margin: 12px 0;
+}
+.home-device-pilot button {
+  min-height: 44px;
+  border-radius: 14px;
+}
+.home-device-pilot .reference-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.home-device-observation {
+  display: grid;
+  gap: 10px;
+  padding: 18px;
+  margin-top: 20px;
+  background: #8dbdb117;
+  border: 1px solid #8dbdb146;
+  border-radius: 16px;
+}
+.home-device-observation strong {
+  font-size: 1.4rem;
+  font-weight: 400;
+}
+.home-device-observation span,
+.home-device-observation small {
+  line-height: 1.5;
+  font-size: 0.83rem;
+}
