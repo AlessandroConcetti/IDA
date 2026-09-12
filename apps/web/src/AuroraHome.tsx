@@ -81,7 +81,6 @@ export function AuroraHome({
 }) {
   const [command, setCommand] = useState("");
   const [expanded, setExpanded] = useState(false);
-  const [solid, setSolid] = useState(false);
   const [welcome, setWelcome] = useState(false);
   const more = useRef<HTMLElement>(null);
   const worldArea = useRef<HTMLDivElement>(null);
@@ -127,9 +126,12 @@ export function AuroraHome({
     if (command.trim() && !isSubmitting) onCommand(command.trim());
   }
   if (welcome) return <CareOnboarding onComplete={() => setWelcome(false)} />;
-  if (theme === "immersive" && onThemeChange) return <ImmersivePresence onThemeChange={onThemeChange} onNavigate={onNavigate} onWelcome={() => setWelcome(true)} />;
+  if (theme === "immersive" && onThemeChange)
+    return (
+      <ImmersivePresence onThemeChange={onThemeChange} onNavigate={onNavigate} onWelcome={() => setWelcome(true)} />
+    );
   return (
-    <div className="aurora-home ida-home-layout" data-theme={themePalette(theme)} data-surface={solid ? "solid" : "glass"}>
+    <div className="aurora-home ida-home-layout" data-theme={themePalette(theme)} data-surface="glass">
       <a className="home-skip-link" href="#aurora-command">
         Aller à la demande IDA
       </a>
@@ -144,11 +146,11 @@ export function AuroraHome({
         </div>
         <div className="aurora-access-actions">
           <span className="home-workspace-date">{homeWorkspaceDate(readySummary)}</span>
-          {onThemeChange ? (
-            <ThemePicker value={theme} onChange={onThemeChange} />
-          ) : null}
+          {onThemeChange ? <ThemePicker value={theme} onChange={onThemeChange} /> : null}
           <span className="aurora-local-status">{onLock ? "Espace local privé" : "Démo locale"}</span>
-          <button type="button" className="scene-profile-entry" onClick={() => setWelcome(true)}>Premiers pas</button>
+          <button type="button" className="scene-profile-entry" onClick={() => setWelcome(true)}>
+            Premiers pas
+          </button>
           {onLock ? (
             <button
               className="aurora-icon-button"
@@ -165,13 +167,9 @@ export function AuroraHome({
 
       <aside className="home-sidebar" aria-label="Raccourcis de l’accueil">
         <nav aria-label="Navigation IDA Home">
-          <a
-            href="#aurora-start"
-            aria-current="page"
-            onClick={() => setWheelEntry((current) => ({ view: "worlds", revision: current.revision + 1 }))}
-          >
+          <button type="button" aria-current="page" onClick={showWorlds}>
             <span aria-hidden="true">⌂</span>Accueil
-          </a>
+          </button>
           <button type="button" onClick={showWorlds}>
             <span aria-hidden="true">◎</span>La Roue des Mondes
           </button>
@@ -302,7 +300,11 @@ export function AuroraHome({
                   <p className="home-start-notice" role="status">
                     {startNotice ?? "Facultatif · préférence locale à ce navigateur, sans changer votre compte."}
                   </p>
-                  <HomeOverview source={source} timezone={readySummary?.timezone} onNavigate={(id) => onEnvironmentNavigate ? onEnvironmentNavigate(id, "home") : onNavigate(id)} />
+                  <HomeOverview
+                    source={source}
+                    timezone={readySummary?.timezone}
+                    onNavigate={(id) => (onEnvironmentNavigate ? onEnvironmentNavigate(id, "home") : onNavigate(id))}
+                  />
                   <p className="home-future-note">
                     Frigo : brouillon accessible depuis les espaces de la maison. Budget et banque : non connectés.
                   </p>
@@ -334,38 +336,10 @@ export function AuroraHome({
         ) : null}
       </main>
 
-      <footer className="aurora-footer">
-        <button
-          className="aurora-icon-button"
-          type="button"
-          onClick={() => setSolid(!solid)}
-          aria-pressed={solid}
-          aria-label="Réduire la transparence"
-          title="Réduire la transparence"
-        >
-          <AuroraIcon name="sun" />
-        </button>
-        <p>
-          <span aria-hidden="true">✦</span>L’intelligence au service de votre vision
-        </p>
-        <button
-          className="aurora-icon-button"
-          type="button"
-          onClick={() => onNavigate("ida")}
-          aria-label="Ouvrir la conversation avec IDA"
-          title="Parler avec IDA"
-        >
-          <AuroraIcon name="chat" />
-        </button>
-      </footer>
       <nav className="aurora-mobile-navigation" aria-label="Navigation mobile">
-        <a
-          href="#aurora-start"
-          aria-current="page"
-          onClick={() => setWheelEntry((current) => ({ view: "worlds", revision: current.revision + 1 }))}
-        >
+        <button type="button" aria-current="page" onClick={showWorlds}>
           <span aria-hidden="true">⌂</span>Accueil
-        </a>
+        </button>
         <button type="button" onClick={() => onNavigate("ida")}>
           <span aria-hidden="true">✦</span>IDA
         </button>

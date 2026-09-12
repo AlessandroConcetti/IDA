@@ -1,4 +1,15 @@
-# IDA Home — interface du 11 septembre 2026
+# IDA Home — interface mise à jour le 12 septembre 2026
+
+## Correctif du 12 septembre
+
+- Cause reproduite dans le navigateur : `.house-environment { position: relative }` annulait le plein écran commun. Après masquage du rail de l'accueil, Home occupait sa première colonne de **150 px**, avec sa colonne de contenu à **0 px**. Le pseudo-élément hérité affichait le sprite spatial agrandi sur le reste du viewport.
+- Home conserve maintenant `position: fixed` et supprime explicitement les deux pseudo-éléments génériques. Contrôle après compilation/rechargement : largeur Home égale au viewport (2372,8 px CSS observés), position (0,0), aucun sprite hérité. Les libellés sur les points holographiques et les titres des dialogues restent lisibles dans Classic.
+- « Voir la maison holographique » ouvre une image entière avec quatre accès aux pièces, sans capteur ni état fictif. Sur petit écran, accueil intérieur lumineux et six raccourcis ; l'image entière reste accessible par ce bouton. La vignette de citation secondaire est masquée pour ne pas précéder le hero lors du réordonnancement mobile.
+- Accueil épuré : clic direct sur les cartes, suppression du bouton « Entrer dans… », du second explorateur, du contrôle d'ambiances de la roue et du bandeau blanc de signature. « Explorer tous les espaces » est conservé. Les préférences système de mouvement réduit restent respectées ; Home conserve ses réglages dans Paramètres.
+- Navigation et dimensions vérifiées dans le navigateur connecté en grand et petit viewport (480/488 px CSS), ouverture du panneau holographique et fermeture. L'outil de capture présente un décalage de taille avec le zoom du navigateur : les images de capture seules ne constituent pas une qualification pixel à pixel. Téléphone physique et accès réseau restent non qualifiés.
+- Vérifications : 78 tests ciblés, types Web/API, lint des 15 fichiers TS concernés et build Web réussis. API locale redémarrée avec le build, toujours sur `127.0.0.1:8787`, sans exposition LAN.
+
+Les indications de validation et de taille de bundle du 11 septembre ci-dessous sont historiques ; cette section prévaut.
 
 ## Intégration
 

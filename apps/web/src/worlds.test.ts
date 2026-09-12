@@ -43,23 +43,37 @@ describe("Roue des Mondes : navigation sans pouvoirs supplémentaires", () => {
         renderEnvironment,
       }),
     );
-    expect(html).toContain("Contenu home");
+    expect(html).toContain("Ouverture de votre maison");
     expect(html).toContain("← La Roue des Mondes");
     expect(html).not.toContain("<main");
     expect(renderEnvironment).toHaveBeenCalledWith("home");
   });
-  it.each(["finance", "unknown"])("n’ouvre pas le monde futur ou inconnu %s au démarrage", (initialWorldId) => {
+  it("n’ouvre pas un monde inconnu au démarrage", () => {
     const renderEnvironment = vi.fn();
     renderToStaticMarkup(
       createElement(WorldWheel, {
         onNavigate: vi.fn(),
         theme: "classic",
-        initialWorldId,
+        initialWorldId: "unknown",
         startOpened: true,
         renderEnvironment,
       }),
     );
     expect(renderEnvironment).not.toHaveBeenCalled();
+  });
+  it("autorise la découverte de Finance sans naviguer vers un outil bancaire", () => {
+    const onNavigate = vi.fn();
+    const html = renderToStaticMarkup(
+      createElement(WorldWheel, {
+        onNavigate,
+        theme: "classic",
+        initialWorldId: "finance",
+        startOpened: true,
+      }),
+    );
+    expect(html).toContain('data-opened="true"');
+    expect(worlds.find((world) => world.id === "finance")?.spaces).toEqual([]);
+    expect(onNavigate).not.toHaveBeenCalled();
   });
   it("conserve les approbations et tous les modules éditoriaux dans Social Hub", () => {
     const spaces = worlds.find((world) => world.id === "social")?.spaces ?? [];
@@ -70,8 +84,11 @@ describe("Roue des Mondes : navigation sans pouvoirs supplémentaires", () => {
     const onNavigate = vi.fn();
     const html = renderToStaticMarkup(createElement(WorldWheel, { onNavigate, theme: "classic" }));
     expect(html).toContain('aria-label="La Roue des Mondes"');
-    expect(html).toContain("Entrer dans Music Studio");
-    expect(html).toContain("À venir");
+    expect(html).toContain('aria-label="Ouvrir Music Studio"');
+    expect(html).not.toContain("Entrer dans Music Studio");
+    expect(html).not.toContain("Explorer tous les environnements");
+    expect(html).not.toContain("Désactiver les ambiances animées");
+    expect(html).toContain("Vidéo à venir");
     expect(html).not.toMatch(/<video|autoplay|<iframe/iu);
     expect(onNavigate).not.toHaveBeenCalled();
   });
@@ -84,6 +101,8 @@ describe("Roue des Mondes : navigation sans pouvoirs supplémentaires", () => {
     );
     expect(html).toContain(`data-theme="${theme}"`);
     expect(html).toContain("Thème global d’IDA");
+    expect(html).toContain("Explorer tous les espaces");
+    expect(html).not.toContain('class="aurora-footer"');
     expect(html).not.toMatch(/<video|autoplay|<iframe/iu);
     expect(onNavigate).not.toHaveBeenCalled();
     expect(onCommand).not.toHaveBeenCalled();

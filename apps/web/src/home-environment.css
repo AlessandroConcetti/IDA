@@ -8,7 +8,7 @@
   --glass-ink: #e3edf5;
   --glass-edge: #a0ccef46;
   --glass-panel: #102130;
-  position: relative;
+  position: fixed;
   display: grid;
   grid-template-columns: 175px minmax(0, 1fr);
   min-height: 100svh;
@@ -16,6 +16,11 @@
   background: radial-gradient(ellipse at 50% 48%, #12355077, transparent 64%), var(--house-bg);
   font-family: "Inter", "Segoe UI", sans-serif;
   isolation: isolate;
+}
+/* Ne pas hériter du sprite de la roue ni de son voile : ce cockpit porte son décor. */
+#root .environment-screen.house-environment::before,
+#root .environment-screen.house-environment::after {
+  content: none;
 }
 #root .house-environment button {
   color: inherit;
@@ -241,6 +246,53 @@
   object-position: 58% 52%;
   transition: filter 0.6s;
 }
+.house-hero > .house-interior-image {
+  display: none;
+}
+#root .house-open-hologram {
+  position: absolute;
+  bottom: 40px;
+  left: 26px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100% - 52px);
+  min-height: 46px;
+  padding: 10px 14px;
+  border: 1px solid #b3dcf58f;
+  border-radius: 18px;
+  background: #092039cc;
+  color: #eefaff;
+  backdrop-filter: blur(12px);
+  font-size: 12px;
+}
+.house-quick-tools {
+  display: none;
+}
+.house-hologram-detail > img {
+  display: block;
+  width: 100%;
+  max-height: 65svh;
+  object-fit: contain;
+  border-radius: 16px;
+  background: #081320;
+}
+.house-hologram-detail > p {
+  font-size: 13px;
+  line-height: 1.7;
+}
+.house-hologram-detail nav {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.house-hologram-detail nav button {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-height: 44px;
+}
 .house-hero-shade {
   position: absolute;
   inset: 0;
@@ -293,6 +345,7 @@
   border: 1px solid #8ad3ff99;
   border-radius: 28px;
   background: linear-gradient(100deg, #164461e8, #091b28e8);
+  color: #edf6ff;
   box-shadow:
     0 0 15px #4bb7ff33,
     inset 0 1px 1px #b7e2ff2e;
@@ -796,6 +849,7 @@
   --house-edge: #9b8d794f;
   --house-panel: #faf7f0c9;
   --house-accent: #1a6091;
+  --glass-ink: #263747;
   background: linear-gradient(130deg, #faf5ec, #dedbd4);
 }
 .house-environment[data-home-theme="classic"] .house-rail {
@@ -812,7 +866,21 @@
   filter: saturate(0.6) brightness(1.15);
 }
 .house-environment[data-home-theme="classic"] .house-command-bar {
+  --glass-ink: #e3edf5;
   color: #e3edf5;
+}
+/* Les dialogues restent sombres dans les deux thèmes : aucun titre sombre sur sombre. */
+#root .house-environment .reference-sheet {
+  --glass-ink: #edf4f7;
+  --glass-base: #213442;
+  --glass-panel: #19212a;
+  --glass-selected: #31566d;
+  --glass-hover: #304d60;
+  color: #edf4f7;
+  color-scheme: dark;
+}
+#root .house-environment .reference-sheet :is(h2, h3) {
+  color: inherit;
 }
 @media (min-width: 1800px) {
   .house-main {
@@ -906,7 +974,7 @@
   #root .house-status-grid button {
     min-height: 110px;
   }
-  .house-secondary .house-quote {
+  #root .house-secondary .house-quote {
     display: none;
   }
   .house-greeting {
@@ -964,6 +1032,41 @@
   .house-hero > img {
     object-position: center;
   }
+  .house-hero > .house-hologram-image {
+    display: none;
+  }
+  .house-hero > .house-interior-image {
+    display: block;
+    object-position: center 43%;
+  }
+  .house-hotspots {
+    display: none;
+  }
+  .house-quick-tools {
+    display: flex;
+    overflow-x: auto;
+    gap: 10px;
+    padding: 5px 0 12px;
+    scroll-snap-type: x proximity;
+  }
+  #root .house-quick-tools button {
+    flex: 0 0 90px;
+    display: grid;
+    justify-items: center;
+    gap: 12px;
+    padding: 16px 8px;
+    min-height: 90px;
+    border: 1px solid var(--house-edge);
+    border-radius: 16px;
+    background: linear-gradient(135deg, #d8e8f135, #253a4d99);
+    color: #edf4f7;
+    font-size: 11px;
+    scroll-snap-align: start;
+  }
+  #root .house-open-hologram {
+    left: 24px;
+    bottom: 32px;
+  }
   .house-hero-shade {
     background:
       linear-gradient(180deg, var(--house-bg) 0, #04111d99 12%, transparent 36%),
@@ -981,15 +1084,16 @@
     margin-bottom: 14px;
   }
   .house-greeting h1 {
-    font-size: 24px;
+    font-size: 33px;
     font-weight: 350;
     max-width: 75%;
   }
   .house-greeting h1 br {
-    display: none;
+    display: block;
   }
   .house-greeting > p {
-    display: none;
+    display: block;
+    max-width: 200px;
   }
   .house-hotspots {
     inset: 45px 0 0;
@@ -1030,6 +1134,31 @@
     flex-direction: column;
     gap: 17px;
   }
+  .house-primary,
+  .house-secondary {
+    display: contents;
+  }
+  .house-hero {
+    order: 1;
+  }
+  .house-quick-tools {
+    order: 2;
+  }
+  .house-secondary > .house-status-panel {
+    order: 3;
+  }
+  .house-modes {
+    order: 4;
+  }
+  .house-spaces {
+    order: 5;
+  }
+  .house-secondary > section {
+    order: 6;
+  }
+  .house-bottom-grid {
+    order: 7;
+  }
   .house-panel {
     padding: 15px;
     border-radius: 18px;
@@ -1066,9 +1195,7 @@
     margin-bottom: 0;
   }
   .house-secondary {
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
+    display: contents;
   }
   .house-status-grid {
     grid-template-columns: 1fr 1fr;

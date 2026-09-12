@@ -25,15 +25,10 @@ export function WorldWheel({
     const index = worlds.findIndex((item) => item.id === initialWorldId);
     return index < 0 ? initialWorldIndex : index;
   });
-  const [opened, setOpened] = useState(
-    () => startOpened && worlds.some((item) => item.id === initialWorldId),
-  );
-  const [grid, setGrid] = useState(false);
-  const [ambiencePaused, setAmbiencePaused] = useState(false);
+  const [opened, setOpened] = useState(() => startOpened && worlds.some((item) => item.id === initialWorldId));
   const rail = useRef<HTMLDivElement>(null);
   const surface = useRef<HTMLElement>(null);
   const cards = useRef<(HTMLButtonElement | null)[]>([]);
-  const enter = useRef<HTMLButtonElement>(null);
   const previousOpen = useRef(false);
   const world = worlds[selected] ?? worlds[initialWorldIndex];
 
@@ -51,30 +46,38 @@ export function WorldWheel({
     if (focus) cards.current[index]?.focus({ preventScroll: true });
   }
   useEffect(() => {
-    if (!opened && !grid) centerCard(selected);
+    if (!opened) centerCard(selected);
     if (previousOpen.current !== opened) {
       if (!opened) cards.current[selected]?.focus({ preventScroll: true });
       surface.current?.scrollIntoView({ block: "start", behavior: "auto" });
     }
     previousOpen.current = opened;
     // Recentrage au changement de présentation, pas à chaque scroll tactile.
-  }, [opened, grid]);
+  }, [opened]);
   if (!world) return null;
   return (
     <section ref={surface} className="worlds" aria-label="La Roue des Mondes" data-theme={theme} data-opened={opened}>
       {opened ? (
-        <EnvironmentLobby key={world.id} world={world} theme={theme} onThemeChange={onThemeChange}
-          ambiencePaused={ambiencePaused} onAmbiencePausedChange={setAmbiencePaused}
-          onBack={() => setOpened(false)} onNavigate={(id) => onEnvironmentNavigate ? onEnvironmentNavigate(id, world.id) : onNavigate(id)} homeOverview={renderEnvironment?.(world.id)}
-          onSelect={(id) => { const index = worlds.findIndex((item) => item.id === id); if (index >= 0) setSelected(index); }} />
+        <EnvironmentLobby
+          key={world.id}
+          world={world}
+          theme={theme}
+          onThemeChange={onThemeChange}
+          onBack={() => setOpened(false)}
+          onNavigate={(id) => (onEnvironmentNavigate ? onEnvironmentNavigate(id, world.id) : onNavigate(id))}
+          homeOverview={renderEnvironment?.(world.id)}
+          onSelect={(id) => {
+            const index = worlds.findIndex((item) => item.id === id);
+            if (index >= 0) setSelected(index);
+          }}
+        />
       ) : (
         <>
           <h2 className="worlds-heading">La Roue des Mondes</h2>
           <div
-            className={grid ? "world-grid" : "world-rail"}
+            className="world-rail"
             ref={rail}
             onScroll={(event) => {
-              if (grid) return;
               const element = event.currentTarget;
               const centers = cards.current.map((card) => (card ? card.offsetLeft + card.offsetWidth / 2 : 0));
               setSelected(nearestWorldIndex(centers, element.scrollLeft + element.clientWidth / 2));
@@ -97,7 +100,10 @@ export function WorldWheel({
                     "--world-angle": `${Math.sign(index - selected) * -14}deg`,
                   } as CSSProperties
                 }
-                onClick={() => { select(index); setOpened(true); }}
+                onClick={() => {
+                  select(index);
+                  setOpened(true);
+                }}
                 onKeyDown={(event) => {
                   const indexForKey = worldIndexForKey(event.key, index, worlds.length);
                   if (indexForKey !== undefined) {
@@ -106,10 +112,14 @@ export function WorldWheel({
                   }
                 }}
               >
-                {!grid && selected === index && item.video ? (
-                  <WorldAmbience src={item.video} paused={ambiencePaused} />
-                ) : null}
-                <span className="world-card-status">{item.id === "health" ? "Personnaliser mon espace" : item.spaces.length ? "Espaces disponibles" : "Découvrir l’environnement"}</span>
+                {selected === index && item.video ? <WorldAmbience src={item.video} paused={false} /> : null}
+                <span className="world-card-status">
+                  {item.id === "health"
+                    ? "Personnaliser mon espace"
+                    : item.spaces.length
+                      ? "Espaces disponibles"
+                      : "Découvrir l’environnement"}
+                </span>
                 <span className="world-glyph" aria-hidden="true">
                   {item.glyph}
                 </span>
@@ -145,33 +155,15 @@ export function WorldWheel({
           </div>
           <div className="world-selection">
             <p>
-              {world.id === "health" ? "Profil corporel facultatif et personnalisation · brouillon non enregistré" : world.spaces.length
-                ? world.spaces.map((space) => space.title).join(" · ")
-                : "Ce monde sera ajouté progressivement. Aucun agent ni service n’est activé."}
+              {world.id === "health"
+                ? "Profil corporel facultatif et personnalisation · brouillon non enregistré"
+                : world.spaces.length
+                  ? world.spaces.map((space) => space.title).join(" · ")
+                  : "Ce monde sera ajouté progressivement. Aucun agent ni service n’est activé."}
             </p>
-            <button
-              ref={enter}
-              type="button"
-              className="world-enter"
-              onClick={() => setOpened(true)}
-            >
-              {`Entrer dans ${world.title}`}{" "}
-              <span aria-hidden="true">→</span>
-            </button>
           </div>
-          <button className="world-grid-toggle" type="button" aria-pressed={grid} onClick={() => setGrid(!grid)}>
-            {grid ? "Revenir à la roue" : "Explorer tous les environnements"}
-          </button>
         </>
       )}
-      {!opened ? <button
-        className="world-grid-toggle world-motion-toggle"
-        type="button"
-        aria-pressed={ambiencePaused}
-        onClick={() => setAmbiencePaused(!ambiencePaused)}
-      >
-        {ambiencePaused ? "Ambiances animées désactivées" : "Désactiver les ambiances animées"}
-      </button> : null}
     </section>
   );
 }

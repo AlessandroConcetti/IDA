@@ -17,6 +17,7 @@ import "./reference-environments.css";
 import "./home-environment.css";
 
 type Panel =
+  | "hologram"
   | "dialogue"
   | "devices"
   | "today"
@@ -30,6 +31,7 @@ type Panel =
   | "room"
   | null;
 const panelTitles: Record<Exclude<Panel, null>, string> = {
+  hologram: "Votre maison holographique",
   dialogue: "Parler avec IDA",
   devices: "Connecter ma maison",
   today: "Votre journée",
@@ -277,17 +279,23 @@ export function HomeEnvironment({
           <div className="house-primary">
             <div className="house-hero" data-view={view}>
               <img
+                className="house-hologram-image"
                 src={scene}
                 alt="Maison méditerranéenne illustrée, dessinée par des lignes holographiques bleues au crépuscule"
                 fetchPriority="high"
+              />
+              <img
+                className="house-interior-image"
+                src="/design/user-20260909/classic-atrium.png"
+                alt="Salon méditerranéen illustré ouvert sur le coucher du soleil"
+                loading="lazy"
               />
               <div className="house-hero-shade" />
               <header className="house-greeting">
                 <span className="house-mobile-wordmark">I D A · HOME</span>
                 <h1 ref={titleRef} tabIndex={-1}>
-                  Bonjour.
-                  <br />
-                  Bienvenue chez vous.
+                  Bienvenue
+                  <br />à la maison.
                 </h1>
                 <p>Votre quotidien, en un seul endroit.</p>
                 <blockquote>
@@ -313,7 +321,28 @@ export function HomeEnvironment({
                 </nav>
               ) : null}
               <span className="house-illustration-label">Vue 3D illustrée · pas le plan de votre domicile</span>
+              <button type="button" className="house-open-hologram" onClick={() => setPanel("hologram")}>
+                <LineIcon kind="home" />
+                Voir la maison holographique <span>↗</span>
+              </button>
             </div>
+            <nav className="house-quick-tools" aria-label="Fonctions de la maison">
+              {(
+                [
+                  ["ambiences", "sun", "Scènes"],
+                  ["devices", "ideas", "Lumières"],
+                  ["climate", "wind", "Climatisation"],
+                  ["security", "alert", "Sécurité"],
+                  ["music", "music", "Multimédia"],
+                  ["energy", "leaf", "Énergie"],
+                ] as const
+              ).map(([id, icon, label]) => (
+                <button type="button" key={id} onClick={() => (id === "music" ? onSelect("music") : setPanel(id))}>
+                  <LineIcon kind={icon} />
+                  <span>{label}</span>
+                </button>
+              ))}
+            </nav>
             <nav className="house-modes" aria-label="Ambiance de cet écran uniquement">
               {homeAmbiences.map((item) => (
                 <button
@@ -412,7 +441,7 @@ export function HomeEnvironment({
             </div>
           </div>
           <aside className="house-secondary">
-            <section className="house-panel">
+            <section className="house-panel house-status-panel">
               <header>
                 <h2>État de la maison</h2>
                 <button type="button" onClick={() => setPanel("devices")} aria-label="Ouvrir la connexion domotique">
@@ -555,6 +584,20 @@ export function HomeEnvironment({
       </div>
       {panel ? (
         <Sheet title={panel === "room" ? room.title : panelTitles[panel]} close={() => setPanel(null)}>
+          {panel === "hologram" ? (
+            <div className="house-hologram-detail">
+              <img src={scene} alt="Maison holographique entière, avec chambres, salon, cuisine et terrasse" />
+              <p>Vue architecturale illustrée. Ce n’est pas un relevé de votre domicile ni l’état de ses appareils.</p>
+              <nav aria-label="Choisir une pièce depuis la maison holographique">
+                {homeSpaces.map((item) => (
+                  <button key={item.id} type="button" onClick={() => openRoom(item)}>
+                    <LineIcon kind={item.icon} />
+                    {item.title} →
+                  </button>
+                ))}
+              </nav>
+            </div>
+          ) : null}
           {panel === "dialogue" ? <LocalDialogue /> : null}
           {panel === "devices" ? <HomeConnections /> : null}
           {panel === "today"

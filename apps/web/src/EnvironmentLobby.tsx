@@ -16,6 +16,7 @@ const ReferenceEnvironment = lazy(() =>
   import("./ReferenceEnvironment").then((module) => ({ default: module.ReferenceEnvironment })),
 );
 const HomeEnvironment = lazy(() => import("./HomeEnvironment").then((module) => ({ default: module.HomeEnvironment })));
+const CareEnvironment = lazy(() => import("./CareEnvironment").then((module) => ({ default: module.CareEnvironment })));
 
 const sceneImages: Record<string, string> = {
   music: "/design/user-20260909/music-scene-v1.png",
@@ -41,8 +42,6 @@ export function EnvironmentLobby({
   onSelect: (id: string) => void;
   onNavigate: (id: NavigationId) => void;
   homeOverview?: ReactNode;
-  ambiencePaused: boolean;
-  onAmbiencePausedChange: (paused: boolean) => void;
 }) {
   const title = useSceneViewport();
   const content = useRef<HTMLElement>(null);
@@ -78,6 +77,25 @@ export function EnvironmentLobby({
     );
   if (world.id === "fabrique")
     return <FabriqueEnvironment titleRef={title} onBack={onBack} onSelect={onSelect} onNavigate={onNavigate} />;
+  if (world.id === "health")
+    return (
+      <Suspense
+        fallback={
+          <section className="environment-screen">
+            <p role="status">Ouverture d’IDA Care…</p>
+          </section>
+        }
+      >
+        <CareEnvironment
+          titleRef={title}
+          theme={theme}
+          onThemeChange={onThemeChange}
+          onBack={onBack}
+          onSelect={onSelect}
+          onNavigate={onNavigate}
+        />
+      </Suspense>
+    );
   if (world.id === "home" && tab === "weather")
     return (
       <Suspense
