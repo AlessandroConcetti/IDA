@@ -14,6 +14,8 @@ Dans l’environnement IDA Home existant, la section Domotique consulte les pré
 
 ### Diagnostic local indépendant
 
+Préparation opérateur complémentaire : [accès privé hors domicile](PRIVATE_WEB_ACCESS.md) et `scripts/check-private-access.ts`. Le trajet téléphone–IDA et le trajet IDA–Home Assistant ont des prérequis séparés ; un VPN sur le téléphone ne sécurise pas à lui seul le second trajet. Aucun port, proxy ou changement HA n'est activé. Présence de coffre, déchiffrement possible et token accepté restent trois preuves distinctes.
+
 Le champ `state` conserve son comportement historique. `prerequisites`, facultatif dans le contrat pour accepter un ancien serveur, est fourni par le serveur mis à jour :
 
 | Champ | Valeurs | Ce qui est réellement vérifié |

@@ -10,6 +10,8 @@ Vérifications de cette session : 78 tests ciblés Home/Care/roue et contrat/tra
 
 ## Domaines
 
+Complément hors domicile : [analyse des VPN et préparation IDA](PRIVATE_WEB_ACCESS.md). Diagnostic opérateur en lecture seule ajouté ; identité distante et essai téléphone extérieur toujours non réalisés. Aucune modification Home Assistant ni exposition réseau dans cette tranche.
+
 | Domaine | État | Disponible | Limite / action restante |
 |---|---|---|---|
 | Core / API | Fonctionnel local | Commandes déterministes, permissions serveur, isolation workspace, Tool Gateway, audit | Pas d’orchestration générale autonome |

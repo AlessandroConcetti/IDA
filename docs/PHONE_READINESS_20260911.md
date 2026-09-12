@@ -1,5 +1,7 @@
 # IDA — téléphone : tranche du 11 septembre 2026
 
+Complément du 12 septembre : [accès privé hors domicile](PRIVATE_WEB_ACCESS.md), comparaison Tailscale/WireGuard/Headscale et diagnostic local sans effet. Aucun VPN, accès distant ou changement Home Assistant n'est activé par cette préparation.
+
 ## État exact
 
 La présentation mobile et une livraison compilée sur la même origine que le Core sont livrées. **Le téléphone n’est pas encore connecté.** Aucun port LAN, tunnel, règle pare-feu, compte distant ou session mobile n’a été activé. `LOCAL_LOCK` reste strictement local.
