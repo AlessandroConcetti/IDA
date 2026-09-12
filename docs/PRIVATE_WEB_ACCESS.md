@@ -2,6 +2,18 @@
 
 Date : 12 septembre 2026. **Proposition et préparation uniquement ; accès distant non activé, essai extérieur non effectué.**
 
+## Avancement après autorisation d'authentifier le téléphone
+
+L'utilisateur confirme Tailscale installé et connecté sur l'iPhone. Tailscale **1.102.4** a ensuite été installé sur le PC avec autorisation explicite et validation de la signature Authenticode du paquet officiel. Windows Installer a terminé avec le code `0` ; le binaire est présent et le service est `Running`. Le daemon indique **`NeedsLogin`** : la connexion du PC au compte Tailscale doit encore être effectuée par l'utilisateur. Le client de la zone de notification a été lancé pour cette action.
+
+Aucun `up`, `login`, Serve, Funnel, certificat HTTPS, routage de sous-réseau ou exit node n'a été configuré par l'agent. Aucune règle de box ni configuration Home Assistant n'a été modifiée. L'installation a ajouté le client, son service et ses composants Windows ; elle ne constitue ni un appairage IDA ni une preuve d'accès distant.
+
+Étape utilisateur immédiate : menu de l'icône Tailscale Windows → **Log in**, avec le même compte que sur l'iPhone. Ne transmettre aucun mot de passe ou code au chat. L'identité applicative et l'appairage IDA restent à implémenter ; le profil `LOCAL_LOCK` reste fermé au réseau. Le QR WebAuthn utilisé depuis le PC ne devra pas être confondu avec une session Safari ouverte sur le téléphone.
+
+La préparation initiale ci-dessous est conservée comme historique et décision de sécurité ; son constat d'absence du binaire précède cette installation.
+
+## Périmètre de la préparation initiale
+
 Demande applicable : IDA dans Safari/Chrome, à domicile et hors domicile, sans publication d'application IDA. Analyser les solutions gratuites et préparer l'intégration **sans modifier Home Assistant ni ouvrir de port**. Cette tranche n'installe aucun VPN, ne configure aucun compte, certificat, proxy, pare-feu ou routeur et ne transmet aucun token.
 
 ## Choix recommandé
