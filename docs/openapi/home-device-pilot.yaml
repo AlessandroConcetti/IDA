@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: IDA — extension locale Home Assistant READ
-  version: 0.1.0
+  version: 0.1.1
 paths:
   /v1/home/device/status:
     get:
@@ -24,6 +24,17 @@ paths:
                       provider: { const: HOME_ASSISTANT }
                       mode: { const: READ_ONLY_PILOT }
                       state: { enum: [DISABLED, CONNECTION_REQUIRED, TLS_REQUIRED, TARGET_REQUIRED, SECRET_REQUIRED, CONFIGURED] }
+                      prerequisites:
+                        type: object
+                        additionalProperties: false
+                        required: [configuration, tls, target, credential, verification]
+                        description: Diagnostic local indépendant. Ni handshake TLS, ni déchiffrement, ni validité du token ou existence de la lampe ne sont testés.
+                        properties:
+                          configuration: { enum: [CONFIGURED, REQUIRED, INVALID] }
+                          tls: { enum: [CONFIGURED, REQUIRED] }
+                          target: { enum: [CONFIGURED, REQUIRED] }
+                          credential: { enum: [STORED, MISSING, UNAVAILABLE, NOT_CHECKED] }
+                          verification: { const: NOT_PERFORMED }
         '401': { description: Session locale requise }
         '403': { description: Permission ou workspace refusé }
   /v1/home/device/read:

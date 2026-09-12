@@ -168,6 +168,11 @@ export function HomeConnections() {
         </span>
       </header>
       <p>Préparons la connexion de vos appareils, en commençant par la lecture de l’état d’une lampe.</p>
+      <p>
+        Le nom d’un token créé dans Home Assistant n’est pas sa valeur secrète. Ne saisissez aucun token dans le chat :
+        son enregistrement se fait dans le coffre local Windows.
+      </p>
+      {status?.prerequisites ? <HomePrerequisites prerequisites={status.prerequisites} /> : null}
       <div className="home-device-pilot">
         <span className="scene-kicker">HOME ASSISTANT · LECTURE SEULE</span>
         <h3>Votre première lampe</h3>
@@ -282,6 +287,50 @@ export function HomeConnections() {
         Le choix d’installation guide la préparation uniquement. Seul le bouton de lecture contacte le hub configuré,
         après contrôle des permissions serveur. Aucun mot de passe ni token à saisir ici. Utilisez vos applications
         habituelles pour commander les appareils.
+      </p>
+    </section>
+  );
+}
+
+export function HomePrerequisites({
+  prerequisites,
+}: {
+  prerequisites: NonNullable<HomeDeviceStatus["prerequisites"]>;
+}) {
+  const rows = [
+    ["Configuration serveur", prerequisites.configuration === "CONFIGURED" ? "Renseignée" : "À configurer"],
+    [
+      "Transport HTTPS",
+      prerequisites.tls === "CONFIGURED"
+        ? "Exigé · certificat à vérifier lors de la lecture"
+        : "Requis · adresse actuelle non sécurisée",
+    ],
+    ["Lampe pilote", prerequisites.target === "CONFIGURED" ? "Désignée" : "Une entité réelle light.… à sélectionner"],
+    [
+      "Secret dans le coffre",
+      {
+        STORED: "Fichier présent · déchiffrement non vérifié",
+        MISSING: "Non enregistré dans IDA",
+        UNAVAILABLE: "Coffre indisponible",
+        NOT_CHECKED: "Non vérifié",
+      }[prerequisites.credential],
+    ],
+    ["Connexion réelle", "Non effectuée · lecture explicite nécessaire"],
+  ];
+  return (
+    <section className="home-prerequisites" aria-label="Prérequis Home Assistant">
+      <h3>Ce qu’il reste à relier</h3>
+      <dl>
+        {rows.map(([label, detail]) => (
+          <div key={label}>
+            <dt>{label}</dt>
+            <dd>{detail}</dd>
+          </div>
+        ))}
+      </dl>
+      <p>
+        Ces vérifications lisent uniquement la configuration locale, sans contacter votre maison. Un fichier de secret
+        présent ne garantit ni un coffre utilisable ni un token valide.
       </p>
     </section>
   );

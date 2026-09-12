@@ -1,10 +1,19 @@
 import { randomUUID } from "node:crypto";
 import type { RequestIdentityContext } from "@ida/contracts";
-import { type HomeDeviceStatus, homeDeviceReadSchema, homeDeviceResultSchema } from "@ida/contracts/home-device";
+import {
+  type HomeDevicePrerequisites,
+  type HomeDeviceStatus,
+  homeDeviceReadSchema,
+  homeDeviceResultSchema,
+} from "@ida/contracts/home-device";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { ConnectorSecret } from "./connector-vault.js";
 import type { DemoDatabase } from "./database.js";
-import { createHomeAssistantHttpsTransport, homeAssistantTargetState } from "./home-assistant-transport.js";
+import {
+  createHomeAssistantHttpsTransport,
+  homeAssistantTargetPrerequisites,
+  homeAssistantTargetState,
+} from "./home-assistant-transport.js";
 import { createHomeAssistantReadProvider } from "./smart-home-read.js";
 
 export const homeDeviceTool = { toolKey: "read_home_device", moduleKey: "HOME", permission: "READ" } as const;
@@ -40,23 +49,43 @@ export function registerHomeDevice(app: FastifyInstance, database: DemoDatabase,
       throw Object.assign(new Error("Ressource non autorisée."), { statusCode: 403, code: "HOME_DEVICE_FORBIDDEN" });
     return identity;
   }
-  async function state(): Promise<HomeDeviceStatus["state"]> {
+  async function state(credentialPresent?: boolean): Promise<HomeDeviceStatus["state"]> {
     if (!options.locked) return "DISABLED";
     if (!binding) return "CONNECTION_REQUIRED";
     if (!binding.enabled) return "DISABLED";
     const target = homeAssistantTargetState(binding);
     if (target !== "VALID") return target;
     try {
-      return (await binding.secret.available()) ? "CONFIGURED" : "SECRET_REQUIRED";
+      return (credentialPresent ?? (await binding.secret.available())) ? "CONFIGURED" : "SECRET_REQUIRED";
     } catch {
       return "SECRET_REQUIRED";
     }
   }
   app.get("/v1/home/device/status", async (request) => {
     authorize(request);
-    const current = await state();
+    let credential: HomeDevicePrerequisites["credential"] = "NOT_CHECKED";
+    // available() n'inspecte que les métadonnées du fichier privé. Jamais resolve(),
+    // même si TLS/cible manquent. Mode désactivé/démo : ne pas consulter le coffre.
+    if (options.locked && binding?.enabled) {
+      try {
+        credential = (await binding.secret.available()) ? "STORED" : "MISSING";
+      } catch {
+        credential = "UNAVAILABLE";
+      }
+    }
+    const current = await state(credential === "STORED");
     await options.revalidate(request);
-    return { data: { provider: "HOME_ASSISTANT", mode: "READ_ONLY_PILOT", state: current } };
+    const data: HomeDeviceStatus = {
+      provider: "HOME_ASSISTANT",
+      mode: "READ_ONLY_PILOT",
+      state: current,
+      prerequisites: {
+        ...homeAssistantTargetPrerequisites(binding),
+        credential,
+        verification: "NOT_PERFORMED",
+      },
+    };
+    return { data };
   });
   app.post("/v1/home/device/read", { bodyLimit: 512 }, async (request, reply) => {
     const identity = authorize(request);

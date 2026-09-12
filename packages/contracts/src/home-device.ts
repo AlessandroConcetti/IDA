@@ -1,5 +1,16 @@
 import { z } from "zod";
 
+/** Métadonnées locales uniquement : aucune connexion ni validation du token. */
+export const homeDevicePrerequisitesSchema = z
+  .object({
+    configuration: z.enum(["CONFIGURED", "REQUIRED", "INVALID"]),
+    tls: z.enum(["CONFIGURED", "REQUIRED"]),
+    target: z.enum(["CONFIGURED", "REQUIRED"]),
+    credential: z.enum(["STORED", "MISSING", "UNAVAILABLE", "NOT_CHECKED"]),
+    verification: z.literal("NOT_PERFORMED"),
+  })
+  .strict();
+
 export const homeDeviceStatusSchema = z
   .object({
     provider: z.literal("HOME_ASSISTANT"),
@@ -12,6 +23,8 @@ export const homeDeviceStatusSchema = z
       "SECRET_REQUIRED",
       "CONFIGURED",
     ]),
+    // Facultatif pour accepter les statuts d'un serveur antérieur pendant mise à jour.
+    prerequisites: homeDevicePrerequisitesSchema.optional(),
   })
   .strict();
 export const homeDeviceReadSchema = z.object({ consent: z.literal(true) }).strict();
@@ -23,4 +36,5 @@ export const homeDeviceResultSchema = z
   })
   .strict();
 export type HomeDeviceStatus = z.infer<typeof homeDeviceStatusSchema>;
+export type HomeDevicePrerequisites = z.infer<typeof homeDevicePrerequisitesSchema>;
 export type HomeDeviceResult = z.infer<typeof homeDeviceResultSchema>;

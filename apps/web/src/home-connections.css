@@ -35,3 +35,29 @@
   line-height: 1.5;
   font-size: 0.83rem;
 }
+.home-prerequisites {
+  margin-block: 18px;
+  padding: 16px;
+  border: 1px solid var(--glass-edge);
+  border-radius: 16px;
+}
+.home-prerequisites dl {
+  margin: 14px 0;
+  display: grid;
+  gap: 12px;
+}
+.home-prerequisites dl > div {
+  display: grid;
+  grid-template-columns: minmax(100px, 1fr) 2fr;
+  gap: 12px;
+}
+.home-prerequisites dt {
+  font-weight: 600;
+}
+.home-prerequisites dd {
+  margin: 0;
+}
+.home-prerequisites p {
+  font-size: 12px;
+  line-height: 1.6;
+}

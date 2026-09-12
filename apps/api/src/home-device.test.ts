@@ -23,6 +23,9 @@ async function fixture({
   workspaceId = "wsp_fixture",
   enabled = true,
   locked = true,
+  entityId = "light.fixture",
+  address = "192.168.200.10",
+  configured = true,
 } = {}) {
   const app = Fastify();
   instances.push(app);
@@ -50,7 +53,7 @@ async function fixture({
     authorize,
     revalidate,
     now: () => new Date(at),
-    binding: { workspaceId, origin, address: "192.168.200.10", entityId: "light.fixture", enabled, secret },
+    binding: configured ? { workspaceId, origin, address, entityId, enabled, secret } : undefined,
   });
   await app.ready();
   const request = (payload: unknown = { consent: true }) =>
@@ -62,9 +65,69 @@ describe("HOME READ — contrôles et données privées", () => {
     const f = await fixture();
     const status = await f.app.inject("/v1/home/device/status");
     expect(status.json().data.state).toBe("CONFIGURED");
+    expect(status.json().data.prerequisites).toEqual({
+      configuration: "CONFIGURED",
+      tls: "CONFIGURED",
+      target: "CONFIGURED",
+      credential: "STORED",
+      verification: "NOT_PERFORMED",
+    });
+    expect(f.secret.available).toHaveBeenCalledTimes(1);
     expect(status.body).not.toContain("fixture");
     expect(f.secret.resolve).not.toHaveBeenCalled();
     expect(f.read).not.toHaveBeenCalled();
+  });
+  it("montre simultanément TLS, cible et secret manquants sans déchiffrement", async () => {
+    const f = await fixture({ origin: "http://ha.fixture.invalid", entityId: "" });
+    f.secret.available.mockResolvedValue(false);
+    const status = await f.app.inject("/v1/home/device/status");
+    expect(status.json().data).toMatchObject({
+      state: "TLS_REQUIRED",
+      prerequisites: {
+        configuration: "CONFIGURED",
+        tls: "REQUIRED",
+        target: "REQUIRED",
+        credential: "MISSING",
+        verification: "NOT_PERFORMED",
+      },
+    });
+    expect(f.secret.available).toHaveBeenCalledTimes(1);
+    expect(f.secret.resolve).not.toHaveBeenCalled();
+    expect(f.read).not.toHaveBeenCalled();
+    expect(f.audit).not.toHaveBeenCalled();
+  });
+  it("un coffre indisponible donne un diagnostic borné sans exposer son erreur", async () => {
+    const f = await fixture();
+    f.secret.available.mockRejectedValue(new Error("PRIVATE_VAULT_DETAILS"));
+    const status = await f.app.inject("/v1/home/device/status");
+    expect(status.json().data.state).toBe("SECRET_REQUIRED");
+    expect(status.json().data.prerequisites.credential).toBe("UNAVAILABLE");
+    expect(status.body).not.toContain("PRIVATE_VAULT_DETAILS");
+    expect(f.secret.available).toHaveBeenCalledTimes(1);
+    expect(f.secret.resolve).not.toHaveBeenCalled();
+  });
+  it.each([{ enabled: false }, { locked: false }, { configured: false }])(
+    "ne consulte pas le coffre désactivé/non configuré pour %j",
+    async (options) => {
+      const f = await fixture(options);
+      const status = await f.app.inject("/v1/home/device/status");
+      expect(status.json().data.prerequisites.credential).toBe("NOT_CHECKED");
+      if (options.configured === false) {
+        expect(status.json().data.prerequisites.configuration).toBe("REQUIRED");
+        expect(status.json().data.state).toBe("CONNECTION_REQUIRED");
+      } else expect(status.json().data.state).toBe("DISABLED");
+      expect(f.secret.available).not.toHaveBeenCalled();
+      expect(f.secret.resolve).not.toHaveBeenCalled();
+      expect(f.read).not.toHaveBeenCalled();
+    },
+  );
+  it("révocation pendant le diagnostic : aucune checklist livrée", async () => {
+    const f = await fixture();
+    f.revalidate.mockRejectedValue(Object.assign(new Error("Connexion requise"), { statusCode: 401 }));
+    const status = await f.app.inject("/v1/home/device/status");
+    expect(status.statusCode).toBe(401);
+    expect(status.json().data).toBeUndefined();
+    expect(f.secret.resolve).not.toHaveBeenCalled();
   });
   it.each([{ origin: "http://ha.fixture.invalid" }, { enabled: false }, { locked: false }])(
     "reste fermé avant le coffre pour %j",

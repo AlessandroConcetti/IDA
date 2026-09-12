@@ -6,6 +6,7 @@ vi.mock("node:https", () => ({ request: socket.request }));
 
 import {
   createHomeAssistantHttpsTransport,
+  homeAssistantTargetPrerequisites,
   homeAssistantTargetState,
   privateHomeAddress,
 } from "./home-assistant-transport.js";
@@ -34,6 +35,38 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 describe("Transport HA — origine et secret fermés par défaut", () => {
+  it("inspecte les prérequis indépendamment sans réseau", () => {
+    expect(homeAssistantTargetPrerequisites(undefined)).toEqual({
+      configuration: "REQUIRED",
+      tls: "REQUIRED",
+      target: "REQUIRED",
+    });
+    expect(homeAssistantTargetPrerequisites({ ...target, origin: "not a URL" })).toEqual({
+      configuration: "INVALID",
+      tls: "REQUIRED",
+      target: "CONFIGURED",
+    });
+    expect(homeAssistantTargetPrerequisites({ ...target, origin: "http://ha.fixture.invalid", entityId: "" })).toEqual({
+      configuration: "CONFIGURED",
+      tls: "REQUIRED",
+      target: "REQUIRED",
+    });
+    expect(socket.request).not.toHaveBeenCalled();
+  });
+  it.each([
+    { origin: "https://user:pass@ha.fixture.invalid" },
+    { origin: "https://ha.fixture.invalid/path" },
+    { origin: "https://ha.fixture.invalid/?token=synthetic" },
+    { origin: "https://192.168.200.11" },
+    { address: "127.0.0.1" },
+  ])("configuration invalide distincte de HTTPS demandé pour %j", (change) => {
+    expect(homeAssistantTargetPrerequisites({ ...target, ...change })).toEqual({
+      configuration: "INVALID",
+      tls: "CONFIGURED",
+      target: "CONFIGURED",
+    });
+    expect(socket.request).not.toHaveBeenCalled();
+  });
   it.each(["127.0.0.1", "169.254.169.254", "8.8.8.8", "::1", "192.168.1.1.evil", "224.0.0.1"])(
     "refuse l'adresse non privée exacte %s",
     (address) => expect(privateHomeAddress(address)).toBe(false),
@@ -60,6 +93,7 @@ describe("Transport HA — origine et secret fermés par défaut", () => {
   it("exige TLS même si l'environnement tente de le désactiver", () => {
     vi.stubEnv("NODE_TLS_REJECT_UNAUTHORIZED", "0");
     expect(homeAssistantTargetState(target)).toBe("TLS_REQUIRED");
+    expect(homeAssistantTargetPrerequisites(target).tls).toBe("REQUIRED");
     vi.unstubAllEnvs();
   });
   it("n'émet qu'un GET ciblé à IP épinglée avec TLS vérifié", async () => {

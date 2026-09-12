@@ -1,6 +1,6 @@
 # Domotique — compatibilité, limites et prochaines étapes
 
-**Mise à jour du 10–11 septembre 2026 :** le pilote READ est désormais enregistré dans le Core, avec statut authentifié, transport HTTPS épinglé, coffre Windows DPAPI et commande de lecture volontaire depuis IDA Home. L'installation réelle reste bloquée avant HTTPS vérifié, token et lampe désignée. Voir [contrat et configuration livrés](VOICE_HOME_CONNECTIONS.md) et [OpenAPI du pilote](openapi/home-device-pilot.yaml). Les paragraphes « non enregistré » ci-dessous décrivent la préparation antérieure, désormais remplacée par ce pilote ; aucun contrôle physique n'est activé.
+**Mise à jour du 12 septembre 2026 :** le pilote READ est enregistré dans le Core, avec statut authentifié, transport HTTPS épinglé, coffre Windows DPAPI et commande de lecture volontaire depuis IDA Home. L'installation réelle reste bloquée avant HTTPS vérifié, coffre utilisable, token enregistré et lampe désignée. Le statut expose désormais ces prérequis indépendamment, sans contacter Home Assistant. Voir [contrat et configuration livrés](VOICE_HOME_CONNECTIONS.md) et [OpenAPI du pilote](openapi/home-device-pilot.yaml). Aucun contrôle physique n'est activé.
 
 Vérification documentaire : **9 septembre 2026**. L’utilisateur a fourni l’adresse exacte de son instance. Une requête GET sans credential à cette adresse a reçu **HTTP 200**, avec le titre « Home Assistant ». L’interface est joignable depuis le PC ; cela ne prouve pas l’accès authentifié à l’API ou la présence d’appareils. Aucun compte, état d’appareil ou service domotique n’a été consulté.
 
@@ -8,11 +8,27 @@ L’adresse fournie utilise HTTP. Aucun token n’a été envoyé. Avant une lec
 
 ## Ce qui est livré maintenant
 
-Dans l’environnement IDA Home existant, une section **Domotique — Non connectée** permet de préciser temporairement son type d’installation et de voir la prochaine étape adaptée. Ce choix ne persiste pas, ne contacte personne et ne représente pas une autorisation. Pas de bouton de connexion fictif ni de champ de credential.
+Dans l’environnement IDA Home existant, la section Domotique consulte les prérequis locaux du Core. « Lire l'état de ma lampe » effectue uniquement une lecture autorisée après préparation complète ; pas de bouton de connexion fictif ni de champ de credential dans le navigateur.
 
-`apps/api/src/smart-home-read.ts` définit `SmartHomeReadProvider` et un adaptateur Home Assistant testable hors ligne : cible lampe unique, chemin GET ciblé, validation de l’identité de la réponse et de son horodatage, projection bornée, erreurs génériques sans données brutes. Ce code n’est **pas enregistré dans l’API ou le Tool Gateway**. Il ne contient ni transport HTTP, ni configuration, ni token. Il ne peut donc pas encore lire la maison réelle. Aucun endpoint ou agent actif n’a été ajouté.
+`apps/api/src/smart-home-read.ts` définit `SmartHomeReadProvider` et un adaptateur Home Assistant : cible lampe unique, GET ciblé, validation de l’identité de la réponse et de son horodatage, projection bornée, erreurs génériques sans données brutes. `home-device.ts` le raccorde au Tool Gateway `HOME / READ`, à l'audit et à la revalidation de session/workspace. `home-assistant-transport.ts` porte le transport HTTPS privé épinglé ; le credential est résolu uniquement côté serveur au clic autorisé. Routes : `GET /v1/home/device/status` et `POST /v1/home/device/read`. Aucun agent autonome, inventaire global ou contrôle physique.
 
-Tests : états ON/OFF/UNKNOWN/UNAVAILABLE distincts, requête ciblée sans appel à la construction, réponses invalides et mauvaise cible, champs sensibles omis, entrées dangereuses refusées, binding capturé, panne sans cache ni retry implicite, annulation avant/pendant lecture, résultat tardif ignoré, guide client sans accès réseau/capteur au rendu. `AbortSignal` prépare l’abandon d’une lecture ; le futur transport devra aussi interrompre ses ressources réseau. Ce ne sont pas des tests de connexion ou de sécurité multi-workspace d’une intégration active.
+### Diagnostic local indépendant
+
+Le champ `state` conserve son comportement historique. `prerequisites`, facultatif dans le contrat pour accepter un ancien serveur, est fourni par le serveur mis à jour :
+
+| Champ | Valeurs | Ce qui est réellement vérifié |
+|---|---|---|
+| `configuration` | `CONFIGURED`, `REQUIRED`, `INVALID` | Présence et forme de l'origine/adresse privée épinglée ; pas sa joignabilité. |
+| `tls` | `CONFIGURED`, `REQUIRED` | HTTPS demandé et vérification des certificats non désactivée ; aucun handshake lors du statut. |
+| `target` | `CONFIGURED`, `REQUIRED` | Identifiant de lampe syntaxiquement accepté ; pas l'existence de la lampe. |
+| `credential` | `STORED`, `MISSING`, `UNAVAILABLE`, `NOT_CHECKED` | Métadonnées du fichier chiffré seulement. Jamais le token ou sa validité. |
+| `verification` | `NOT_PERFORMED` | Le statut ne contacte jamais Home Assistant. |
+
+Les trois manques TLS/cible/credential peuvent être affichés ensemble. Le mode désactivé ou non verrouillé et l'absence de binding ne consultent pas le coffre (`NOT_CHECKED`). Un autre workspace est refusé avant cette inspection. Une révocation pendant le diagnostic empêche la livraison de la checklist. Aucun chemin, origine, identifiant HA ou secret ne figure dans ce résultat.
+
+**Limite du coffre :** `STORED` ne qualifie ni le déchiffrement ni le helper PowerShell. La politique `Restricted` constatée sur le poste empêche actuellement l'exécution des helpers `.ps1`. Cette tranche ne modifie aucune politique et ne la contourne pas. Un mécanisme autorisé doit être qualifié avant connexion réelle. Le nom donné à un token dans Home Assistant n'est pas sa valeur et ne signifie pas que le coffre IDA le contient.
+
+Tests : états ON/OFF/UNKNOWN/UNAVAILABLE distincts, requête ciblée, réponses invalides et mauvaise cible, champs sensibles omis, HTTP/redirections refusés, binding capturé, audit/permissions/révocation, panne sans cache ni retry implicite, quotas/concurrence et annulation réseau. Diagnostic : prérequis indépendants, credential absent/indisponible, mode fermé, révocation pendant inspection et absence de secret/réseau. Les fixtures sont synthétiques ; ces vérifications ne prouvent pas une connexion à la maison réelle.
 
 ## Possibilités officielles
 
@@ -45,10 +61,10 @@ Le port dépend de la méthode/version/configuration : ne pas supposer `8123`. L
 
 L’authentification Home Assistant est liée à un utilisateur ; un token longue durée peut avoir des pouvoirs dépassant ce pilote. Sa création et sa saisie sécurisée feront l’objet d’un parcours distinct, avec intervention humaine, stockage serveur et révocation. Ne pas copier le token dans ce chat, dans le frontend ou dans un fichier public. [Authentification officielle](https://developers.home-assistant.io/docs/auth_api/).
 
-## Contrats futurs, non publiés
+## Extension future au-delà du pilote
 
-Routes candidates : lecture de l’état de connexion, liste des seuls appareils autorisés, lecture d’un appareil IDA opaque. Aucune route de proxy libre, URI de hub ou `entity_id` accepté depuis une commande IA. Ces routes ne sont pas ajoutées à l’OpenAPI tant que l’activation et le modèle de droits ne sont pas validés.
+Les routes du pilote sont publiées dans son OpenAPI. Restent à concevoir : liste des seuls appareils autorisés et lecture d'un appareil IDA opaque. Aucune route de proxy libre, URI de hub ou `entity_id` accepté depuis une commande IA. Une éventuelle découverte globale exige un consentement distinct et une projection bornée : l'appel REST HA `/api/states` retourne tous les états, pas seulement les lampes. La sélection manuelle d'une lampe reste le chemin minimal.
 
-Le serveur résoudra connexion/secret/cible depuis le workspace et exécutera `read_home_device` via le Gateway. Le port actuel fait une traduction de protocole, **pas** l’authentification, l’audit ou le filtrage inter-workspaces : il ne faut pas le brancher directement à un contrôleur HTTP. Les futures données, rétention, exclusions et responsabilités du `Home Safety Steward` sont définies dans l’ADR ; aucun nouvel agent n’est enregistré.
+Le serveur résout déjà connexion/secret/cible depuis le workspace et exécute `read_home_device` via le Gateway. Le port de protocole ne fait pas lui-même l'authentification : son contrôleur `home-device.ts` assure les barrières avant/après lecture. Les données, rétention, exclusions et responsabilités futures du `Home Safety Steward` sont définies dans l’ADR ; aucun nouvel agent n’est enregistré.
 
 La section précédente sur les dates de release reste en pause. Musique, Social Hub et les autres modules sont préservés ; cette préparation ne retarde pas leur utilisation.

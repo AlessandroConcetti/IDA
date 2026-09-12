@@ -1,9 +1,38 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { HomeConnections, homeConnectionAdvice } from "./HomeConnections";
+import { HomeConnections, HomePrerequisites, homeConnectionAdvice } from "./HomeConnections";
 
 describe("IDA Home — préparer sans connecter implicitement", () => {
+  it("distingue configuration, coffre et connexion réelle dans le panneau de prérequis", () => {
+    const html = renderToStaticMarkup(
+      createElement(HomePrerequisites, {
+        prerequisites: {
+          configuration: "CONFIGURED",
+          tls: "REQUIRED",
+          target: "REQUIRED",
+          credential: "MISSING",
+          verification: "NOT_PERFORMED",
+        },
+      }),
+    );
+    expect(html).toContain("Requis · adresse actuelle non sécurisée");
+    expect(html).toContain("Non enregistré dans IDA");
+    expect(html).toContain("Non effectuée · lecture explicite nécessaire");
+    const stored = renderToStaticMarkup(
+      createElement(HomePrerequisites, {
+        prerequisites: {
+          configuration: "CONFIGURED",
+          tls: "CONFIGURED",
+          target: "CONFIGURED",
+          credential: "STORED",
+          verification: "NOT_PERFORMED",
+        },
+      }),
+    );
+    expect(stored).toContain("Fichier présent · déchiffrement non vérifié");
+    expect(stored).not.toContain("Connexion réussie");
+  });
   it.each(["unknown", "home-assistant", "voice-apps"] as const)(
     "donne une prochaine étape honnête pour %s",
     (setup) => {

@@ -1,5 +1,6 @@
 import { request as httpsRequest } from "node:https";
 import { isIP } from "node:net";
+import type { HomeDevicePrerequisites } from "@ida/contracts/home-device";
 import type { HomeAssistantReadTransport } from "./smart-home-read.js";
 
 export type HomeAssistantTarget = Readonly<{ origin: string; address: string; entityId: string }>;
@@ -11,6 +12,36 @@ export function privateHomeAddress(value: string): boolean {
   const [a, b] = value.split(".").map(Number);
   return a === 10 || (a === 172 && b !== undefined && b >= 16 && b <= 31) || (a === 192 && b === 168);
 }
+
+/** Inspection indépendante des prérequis, sans réseau ni identité TLS prétendument vérifiée. */
+export function homeAssistantTargetPrerequisites(
+  target: HomeAssistantTarget | undefined,
+): Pick<HomeDevicePrerequisites, "configuration" | "tls" | "target"> {
+  if (!target) return { configuration: "REQUIRED", tls: "REQUIRED", target: "REQUIRED" };
+  let url: URL | undefined;
+  try {
+    url = new URL(target.origin);
+  } catch {
+    // Une URL invalide ne masque pas le diagnostic séparé de la cible.
+  }
+  const validOrigin =
+    url !== undefined &&
+    ["http:", "https:"].includes(url.protocol) &&
+    !url.username &&
+    !url.password &&
+    !url.search &&
+    !url.hash &&
+    url.pathname === "/" &&
+    /^[a-z0-9.-]+$/i.test(url.hostname) &&
+    privateHomeAddress(target.address) &&
+    (!isIP(url.hostname) || url.hostname === target.address);
+  return {
+    configuration: validOrigin ? "CONFIGURED" : "INVALID",
+    tls: url?.protocol === "https:" && process.env.NODE_TLS_REJECT_UNAUTHORIZED !== "0" ? "CONFIGURED" : "REQUIRED",
+    target: entityPattern.test(target.entityId) ? "CONFIGURED" : "REQUIRED",
+  };
+}
+
 export function homeAssistantTargetState(
   target: HomeAssistantTarget,
 ): "CONNECTION_REQUIRED" | "TLS_REQUIRED" | "TARGET_REQUIRED" | "VALID" {
