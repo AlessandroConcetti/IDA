@@ -166,7 +166,7 @@ describe("IDA Home — aperçus factuels en lecture seule", () => {
         );
         expect(html).toContain("Navigation IDA Home");
         expect(html).toContain("Suggestions de demande");
-        expect(html).toContain("Sélectionner IDA Home");
+        expect(html).toContain('aria-label="Ouvrir IDA Home"');
         expect(html).not.toContain('id="home-tasks-title"');
         expect(html.match(/<main\b/g)).toHaveLength(1);
         expect(html).not.toMatch(/<video|<iframe|autoplay/iu);
