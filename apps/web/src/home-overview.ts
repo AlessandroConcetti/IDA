@@ -50,6 +50,7 @@ export function homeWorkspaceDate(summary: CommandCenterSummary | undefined): st
 const homeActivityLabels: Readonly<Record<string, string>> = {
   "task.created": "Nouvelle tâche ajoutée",
   "task.completed": "Tâche terminée",
+  "creative.dossier.recorded": "Dossier de conception enrichi",
   "release.created": "Release ajoutée au catalogue",
   "track.created": "Morceau ajouté au catalogue",
   "media.imported": "Média ajouté à la bibliothèque",

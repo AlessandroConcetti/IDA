@@ -102,6 +102,7 @@ export const activityLogActionValues = [
   "post_variant.internal_schedule_cancelled",
   "task.created",
   "task.completed",
+  "creative.dossier.recorded",
 ] as const;
 
 export const activityLogActionSchema = z.enum(activityLogActionValues);

@@ -822,6 +822,7 @@ function activityActionLabel(action: string): string {
     "post_variant.internal_schedule_cancelled": "Planification interne annulée",
     "task.created": "Tâche créée",
     "task.completed": "Tâche terminée",
+    "creative.dossier.recorded": "Dossier de conception enrichi",
   };
 
   return labels[action] ?? "Action interne enregistrée";

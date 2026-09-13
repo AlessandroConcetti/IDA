@@ -4,6 +4,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./creative-engine": {
+      "types": "./src/creative-engine.ts",
+      "import": "./dist/creative-engine.js"
+    },
     "./home-device": {
       "types": "./src/home-device.ts",
       "import": "./dist/home-device.js"

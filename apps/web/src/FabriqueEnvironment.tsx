@@ -1,6 +1,7 @@
 import { type CSSProperties, type RefObject, useEffect, useRef, useState } from "react";
 import { completeTask, createTask, fetchTasks, type TaskRecord } from "./api";
 import { IdaApiError } from "./api-transport";
+import { CreativeEngineWorkspace } from "./CreativeEngineWorkspace";
 import type { NavigationId } from "./data";
 import { LocalDialogue } from "./LocalDialogue";
 import { LineIcon, ReferenceRail, Sheet } from "./ReferenceChrome";
@@ -75,6 +76,7 @@ export function FabriqueEnvironment({
   onNavigate: (id: NavigationId) => void;
 }) {
   const [view, setView] = useState<View | null>(null);
+  const [engineOpen, setEngineOpen] = useState(false);
   const [kind, setKind] = useState<ProjectKind>("Application");
   const [name, setName] = useState("");
   const [goal, setGoal] = useState("");
@@ -239,6 +241,19 @@ export function FabriqueEnvironment({
       }
     }
   }
+  if (engineOpen)
+    return (
+      <CreativeEngineWorkspace
+        onClose={() => {
+          setEngineOpen(false);
+          setRevision((value) => value + 1);
+        }}
+        onCreateProject={() => {
+          setEngineOpen(false);
+          newProject("Application");
+        }}
+      />
+    );
   return (
     <section
       className="environment-screen reference-environment fabrique-reference"
@@ -279,6 +294,14 @@ export function FabriqueEnvironment({
         </header>
         <div className="reference-panels fabrique-panels">
           <section className="reference-glass fabrique-new">
+            <button className="reference-row" type="button" onClick={() => setEngineOpen(true)}>
+              <LineIcon kind="grid" />
+              <span>
+                <strong>IDA Creative Engine</strong>
+                <small>Références · plans · dossiers de conception</small>
+              </span>
+              <span aria-hidden="true">→</span>
+            </button>
             <button className="fabrique-new-title" type="button" onClick={() => newProject("Application")}>
               <LineIcon kind="case" />
               <span>Nouveau projet</span>
@@ -348,6 +371,10 @@ export function FabriqueEnvironment({
           </p>
         </div>
         <nav className="reference-dock" aria-label="Actions de La Fabrique">
+          <button type="button" onClick={() => setEngineOpen(true)}>
+            <LineIcon kind="grid" />
+            Creative Engine
+          </button>
           <button type="button" onClick={() => open("projects")}>
             <LineIcon kind="search" />
             Explorer

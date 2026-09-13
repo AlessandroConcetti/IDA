@@ -73,6 +73,7 @@ import {
   ToolPolicyError,
 } from "@ida/domain";
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
+import { creativeReadTool, creativeWriteTool, registerCreativeEngine } from "./creative-engine.js";
 import { toContentRotationCandidateResponse } from "./content-rotation.js";
 import {
   type ActivityLogEntry,
@@ -1097,6 +1098,8 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   const agents = createAgentRegistry();
   const modules = createModuleRegistry();
   const toolGateway = new ToolGateway(undefined, [
+    creativeReadTool,
+    creativeWriteTool,
     homeWeatherTool,
     homeDeviceTool,
     { toolKey: "update_artist_profile", moduleKey: "MEMORY", permission: "WRITE" },
@@ -2525,6 +2528,10 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   }));
 
   registerLocalDialogue(app, database, { enabled: options.localDialogueEnabled === true, locked: identityMode === "LOCAL_LOCK" });
+  await registerCreativeEngine(app, database, {
+    authorize: assertToolAuthorized,
+    revalidate: revalidateCatalogRead,
+  });
   registerHomeWeather(app, database, {
     enabled: options.weatherEnabled === true,
     locked: identityMode === "LOCAL_LOCK",
