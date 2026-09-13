@@ -16,6 +16,7 @@ const detail: CreativeProjectDetail = {
   plans: [],
   notes: [],
   reviews: [],
+  progress: [],
 };
 describe("Creative Engine — interface et export honnêtes", () => {
   it("présente l'arborescence sans activer de capteur, provider ou callback", () => {

@@ -1,6 +1,8 @@
 import {
   type CreativeKind,
+  type CreativeProgressInput,
   creativeDetailResponseSchema,
+  creativeProgressResponseSchema,
   creativeProjectsResponseSchema,
   creativeRecordSchemas,
 } from "../../../packages/contracts/src/creative-engine";
@@ -21,4 +23,13 @@ export async function saveCreativeRecord(id: string, kind: CreativeKind, body: u
   });
   if (typeof result !== "object" || result === null || !("data" in result)) throw new Error("Réponse invalide.");
   return creativeRecordSchemas[kind].parse(result.data);
+}
+export async function saveCreativeProgress(id: string, body: CreativeProgressInput) {
+  return creativeProgressResponseSchema.parse(
+    await requestApi(`${base}/${encodeURIComponent(id)}/progress`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  ).data;
 }

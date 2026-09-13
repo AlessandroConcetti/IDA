@@ -4,10 +4,17 @@ import {
   type CreativeProject,
   type CreativeProjectDetail,
   creativeInputSchemas,
+  creativeProgressCreateSchema,
   creativeSections,
 } from "../../../packages/contracts/src/creative-engine";
 import { IdaApiError } from "./api-transport";
-import { fetchCreativeDetail, fetchCreativeProjects, saveCreativeRecord } from "./creative-engine-api";
+import { CreativePlanProgress } from "./CreativePlanProgress";
+import {
+  fetchCreativeDetail,
+  fetchCreativeProjects,
+  saveCreativeProgress,
+  saveCreativeRecord,
+} from "./creative-engine-api";
 import { creativeDossierExport } from "./creative-engine-export";
 import { LineIcon } from "./ReferenceChrome";
 import "./creative-engine.css";
@@ -159,6 +166,7 @@ export function CreativeEngineWorkspace({
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+  const [refreshNeeded, setRefreshNeeded] = useState(false);
   const [revision, setRevision] = useState(0);
   const heading = useRef<HTMLHeadingElement>(null);
   const epoch = useRef(0);
@@ -185,7 +193,10 @@ export function CreativeEngineWorkspace({
         setProjects(rows);
         if (projectId) {
           const record = await fetchCreativeDetail(projectId, controller.signal);
-          if (current === epoch.current) setDetail(record);
+          if (current === epoch.current) {
+            setDetail(record);
+            setRefreshNeeded(false);
+          }
         }
       })
       .catch((failure) => {
@@ -206,15 +217,16 @@ export function CreativeEngineWorkspace({
     setSection(next);
     setNotice("");
   }
-  async function save(kind: CreativeKind, body: unknown) {
-    if (writing.current || !detail || loading || error) return false;
+  async function save(kind: CreativeKind | "progress", body: unknown) {
+    if (writing.current || !detail || loading || error || refreshNeeded) return false;
     writing.current = true;
     setBusy(true);
     setNotice("");
     const current = epoch.current;
     let saved = false;
     try {
-      await saveCreativeRecord(detail.project.id, kind, body);
+      if (kind === "progress") await saveCreativeProgress(detail.project.id, creativeProgressCreateSchema.parse(body));
+      else await saveCreativeRecord(detail.project.id, kind, body);
       saved = true;
       const updated = await fetchCreativeDetail(detail.project.id);
       if (alive.current && current === epoch.current) {
@@ -223,12 +235,16 @@ export function CreativeEngineWorkspace({
       }
       return true;
     } catch (failure) {
-      if (alive.current && current === epoch.current)
+      if (alive.current && current === epoch.current) {
+        if (kind === "progress") setRefreshNeeded(true);
         setNotice(
           saved
             ? "Enregistrement confirmé, mais actualisation impossible. Actualisez le dossier ; ne recréez pas l’entrée."
-            : `${message(failure)} Une nouvelle tentative identique ne crée pas de doublon.`,
+            : kind === "progress"
+              ? `${message(failure)} Actualisez le dossier avant de reprendre le suivi ; aucune progression n’est supposée enregistrée.`
+              : `${message(failure)} Une nouvelle tentative identique ne crée pas de doublon.`,
         );
+      }
       return saved;
     } finally {
       writing.current = false;
@@ -292,6 +308,11 @@ export function CreativeEngineWorkspace({
           </header>
           {loading && <p role="status">Chargement du workspace…</p>}
           {error && <p role="alert">{error} Les données ne sont pas déclarées vides : elles sont indisponibles.</p>}
+          {refreshNeeded && (
+            <p role="alert">
+              Actualisez le dossier avant toute nouvelle déclaration. Le suivi affiché peut être périmé.
+            </p>
+          )}
           {!loading && !error && (
             <>
               <div className="creative-project-picker">
@@ -366,11 +387,12 @@ export function CreativeEngineWorkspace({
                           <h3>
                             {index + 1}. {p.title}
                           </h3>
-                          <ol>
-                            {p.steps.map((s, i) => (
-                              <li key={`${i}-${s}`}>{s}</li>
-                            ))}
-                          </ol>
+                          <CreativePlanProgress
+                            plan={p}
+                            events={detail.progress}
+                            busy={busy || refreshNeeded}
+                            onUpdate={(input) => save("progress", input)}
+                          />
                           <h4>Critères de réussite</h4>
                           <ul>
                             {p.acceptanceCriteria.map((s, i) => (
@@ -405,7 +427,7 @@ export function CreativeEngineWorkspace({
                     key={`${projectId}-${section}`}
                     kind={section}
                     detail={detail}
-                    busy={busy}
+                    busy={busy || refreshNeeded}
                     onSave={save}
                   />
                 </>
@@ -504,7 +526,7 @@ export function CreativeEngineWorkspace({
           )}
           <footer>
             Conception manuelle · même API, mêmes permissions · aucune exécution ni installation · 200 éléments maximum
-            par dossier
+            par dossier · 500 déclarations de suivi maximum
           </footer>
         </main>
       </div>

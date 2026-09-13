@@ -33,6 +33,15 @@ export const creativeReviewCreateSchema = z
     note: text(1000),
   })
   .strict();
+export const creativeProgressCreateSchema = z
+  .object({
+    planId: creativeIdSchema,
+    stepIndex: z.number().int().min(0).max(11),
+    completed: z.boolean(),
+    expectedRevision: z.number().int().min(0).max(500),
+    note: text(300).optional(),
+  })
+  .strict();
 export const creativeInputSchemas = {
   references: creativeReferenceCreateSchema,
   plans: creativePlanCreateSchema,
@@ -42,6 +51,19 @@ export const creativeInputSchemas = {
 export const creativeKindSchema = z.enum(["references", "plans", "notes", "reviews"]);
 export type CreativeKind = z.infer<typeof creativeKindSchema>;
 const recordFields = { id: creativeIdSchema, projectId: creativeIdSchema, createdAt: z.string().datetime() };
+export const creativeProgressSchema = z
+  .object({
+    ...recordFields,
+    planId: creativeIdSchema,
+    stepIndex: z.number().int().min(0).max(11),
+    completed: z.boolean(),
+    revision: z.number().int().min(1).max(500),
+    note: text(300).nullable(),
+  })
+  .strict();
+export const creativeProgressResponseSchema = z.object({ data: creativeProgressSchema }).strict();
+export type CreativeProgress = z.infer<typeof creativeProgressSchema>;
+export type CreativeProgressInput = z.infer<typeof creativeProgressCreateSchema>;
 export const creativeReferenceSchema = creativeReferenceCreateSchema.extend({
   ...recordFields,
   url: referenceUrl.nullable(),
@@ -70,13 +92,52 @@ export const creativeProjectDetailSchema = z
     plans: z.array(creativePlanSchema).max(200),
     notes: z.array(creativeNoteSchema).max(200),
     reviews: z.array(creativeReviewSchema).max(200),
+    progress: z.array(creativeProgressSchema).max(500).default([]),
   })
-  .strict();
+  .strict()
+  .superRefine((detail, context) => {
+    const plans = new Map(detail.plans.map((plan) => [plan.id, plan]));
+    const revisions = new Map<string, Set<number>>();
+    for (const [index, event] of detail.progress.entries()) {
+      const plan = plans.get(event.planId);
+      const seen = revisions.get(event.planId) ?? new Set<number>();
+      if (
+        !plan ||
+        event.projectId !== detail.project.id ||
+        plan.projectId !== detail.project.id ||
+        event.stepIndex >= plan.steps.length ||
+        seen.has(event.revision)
+      ) {
+        context.addIssue({ code: "custom", path: ["progress", index], message: "Historique de plan incohérent." });
+      }
+      seen.add(event.revision);
+      revisions.set(event.planId, seen);
+    }
+    for (const seen of revisions.values()) {
+      if (Math.max(...seen) !== seen.size)
+        context.addIssue({ code: "custom", path: ["progress"], message: "Historique de plan incomplet." });
+    }
+  });
 export const creativeProjectsResponseSchema = z.object({ data: z.array(creativeProjectSchema).max(200) }).strict();
 export const creativeDetailResponseSchema = z.object({ data: creativeProjectDetailSchema }).strict();
 export type CreativeProject = z.infer<typeof creativeProjectSchema>;
 export type CreativeProjectDetail = z.infer<typeof creativeProjectDetailSchema>;
 export type CreativeRecord = z.infer<(typeof creativeRecordSchemas)[CreativeKind]>;
+
+/** Déclarations humaines uniquement : ce calcul ne prouve aucune exécution. */
+export function creativePlanProgress(plan: z.infer<typeof creativePlanSchema>, events: CreativeProgress[]) {
+  const history = events.filter((event) => event.planId === plan.id).sort((a, b) => a.revision - b.revision);
+  const steps = plan.steps.map(() => false);
+  for (const event of history) if (event.stepIndex < steps.length) steps[event.stepIndex] = event.completed;
+  const completed = steps.filter(Boolean).length;
+  return {
+    history,
+    steps,
+    completed,
+    revision: history.at(-1)?.revision ?? 0,
+    percent: Math.round((completed / steps.length) * 100),
+  };
+}
 
 // Catalogue documentaire uniquement. Aucune déclaration d'agent ou activation de provider.
 export const creativeSections = [
@@ -99,7 +160,8 @@ export const creativeSections = [
     label: "Plans",
     icon: "map",
     state: "REAL",
-    detail: "Étapes et critères de réussite documentés. Chaque enregistrement crée une version indépendante.",
+    detail:
+      "Plans versionnés et suivi manuel des étapes. Progression déclarée, sans exécution ni validation automatique.",
   },
   {
     key: "agents",
