@@ -115,6 +115,7 @@ import {
 import { resolveIdentityMode, resolveLocalWebOrigin } from "./runtime-config.js";
 import { registerBuiltWeb } from "./built-web.js";
 import { registerLocalDialogue } from "./local-dialogue.js";
+import { intelligenceNetworkReadTool, registerIntelligenceNetwork } from "./intelligence-network.js";
 import { homeWeatherTool, registerHomeWeather } from "./home-weather.js";
 import { type HomeAssistantBinding, homeDeviceTool, registerHomeDevice } from "./home-device.js";
 import { defaultCalendarRange, getWorkspaceDayRange, type ResolvedCalendarRange } from "./workspace-time.js";
@@ -1098,6 +1099,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   const agents = createAgentRegistry();
   const modules = createModuleRegistry();
   const toolGateway = new ToolGateway(undefined, [
+    intelligenceNetworkReadTool,
     creativeReadTool,
     creativeWriteTool,
     homeWeatherTool,
@@ -2527,10 +2529,18 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     data: await core.execute(getRequestIdentityContext(request), request.body),
   }));
 
-  registerLocalDialogue(app, database, { enabled: options.localDialogueEnabled === true, locked: identityMode === "LOCAL_LOCK" });
   await registerCreativeEngine(app, database, {
     authorize: assertToolAuthorized,
     revalidate: revalidateCatalogRead,
+  });
+  const intelligenceRegistry = registerLocalDialogue(app, database, {
+    enabled: options.localDialogueEnabled === true,
+    locked: identityMode === "LOCAL_LOCK",
+  });
+  registerIntelligenceNetwork(app, intelligenceRegistry, {
+    authorize: (request) => assertToolAuthorized(request, intelligenceNetworkReadTool),
+    revalidate: (request) => revalidateCatalogRead(request, intelligenceNetworkReadTool),
+    now: serverNow,
   });
   registerHomeWeather(app, database, {
     enabled: options.weatherEnabled === true,

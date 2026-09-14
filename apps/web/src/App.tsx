@@ -2,6 +2,7 @@ import { type DragEvent, type FormEvent, useEffect, useMemo, useRef, useState, u
 import { AuroraHome } from "./AuroraHome";
 import { ThemePicker } from "./ThemePicker";
 import { LocalDialogue } from "./LocalDialogue";
+import { IntelligenceNetwork } from "./IntelligenceNetwork";
 import {
   type ActivityLogRecord,
   type AgentManifestRecord,
@@ -4226,6 +4227,7 @@ function SystemView({ dashboard, source }: { dashboard: DashboardSnapshot; sourc
   return (
     <div className="page-grid system-view">
       <SystemPanel services={dashboard.systemServices} source={source} />
+      <IntelligenceNetwork />
       <AgentRegistryPanel />
       <ActivityTimeline />
     </div>

@@ -352,6 +352,14 @@ describe("Guarded first music proposal, synthetic providers only", () => {
     expect((await f.service.propose(f.scope, { intent: "SEARCH_TRACK" })).status).toBe("FOUND");
     expect(f.fallback.generate).toHaveBeenCalledTimes(1);
     f.fallback.generate.mockClear();
+    // Une panne met le modèle en retrait jusqu'à requalification serveur explicite.
+    f.registry.configure("local", {
+      enabled: true,
+      configured: true,
+      availability: "READY",
+      remainingCalls: 2,
+      validUntil: "2026-09-08T11:00:00Z",
+    });
     f.adapter.generate.mockImplementation(async () => {
       f.rows.tracks.pop();
       throw new IntelligenceError("UNAVAILABLE");

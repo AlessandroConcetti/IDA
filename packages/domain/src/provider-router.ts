@@ -9,6 +9,7 @@ import {
 } from "@ida/contracts/intelligence";
 import type { IntelligenceAudit } from "@ida/contracts/intelligence-audit";
 import { IntelligenceError, type ProviderCandidate, type ProviderRegistry } from "./provider-registry.js";
+import { QuotaManager } from "./quota-manager.js";
 
 export type { IntelligenceAudit } from "@ida/contracts/intelligence-audit";
 
@@ -49,6 +50,8 @@ function permitted(
   )
     return false;
   if (manifest.locality === "LOCAL") return true;
+  // Aucune egress de haute sensibilité, même si une ancienne liste de consentement la contient.
+  if (request.dataClasses.includes("HIGHLY_SENSITIVE")) return false;
   return policy.cloudConsents.some(
     (consent) =>
       sameIntelligenceScope(consent.scope, request.scope) &&
@@ -88,7 +91,11 @@ export function selectModels(
             model.maxComplexity >= request.complexity &&
             model.maxInputChars >= request.prompt.length &&
             model.maxOutputTokens >= request.maxOutputTokens &&
-            model.estimatedCostMicros !== null &&
+            // Cette tranche n'active aucun paiement, même avec une clé et un budget positif.
+            model.estimatedCostMicros === 0 &&
+            provider.health[model.id]?.available !== false &&
+            (provider.manifest.locality === "LOCAL" ||
+              QuotaManager.status(provider.quota, model.id, now, tokenEnvelope(request)) === "AVAILABLE_FREE") &&
             model.estimatedCostMicros <= policy.maxCostMicros - spentMicros &&
             model.estimatedLatencyMs !== null &&
             model.estimatedLatencyMs <= policy.maxLatencyMs,
@@ -111,6 +118,11 @@ export function selectModels(
         a.model.id.localeCompare(b.model.id)
       );
     });
+}
+
+// Réservation pessimiste UTF-8 : pas de moyenne chars/4 qui sous-estime les entrées multilingues.
+function tokenEnvelope(request: IntelligenceRequest): number {
+  return new TextEncoder().encode(request.prompt).length + request.maxOutputTokens + 512;
 }
 
 export class ProviderRouter implements IntelligencePort {
@@ -206,7 +218,7 @@ export class ProviderRouter implements IntelligencePort {
       attemptLimit = Math.min(attemptLimit, currentPolicy.maxAttempts);
       if (signal?.aborted) throw new IntelligenceError("CANCELLED");
       if (this.now() >= deadline) throw new IntelligenceError("TIMEOUT");
-      const reserved = this.registry.reserve(provider, this.now());
+      const reserved = this.registry.reserve(provider, this.now(), model.id, tokenEnvelope(request));
       attempted.add(provider.manifest.key);
       spentMicros += event.estimatedCostMicros;
       const controller = new AbortController();
@@ -277,10 +289,12 @@ export class ProviderRouter implements IntelligencePort {
           throw new IntelligenceError("FORBIDDEN");
         }
         if (controller.signal.aborted) throw controller.signal.reason;
+        this.registry.recordOutcome(provider, model.id, "SUCCEEDED", this.now());
         return result.data;
       } catch (error) {
         const safe =
           error instanceof IntelligenceError ? new IntelligenceError(error.code) : new IntelligenceError("UNAVAILABLE");
+        this.registry.recordOutcome(provider, model.id, safe.code, this.now());
         await this.log({ ...event, outcome: safe.code });
         // Pas de retry après refus, erreur de validation, autorisation, annulation ou timeout ambigu.
         if (!(error instanceof IntelligenceError) || !["UNAVAILABLE", "RATE_LIMITED"].includes(safe.code)) throw safe;

@@ -1,12 +1,12 @@
-import type { FastifyInstance } from "fastify";
 import { type IntelligencePolicy, intelligenceRequestSchema } from "@ida/contracts/intelligence";
 import { ProviderRegistry, ToolGateway } from "@ida/domain";
+import type { FastifyInstance } from "fastify";
 import { OllamaAdapter } from "./ai-adapters.js";
 import { CoreIntelligence, intelligenceProposalTool } from "./core-intelligence.js";
 import type { DemoDatabase } from "./database.js";
 import { localPilot } from "./evaluation/local-model-pin.js";
-import { getRequestIdentityContext } from "./identity-context.js";
 import { DeterministicIdaCore } from "./ida-core.js";
+import { getRequestIdentityContext } from "./identity-context.js";
 import { createPersistentIntelligenceAudit } from "./intelligence-audit.js";
 import { LocalIntelligenceAccess } from "./local-intelligence-access.js";
 import { OllamaLoopbackTransport } from "./ollama-transport.js";
@@ -210,4 +210,5 @@ export function registerLocalDialogue(
       reply.raw.removeListener("close", cancel);
     }
   });
+  return registry;
 }

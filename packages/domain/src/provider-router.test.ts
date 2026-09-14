@@ -43,7 +43,7 @@ function manifest(key = "local", locality: "LOCAL" | "CLOUD" = "LOCAL"): AIProvi
         maxComplexity: 1,
         maxInputChars: 1000,
         maxOutputTokens: 500,
-        estimatedCostMicros: locality === "LOCAL" ? 0 : 40,
+        estimatedCostMicros: 0,
         estimatedLatencyMs: 10,
       },
     ],
@@ -89,7 +89,17 @@ function fixture(manifests = [manifest(), manifest("cloud", "CLOUD")]) {
   const registry = new ProviderRegistry(
     manifests.map((entry, index) => ({ manifest: entry, adapter: required(adapters, index) })),
   );
-  for (const entry of manifests) registry.configure(entry.key, state());
+  for (const entry of manifests) {
+    registry.configure(entry.key, state());
+    if (entry.locality === "CLOUD")
+      registry.observeFreeQuota(entry.key, {
+        modelIds: entry.models.map((model) => model.id),
+        observedAt: new Date(now).toISOString(),
+        validUntil: "2026-09-07T13:00:00Z",
+        noPaidOverage: true,
+        windows: [{ kind: "REQUESTS_DAY", remaining: 10, limit: 10, resetAt: "2026-09-08T00:00:00Z" }],
+      });
+  }
   let currentPolicy = policy();
   const authorize = vi.fn(async () => currentPolicy);
   const audit = vi.fn(async (_event: IntelligenceAudit) => {});
@@ -383,14 +393,14 @@ describe("Controlled fallback", () => {
       expect(required(f.adapters, 1).generate).not.toHaveBeenCalled();
     },
   );
-  it("charges failed attempts against the same routing envelope", async () => {
+  it("never selects a paid model even with a positive legacy budget", async () => {
     const m = manifest();
     required(m.models).estimatedCostMicros = 70;
-    const f = fixture([m, manifest("cloud", "CLOUD")]);
+    const f = fixture([m]);
     f.setPolicy(policy({ cloudConsents: [consent()] }));
     required(f.adapters).generate.mockRejectedValue(new IntelligenceError("UNAVAILABLE"));
     await expect(f.router.generate(request())).rejects.toMatchObject({ code: "NO_COMPATIBLE_MODEL" });
-    expect(required(f.adapters, 1).generate).not.toHaveBeenCalled();
+    expect(required(f.adapters).generate).not.toHaveBeenCalled();
   });
   it.each(["consent", "mode", "identity", "disabled"])("rechecks %s before fallback", async (change) => {
     const f = fixture();

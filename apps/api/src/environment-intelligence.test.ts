@@ -138,7 +138,9 @@ describe("Environment-scoped intelligence port", () => {
   it("keeps profiles aligned with the existing world wheel without creating a second catalog", async () => {
     const source = await readFile(new URL("../../web/src/worlds.ts", import.meta.url), "utf8");
     const ids = [...source.matchAll(/id: "([a-z]+)"/gu)].map((match) => match[1]);
-    expect(ids.sort()).toEqual(
+    // La Fabrique est un espace documentaire sans cerveau autonome activé.
+    expect(ids).toContain("fabrique");
+    expect(ids.filter((id) => id !== "fabrique").sort()).toEqual(
       listEnvironmentBrainProfiles()
         .map((profile) => profile.environmentKey)
         .sort(),

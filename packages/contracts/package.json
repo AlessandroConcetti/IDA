@@ -4,6 +4,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./intelligence-network": {
+      "types": "./src/intelligence-network.ts",
+      "import": "./dist/intelligence-network.js"
+    },
     "./creative-engine": {
       "types": "./src/creative-engine.ts",
       "import": "./dist/creative-engine.js"

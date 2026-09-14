@@ -21,7 +21,16 @@ export const intelligenceErrorCodes = [
   "AUDIT_UNAVAILABLE",
 ] as const;
 
-export const aiDataClassSchema = z.enum(["PUBLIC", "INTERNAL", "PRIVATE_CREATIVE", "SENSITIVE_PERSONAL", "SECRET"]);
+export const aiDataClassSchema = z.enum([
+  "PUBLIC",
+  "INTERNAL",
+  "PRIVATE_CREATIVE",
+  "PERSONAL",
+  "SENSITIVE",
+  "HIGHLY_SENSITIVE",
+  "SENSITIVE_PERSONAL",
+  "SECRET",
+]);
 export const intelligenceScopeSchema = z
   .object({
     userId: id,
@@ -31,7 +40,45 @@ export const intelligenceScopeSchema = z
   })
   .strict();
 export const intelligencePurposeSchema = z.enum(["ASSISTANT_REPLY", "CONTENT_DRAFT"]);
-export const modelCapabilitySchema = z.enum(["TEXT", "REASONING"]);
+// Le port courant reste textuel. Vision/audio/images exigent un autre contrat de payload avant activation.
+export const modelCapabilitySchema = z.enum([
+  "TEXT",
+  "REASONING",
+  "CODE",
+  "STRUCTURED_OUTPUT",
+  "TOOL_CALLING",
+  "LONG_CONTEXT",
+]);
+
+export const freeQuotaWindowSchema = z
+  .object({
+    kind: z.enum(["REQUESTS_MINUTE", "REQUESTS_DAY", "REQUESTS_MONTH", "TOKENS_MINUTE", "TOKENS_DAY", "TOKENS_MONTH"]),
+    limit: nonNegative,
+    remaining: nonNegative,
+    resetAt: timestamp,
+  })
+  .strict()
+  .refine((value) => value.remaining <= value.limit, "Remaining exceeds limit");
+
+// Observation revue côté serveur uniquement, jamais une valeur déduite d'un tarif public ou d'une API key.
+export const freeQuotaObservationSchema = z
+  .object({
+    modelIds: z.array(modelId).min(1).max(32),
+    observedAt: timestamp,
+    validUntil: timestamp,
+    noPaidOverage: z.literal(true),
+    windows: z.array(freeQuotaWindowSchema).min(1).max(6),
+  })
+  .strict()
+  .refine(
+    (value) =>
+      Date.parse(value.validUntil) > Date.parse(value.observedAt) &&
+      value.windows.every((window) => Date.parse(window.resetAt) > Date.parse(value.observedAt)) &&
+      new Set(value.modelIds).size === value.modelIds.length &&
+      new Set(value.windows.map((window) => window.kind)).size === value.windows.length,
+    "Invalid quota observation",
+  );
+export type FreeQuotaObservation = z.infer<typeof freeQuotaObservationSchema>;
 
 // Métadonnées revues côté serveur. Aucun endpoint, secret ou code exécutable.
 export const aiProviderManifestSchema = z
@@ -79,8 +126,8 @@ export const intelligenceRequestSchema = z
     scope: intelligenceScopeSchema,
     purpose: intelligencePurposeSchema,
     prompt: z.string().trim().min(1).max(32_000),
-    dataClasses: z.array(aiDataClassSchema).min(1).max(5),
-    capabilities: z.array(modelCapabilitySchema).min(1).max(2),
+    dataClasses: z.array(aiDataClassSchema).min(1).max(8),
+    capabilities: z.array(modelCapabilitySchema).min(1).max(6),
     complexity: z.number().int().min(1).max(3),
     maxOutputTokens: z.number().int().min(1).max(8192),
   })

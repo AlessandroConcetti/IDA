@@ -3,9 +3,12 @@ import {
   type AIProviderState,
   aiProviderManifestSchema,
   aiProviderStateSchema,
+  type FreeQuotaObservation,
+  freeQuotaObservationSchema,
   type IntelligenceText,
   intelligenceErrorCodes,
 } from "@ida/contracts/intelligence";
+import { QuotaManager, type QuotaSnapshot } from "./quota-manager.js";
 
 export type IntelligenceErrorCode = (typeof intelligenceErrorCodes)[number];
 
@@ -35,6 +38,8 @@ export type ProviderCandidate = {
   manifest: AIProviderManifest;
   state: AIProviderState;
   revision: number;
+  quota: QuotaSnapshot;
+  health: Record<string, { available: boolean; lastSuccess: string | null; lastError: IntelligenceErrorCode | null }>;
 };
 
 type Registration = {
@@ -43,11 +48,13 @@ type Registration = {
   state: AIProviderState;
   revision: number;
   controller: AbortController;
+  health: ProviderCandidate["health"];
 };
 
 /** Registre statique en code serveur, selon le même principe que l'AgentRegistry. */
 export class ProviderRegistry {
   private readonly entries = new Map<string, Registration>();
+  private readonly quotas = new QuotaManager();
 
   constructor(providers: readonly { manifest: AIProviderManifest; adapter: IntelligenceAdapter }[] = []) {
     for (const provider of providers) {
@@ -69,6 +76,7 @@ export class ProviderRegistry {
         adapter: provider.adapter,
         revision: 0,
         controller: new AbortController(),
+        health: {},
         state: {
           enabled: false,
           configured: false,
@@ -81,8 +89,8 @@ export class ProviderRegistry {
   }
 
   list(): ProviderCandidate[] {
-    return [...this.entries.values()].map(({ manifest, state, revision }) =>
-      structuredClone({ manifest, state, revision }),
+    return [...this.entries.values()].map(({ manifest, state, revision, health }) =>
+      structuredClone({ manifest, state, revision, health, quota: this.quotas.snapshot(manifest.key) }),
     );
   }
 
@@ -94,13 +102,54 @@ export class ProviderRegistry {
     entry.controller.abort();
     entry.controller = new AbortController();
     entry.state = parsed.data;
+    entry.health = {};
     entry.revision += 1;
+  }
+
+  /** Pas d'endpoint HTTP pour cette autorité. Une revue des conditions/arrêt de facturation est préalable. */
+  observeFreeQuota(providerKey: string, observation: FreeQuotaObservation): void {
+    const entry = this.entries.get(providerKey);
+    const parsed = freeQuotaObservationSchema.safeParse(observation);
+    if (
+      !entry ||
+      !parsed.success ||
+      entry.manifest.locality !== "CLOUD" ||
+      !parsed.data.modelIds.every((id) => entry.manifest.models.some((model) => model.id === id))
+    )
+      throw new IntelligenceError("CONFIGURATION_INVALID");
+    try {
+      this.quotas.observe(providerKey, parsed.data);
+    } catch {
+      throw new IntelligenceError("CONFIGURATION_INVALID");
+    }
+    entry.controller.abort();
+    entry.controller = new AbortController();
+    entry.revision += 1;
+  }
+
+  recordOutcome(
+    candidate: ProviderCandidate,
+    modelId: string,
+    outcome: "SUCCEEDED" | IntelligenceErrorCode,
+    now: number,
+  ): void {
+    const entry = this.entries.get(candidate.manifest.key);
+    if (!entry || entry.revision !== candidate.revision || !Number.isFinite(now)) return;
+    const previous = entry.health[modelId];
+    entry.health[modelId] = {
+      available: outcome === "SUCCEEDED" || outcome === "CANCELLED",
+      lastSuccess: outcome === "SUCCEEDED" ? new Date(now).toISOString() : (previous?.lastSuccess ?? null),
+      lastError: outcome === "SUCCEEDED" ? null : outcome,
+    };
+    if (outcome === "RATE_LIMITED") this.quotas.exhaust(entry.manifest.key);
   }
 
   /** Réservation synchrone : deux requêtes ne peuvent consommer le dernier appel. */
   reserve(
     candidate: ProviderCandidate,
     nowMs: number,
+    modelId: string,
+    tokens: number,
   ): {
     adapter: IntelligenceAdapter;
     invalidated: AbortSignal;
@@ -117,6 +166,11 @@ export class ProviderRegistry {
     ) {
       throw new IntelligenceError("UNAVAILABLE");
     }
+    const model = entry.manifest.models.find((item) => item.id === modelId);
+    if (model?.estimatedCostMicros !== 0 || entry.health[modelId]?.available === false)
+      throw new IntelligenceError("UNAVAILABLE");
+    if (entry.manifest.locality === "CLOUD" && !this.quotas.reserve(entry.manifest.key, modelId, tokens, nowMs))
+      throw new IntelligenceError("UNAVAILABLE");
     entry.state.remainingCalls -= 1;
     return { adapter: entry.adapter, invalidated: entry.controller.signal };
   }

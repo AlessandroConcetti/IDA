@@ -60,6 +60,14 @@ function fixture(manifests = [manifest("ollama"), manifest("backup"), manifest("
       remainingCalls: 10,
       validUntil: "2026-09-07T13:00:00Z",
     });
+    if (entry.locality === "CLOUD")
+      registry.observeFreeQuota(entry.key, {
+        modelIds: entry.models.map((model) => model.id),
+        observedAt: new Date(now).toISOString(),
+        validUntil: "2026-09-07T13:00:00Z",
+        noPaidOverage: true,
+        windows: [{ kind: "REQUESTS_DAY", limit: 10, remaining: 10, resetAt: "2026-09-08T00:00:00Z" }],
+      });
   }
   const policy: IntelligencePolicy = {
     mode: "AI",
