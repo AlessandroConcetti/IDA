@@ -1,5 +1,7 @@
 # Dialogue IA local — expérimental, 10 septembre 2026
 
+**Reconnexion du 14 septembre :** moteur local et API relancés avec activation explicite, une réponse réelle vérifiée via la route authentifiée sur une base synthétique isolée (14,854 s). Nouveau lanceur manuel contrôlé et accès depuis System → Réseau d’intelligence. La session personnelle reste à déverrouiller par l’utilisateur ; le téléphone reste en pause. Voir [preuves, lancement et limites](LOCAL_RUNTIME_CONNECTION.md), qui remplace les constats historiques de disponibilité ci-dessous.
+
 **Reprise du 10–11 septembre :** le verrou est désormais initialisé (statut observé `LOCAL_LOCK / LOCKED`), sans intervention de l'agent sur le credential. Le même dialogue est accessible dans le robot Immersive avec dictée française strictement locale à relire, puis lecture volontaire de la réponse via voix locale. Aucun capteur implicite ni changement des accès Core. Voir [parcours et limites voix/domotique](VOICE_HOME_CONNECTIONS.md). Les constats `UNINITIALIZED` plus bas appartiennent à la livraison initiale.
 
 ## Branchement réel dans le code

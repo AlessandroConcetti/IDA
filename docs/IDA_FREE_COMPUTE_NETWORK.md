@@ -1,5 +1,7 @@
 # IDA — Free Compute Federation
 
+**Suite du 14 septembre :** dialogue local reconnecté au moteur existant, accès direct ajouté au panneau System ; aucune offre cloud activée. Une inférence synthétique a traversé la vraie route authentifiée. Voir [LOCAL_RUNTIME_CONNECTION.md](LOCAL_RUNTIME_CONNECTION.md) pour distinguer preuve serveur, allocation temporaire et validation navigateur restant à effectuer dans la session personnelle.
+
 Tranche du 14 septembre 2026. État : **contrats, gouverneur gratuit, registre partagé et tableau de bord implémentés ; activation des fournisseurs cloud PREPARED / NEEDS_REVIEW**. Aucun compte, clé, service payant, modèle local, moteur tiers ou accès réseau ajouté. Tailscale et pairing iPhone restent en pause.
 
 ## Ce qui fonctionne maintenant

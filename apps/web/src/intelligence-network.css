@@ -117,6 +117,47 @@
   color: var(--network-muted);
   font-size: 12px;
 }
+.intelligence-network__dialogue {
+  margin: 18px 0;
+  padding: clamp(14px, 2vw, 24px);
+  border: 1px solid var(--network-line);
+  border-radius: 18px;
+  background: var(--network-panel);
+}
+.intelligence-network__dialogue-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.intelligence-network__dialogue-heading p {
+  color: var(--network-muted);
+  margin-top: 6px;
+}
+.intelligence-network__dialogue .local-dialogue {
+  display: grid;
+  gap: 14px;
+  margin-top: 22px;
+}
+.intelligence-network__dialogue textarea {
+  display: block;
+  width: 100%;
+  min-height: 120px;
+  margin: 8px 0 14px;
+  padding: 14px;
+  resize: vertical;
+  border: 1px solid var(--network-line);
+  border-radius: 12px;
+  background: var(--network-control);
+  color: var(--network-text);
+  font: inherit;
+}
+.intelligence-network__dialogue .reference-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
 .intelligence-network__overview {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

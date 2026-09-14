@@ -1,12 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { IdaApiError, requestApi } from "./api-transport";
+import { readLocalDialogueReply, readLocalDialogueStatus } from "./local-dialogue-state";
 import { type VoiceActivity, VoiceControls } from "./VoiceControls";
-
-function payloadData(value: unknown): Record<string, unknown> | undefined {
-  if (!value || typeof value !== "object" || !("data" in value) || !value.data || typeof value.data !== "object")
-    return undefined;
-  return value.data as Record<string, unknown>;
-}
 
 /** Dialogue explicite partagé, voix cliente locale, sans mémoire ni outils automatiques. */
 export function LocalDialogue({
@@ -26,19 +21,14 @@ export function LocalDialogue({
   useEffect(() => {
     let active = true;
     setReady(false);
+    setStatus("Vérification du modèle local…");
     const statusController = new AbortController();
     void requestApi("/v1/intelligence/local/status", { signal: statusController.signal })
       .then((payload) => {
-        const data = payloadData(payload);
         if (!active) return;
-        setReady(data?.state === "READY");
-        setStatus(
-          data?.state === "READY"
-            ? "Qwen local disponible · expérimental · aucun cloud"
-            : data?.state === "BUSY"
-              ? "Modèle occupé · réessayez après sa réponse"
-              : "Modèle local indisponible ou désactivé",
-        );
+        const data = readLocalDialogueStatus(payload);
+        setReady(data.ready);
+        setStatus(data.message);
       })
       .catch(() => {
         if (active) {
@@ -62,7 +52,7 @@ export function LocalDialogue({
     setReply("");
     setHasAnswer(false);
     try {
-      const data = payloadData(
+      const text = readLocalDialogueReply(
         await requestApi(
           "/v1/intelligence/local/reply",
           {
@@ -76,8 +66,8 @@ export function LocalDialogue({
         ),
       );
       if (!current.signal.aborted) {
-        setReply(typeof data?.text === "string" ? data.text : "Réponse incomplète. Réessayez.");
-        setHasAnswer(typeof data?.text === "string" && !!data.text.trim());
+        setReply(text);
+        setHasAnswer(true);
       }
     } catch (error) {
       if (!current.signal.aborted)

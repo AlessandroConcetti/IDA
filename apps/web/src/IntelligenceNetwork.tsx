@@ -5,6 +5,8 @@ import {
   type IntelligenceNetwork as NetworkSnapshot,
 } from "../../../packages/contracts/src/intelligence-network";
 import { IdaApiError, requestApi } from "./api-transport";
+import { LocalDialogue } from "./LocalDialogue";
+import { allocationStatusLabel } from "./local-dialogue-state";
 import "./intelligence-network.css";
 
 const statusLabels: Record<NetworkProvider["status"], string> = {
@@ -95,7 +97,11 @@ function ProviderQuota({ provider, generatedAt }: { provider: NetworkProvider; g
       </div>
       {quota === null ? (
         <p className="intelligence-network__unknown">
-          Aucun quota observé. Le solde et la date de renouvellement sont inconnus.
+          {provider.locality === "LOCAL"
+            ? provider.key === "ollama"
+              ? "Pas de quota fournisseur cloud. Le dialogue est limité à une demande simultanée et 30 tentatives par heure sur ce serveur."
+              : "Calcul local sans quota fournisseur cloud. L’allocation applicable reste contrôlée côté serveur."
+            : "Aucun quota observé. Le solde et la date de renouvellement sont inconnus."}
         </p>
       ) : (
         <>
@@ -154,11 +160,17 @@ export function IntelligenceProviderCard({
         </div>
         <span className="intelligence-network__status" data-status={provider.status}>
           <span aria-hidden="true" />
-          {statusLabels[provider.status]}
+          {allocationStatusLabel(provider) ?? statusLabels[provider.status]}
         </span>
       </header>
       <code className="intelligence-network__model">{provider.model}</code>
       <p className="intelligence-network__role">{provider.role}</p>
+      {provider.locality === "LOCAL" && provider.key === "ollama" && (
+        <p className="intelligence-network__unknown">
+          L’allocation est ouverte pour chaque demande puis consommée. Pour vérifier le moteur ou lui parler, ouvrez le
+          dialogue local ci-dessus ; ce compteur n’indique pas si Ollama fonctionne.
+        </p>
+      )}
       <div className="intelligence-network__tags">
         <span>{lifecycleLabels[provider.lifecycle]}</span>
         <span>{costLabels[provider.cost]}</span>
@@ -279,6 +291,7 @@ export function IntelligenceNetwork() {
   const [revision, setRevision] = useState(0);
   const [status, setStatus] = useState("ALL");
   const [locality, setLocality] = useState("ALL");
+  const [dialogueOpen, setDialogueOpen] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -339,6 +352,23 @@ export function IntelligenceNetwork() {
           </p>
         </div>
       </aside>
+      <section className="intelligence-network__dialogue" aria-label="Utiliser le moteur local">
+        <div className="intelligence-network__dialogue-heading">
+          <div>
+            <h3>Parler à IDA sur ce PC</h3>
+            <p>Vérification du moteur à l’ouverture. Le calcul démarre seulement après « Envoyer ».</p>
+          </div>
+          <button
+            type="button"
+            aria-expanded={dialogueOpen}
+            aria-controls={`${filterId}-dialogue`}
+            onClick={() => setDialogueOpen((open) => !open)}
+          >
+            {dialogueOpen ? "Fermer le dialogue" : "Ouvrir le dialogue local"}
+          </button>
+        </div>
+        <div id={`${filterId}-dialogue`}>{dialogueOpen && <LocalDialogue />}</div>
+      </section>
       <div className="intelligence-network__live" role="status" aria-live="polite">
         {load.phase === "loading" && "Lecture du registre en cours…"}
         {data && (
