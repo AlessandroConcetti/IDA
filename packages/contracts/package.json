@@ -4,6 +4,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./local-chat": {
+      "types": "./src/local-chat.ts",
+      "import": "./dist/local-chat.js"
+    },
     "./intelligence-network": {
       "types": "./src/intelligence-network.ts",
       "import": "./dist/intelligence-network.js"

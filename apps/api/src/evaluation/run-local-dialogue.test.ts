@@ -87,6 +87,8 @@ describe("Synthetic local dialogue smoke: real isolated auth/Core, mocked infere
       anonymousRejected: true,
       sessionRevoked: true,
       generationRequests: 1,
+      savedHistoryVerified: true,
+      savedReplayVerified: true,
       expectedMarkerMatched: true,
       browserValidated: false,
       userDataAccessed: false,

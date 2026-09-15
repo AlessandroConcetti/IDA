@@ -1,6 +1,7 @@
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { intelligenceTextSchema } from "@ida/contracts/intelligence";
+import { localChatHistoryResponseSchema, localChatReplyResponseSchema } from "@ida/contracts/local-chat";
 import { createApp } from "../app.js";
 import { localPilot } from "./local-model-pin.js";
 
@@ -15,6 +16,7 @@ type SmokeFailure =
   | "LOCAL_MODEL_NOT_READY"
   | "LOCAL_REPLY_FAILED"
   | "LOCAL_RESPONSE_INVALID"
+  | "LOCAL_HISTORY_FAILED"
   | "SESSION_REVOCATION_FAILED";
 
 export class LocalDialogueSmokeError extends Error {
@@ -72,12 +74,14 @@ export async function runLocalDialogueSmoke(args: readonly string[]) {
     if (status.statusCode !== 200 || state?.state !== "READY" || state?.model !== localPilot.name)
       throw new LocalDialogueSmokeError("LOCAL_MODEL_NOT_READY");
 
-    // Exactly one authenticated generation request. Never retry or substitute a response.
+    // Exactly one new generation, then a replay of its saved ID (never a fallback).
+    const requestId = randomUUID();
+    const payload = { prompt: localDialogueSmokePrompt, requestId };
     const response = await app.inject({
       method: "POST",
       url: "/v1/intelligence/local/reply",
       headers: { cookie },
-      payload: { prompt: localDialogueSmokePrompt },
+      payload,
     });
     if (response.statusCode !== 200) throw new LocalDialogueSmokeError("LOCAL_REPLY_FAILED");
     const data = response.json().data;
@@ -90,6 +94,27 @@ export async function runLocalDialogueSmoke(args: readonly string[]) {
       data.experimental !== true
     )
       throw new LocalDialogueSmokeError("LOCAL_RESPONSE_INVALID");
+
+    const saved = localChatReplyResponseSchema.safeParse(response.json());
+    if (!saved.success || saved.data.data.exchange?.id !== requestId)
+      throw new LocalDialogueSmokeError("LOCAL_HISTORY_FAILED");
+    const history = await app.inject({ method: "GET", url: "/v1/intelligence/local/history", headers: { cookie } });
+    const historyData = localChatHistoryResponseSchema.safeParse(history.json());
+    const replay = await app.inject({
+      method: "POST",
+      url: "/v1/intelligence/local/reply",
+      headers: { cookie },
+      payload,
+    });
+    if (
+      history.statusCode !== 200 ||
+      !historyData.success ||
+      historyData.data.data.items.length !== 1 ||
+      historyData.data.data.items[0]?.id !== requestId ||
+      replay.statusCode !== 200 ||
+      replay.body !== response.body
+    )
+      throw new LocalDialogueSmokeError("LOCAL_HISTORY_FAILED");
 
     const lock = await app.inject({ method: "POST", url: "/v1/auth/lock", headers: { cookie } });
     const afterLock = await app.inject({ method: "GET", url: "/v1/intelligence/local/status", headers: { cookie } });
@@ -105,6 +130,8 @@ export async function runLocalDialogueSmoke(args: readonly string[]) {
       authenticatedRouteSucceeded: true,
       sessionRevoked: true,
       generationRequests: 1,
+      savedHistoryVerified: true,
+      savedReplayVerified: true,
       expectedMarkerMatched: data.text.trim() === "IDA_LOCAL_OK",
       browserValidated: false,
       userDataAccessed: false,

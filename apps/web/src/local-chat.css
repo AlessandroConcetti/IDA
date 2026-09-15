@@ -1,0 +1,120 @@
+.local-dialogue .local-chat-history {
+  margin: 20px 0;
+  padding: clamp(14px, 2vw, 22px);
+  border: 1px solid var(--glass-edge, #ffffff26);
+  border-radius: 18px;
+  background: var(--glass-panel, #15232e80);
+  color: inherit;
+  min-width: 0;
+}
+
+.local-dialogue .local-chat-history__heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.local-dialogue .local-chat-history__heading h3 {
+  margin: 0 0 6px;
+}
+
+.local-dialogue .local-chat-history__heading p,
+.local-dialogue .local-chat-history__privacy {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.6;
+  opacity: 0.8;
+}
+
+.local-dialogue .local-chat-history__heading button {
+  flex-shrink: 0;
+  min-height: 42px;
+  padding: 10px 14px;
+}
+
+.local-dialogue .local-chat-history__list {
+  display: grid;
+  gap: 20px;
+  max-height: min(520px, 62dvh);
+  margin: 20px 0;
+  padding: 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+  scrollbar-gutter: stable;
+}
+
+.local-dialogue .local-chat-history__list:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 4px;
+  border-radius: 10px;
+}
+
+.local-dialogue .local-chat-exchange {
+  min-width: 0;
+}
+
+.local-dialogue .local-chat-exchange__meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 6px 16px;
+  margin-bottom: 9px;
+  font-size: 0.74rem;
+  opacity: 0.72;
+}
+
+.local-dialogue .local-chat-exchange__question,
+.local-dialogue .local-chat-exchange__answer {
+  padding: 14px 16px;
+  border: 1px solid var(--glass-edge, #ffffff26);
+  border-radius: 14px;
+  background: #ffffff07;
+}
+
+.local-dialogue .local-chat-exchange__question {
+  margin-left: clamp(0px, 3vw, 30px);
+  margin-bottom: 8px;
+  background: #7fc1db0b;
+}
+
+.local-dialogue .local-chat-exchange h4 {
+  margin: 0 0 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.local-dialogue .local-chat-exchange p {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.65;
+}
+
+.local-dialogue .local-chat-history__empty {
+  padding: 16px 0;
+  opacity: 0.8;
+}
+
+.local-dialogue .local-chat-history__error,
+.local-dialogue .local-chat-saved {
+  padding: 12px 14px;
+  border-left: 3px solid currentColor;
+  border-radius: 6px;
+  background: #ffffff08;
+  font-size: 0.86rem;
+  line-height: 1.6;
+}
+
+@media (max-width: 640px) {
+  .local-dialogue .local-chat-history__heading button {
+    width: 100%;
+  }
+
+  .local-dialogue .local-chat-exchange__question,
+  .local-dialogue .local-chat-exchange__answer {
+    padding: 12px;
+  }
+}

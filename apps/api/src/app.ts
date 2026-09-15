@@ -114,7 +114,8 @@ import {
 } from "./local-auth.js";
 import { resolveIdentityMode, resolveLocalWebOrigin } from "./runtime-config.js";
 import { registerBuiltWeb } from "./built-web.js";
-import { registerLocalDialogue } from "./local-dialogue.js";
+import { LocalChatStore } from "./local-chat-store.js";
+import { localChatReadTool, localChatWriteTool, registerLocalDialogue } from "./local-dialogue.js";
 import { intelligenceNetworkReadTool, registerIntelligenceNetwork } from "./intelligence-network.js";
 import { homeWeatherTool, registerHomeWeather } from "./home-weather.js";
 import { type HomeAssistantBinding, homeDeviceTool, registerHomeDevice } from "./home-device.js";
@@ -1100,6 +1101,8 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   const modules = createModuleRegistry();
   const toolGateway = new ToolGateway(undefined, [
     intelligenceNetworkReadTool,
+    localChatReadTool,
+    localChatWriteTool,
     creativeReadTool,
     creativeWriteTool,
     homeWeatherTool,
@@ -2533,9 +2536,17 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     authorize: assertToolAuthorized,
     revalidate: revalidateCatalogRead,
   });
+  const localChatStore = new LocalChatStore(database, serverNow);
+  try {
+    await localChatStore.initialize();
+  } catch (error) {
+    await database.close();
+    throw error;
+  }
   const intelligenceRegistry = registerLocalDialogue(app, database, {
     enabled: options.localDialogueEnabled === true,
     locked: identityMode === "LOCAL_LOCK",
+    history: { store: localChatStore, authorize: assertToolAuthorized, revalidate: revalidateCatalogRead },
   });
   registerIntelligenceNetwork(app, intelligenceRegistry, {
     authorize: (request) => assertToolAuthorized(request, intelligenceNetworkReadTool),
