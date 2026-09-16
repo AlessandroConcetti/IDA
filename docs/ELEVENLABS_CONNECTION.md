@@ -1,6 +1,6 @@
 # ElevenLabs — préparation du connecteur vocal
 
-État au 16 septembre 2026 : **PREPARED / non activé**.
+État vérifié le 17 septembre 2026 : **credential stocké / TTS non activé**.
 
 ElevenLabs est un fournisseur de synthèse vocale, pas un modèle LLM. Son credential
 reste donc séparé du `ProviderRegistry` texte (Ollama, Mistral, Gemini, etc.). Le
@@ -16,6 +16,9 @@ argument, variable d'environnement, log, frontend ou conversation. `Bypass` ne
 s'applique qu'à cette exécution du processus PowerShell ; la stratégie globale
 n'est pas modifiée. Le fichier attendu est
 `.data/connector-secrets/wsp_demo_aless.elevenlabs.dpapi`.
+
+La présence de ce fichier a été vérifiée sans déchiffrement : fichier régulier,
+sans lien symbolique, 652 octets. Sa valeur n'a pas été lue ni affichée.
 
 Cette étape ne contacte pas ElevenLabs et ne prouve pas que la clé est valide.
 Le connecteur TTS reste à implémenter derrière un contrat dédié (texte borné,
