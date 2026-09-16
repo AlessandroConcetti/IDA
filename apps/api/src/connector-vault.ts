@@ -16,6 +16,10 @@ export function windowsHomeAssistantSecret(vaultRoot: string, workspaceId: strin
 export const intelligenceSecretProviders = ["groq", "gemini", "mistral", "openai"] as const;
 export type IntelligenceSecretProvider = (typeof intelligenceSecretProviders)[number];
 
+/** Voice providers use the same DPAPI vault, but are not LLM registrations. */
+export const voiceSecretProviders = ["elevenlabs"] as const;
+export type VoiceSecretProvider = (typeof voiceSecretProviders)[number];
+
 /** Même coffre DPAPI que les connecteurs ; aucun secret issu du navigateur ou de l'environnement. */
 export function windowsIntelligenceSecret(
   vaultRoot: string,
@@ -24,6 +28,16 @@ export function windowsIntelligenceSecret(
 ): ConnectorSecret {
   if (!intelligenceSecretProviders.includes(provider)) throw new Error("INVALID_VAULT_BINDING");
   return windowsConnectorSecret(vaultRoot, workspaceId, provider, "INTELLIGENCE_SECRET_UNAVAILABLE");
+}
+
+/** ElevenLabs credential is isolated from the text-model provider registry. */
+export function windowsVoiceSecret(
+  vaultRoot: string,
+  workspaceId: string,
+  provider: VoiceSecretProvider,
+): ConnectorSecret {
+  if (!voiceSecretProviders.includes(provider)) throw new Error("INVALID_VAULT_BINDING");
+  return windowsConnectorSecret(vaultRoot, workspaceId, provider, "VOICE_SECRET_UNAVAILABLE");
 }
 
 function windowsConnectorSecret(

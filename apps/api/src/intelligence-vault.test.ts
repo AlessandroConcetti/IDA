@@ -6,7 +6,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   type IntelligenceSecretProvider,
   intelligenceSecretProviders,
+  type VoiceSecretProvider,
+  voiceSecretProviders,
   windowsIntelligenceSecret,
+  windowsVoiceSecret,
 } from "./connector-vault.js";
 
 vi.mock("node:fs/promises", () => ({ lstat: vi.fn() }));
@@ -38,6 +41,9 @@ async function flush() {
 function vault(provider: IntelligenceSecretProvider = "groq") {
   return windowsIntelligenceSecret(root, workspaceId, provider);
 }
+function voiceVault(provider: VoiceSecretProvider = "elevenlabs") {
+  return windowsVoiceSecret(root, workspaceId, provider);
+}
 
 beforeEach(() => {
   Object.defineProperty(process, "platform", { configurable: true, value: "win32" });
@@ -64,8 +70,19 @@ afterEach(() => {
 describe("Intelligence vault, mocked metadata and processes only", () => {
   it("declares an explicit provider allowlist", () => {
     expect(intelligenceSecretProviders).toEqual(["groq", "gemini", "mistral", "openai"]);
+    expect(voiceSecretProviders).toEqual(["elevenlabs"]);
     expect(metadata).not.toHaveBeenCalled();
     expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("keeps voice credentials outside the LLM provider allowlist", async () => {
+    const secret = voiceVault();
+    expect(await secret.available()).toBe(true);
+    expect(metadata).toHaveBeenCalledExactlyOnceWith(resolve(root, `${workspaceId}.elevenlabs.dpapi`));
+    expect(execute).not.toHaveBeenCalled();
+    expect(() => windowsVoiceSecret(root, workspaceId, "mistral" as VoiceSecretProvider)).toThrow(
+      "INVALID_VAULT_BINDING",
+    );
   });
 
   it.each(["other", "GROQ", "../groq", "groq/other", "groq.dpapi", "", "groq\n"])(

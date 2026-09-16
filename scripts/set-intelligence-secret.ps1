@@ -1,5 +1,5 @@
 param(
-    [Parameter(Mandatory = $true)][ValidateSet('groq', 'gemini', 'mistral', 'openai')][string]$Provider,
+    [Parameter(Mandatory = $true)][ValidateSet('groq', 'gemini', 'mistral', 'openai', 'elevenlabs')][string]$Provider,
     [Parameter(Mandatory = $true)][ValidatePattern('^wsp_[a-zA-Z0-9_]+$')][string]$WorkspaceId
 )
 $ErrorActionPreference = 'Stop'
@@ -53,6 +53,10 @@ try {
         $idaStream.Write($idaBytes, 0, $idaBytes.Length)
     } finally { $idaStream.Dispose() }
     Write-Host 'Clé enregistrée avec DPAPI CurrentUser, pour ce workspace et ce fournisseur uniquement.'
-    Write-Host 'Activation encore bloquée : plan gratuit sans dépassement, quota réel et consentement cloud à vérifier.'
+    if ($Provider -eq 'elevenlabs') {
+        Write-Host 'Clé vocale enregistrée : le connecteur ElevenLabs reste PREPARED et aucun appel audio ne sera effectué automatiquement.'
+    } else {
+        Write-Host 'Activation encore bloquée : plan gratuit sans dépassement, quota réel et consentement cloud à vérifier.'
+    }
     Write-Host 'La présence de ce fichier ne prouve pas que la clé fonctionne et ne modifie pas le registre en cours.'
 } finally { $idaToken.Dispose() }
