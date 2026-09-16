@@ -24,12 +24,22 @@ while ($idaAncestor) {
 }
 $null = New-Item -ItemType Directory -Path $idaVaultRoot -Force
 $idaOwner = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
-$idaAcl = New-Object System.Security.AccessControl.DirectorySecurity
-$idaAcl.SetAccessRuleProtection($true, $false)
-$idaAcl.SetOwner($idaOwner)
-$idaRule = New-Object System.Security.AccessControl.FileSystemAccessRule($idaOwner, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
-$idaAcl.AddAccessRule($idaRule)
-Set-Acl -LiteralPath $idaVaultRoot -AclObject $idaAcl
+# Reuse an already-private vault. Set-Acl with a freshly constructed owner/SACL
+# can require SeSecurityPrivilege on standard Windows accounts even when the
+# directory is already correctly protected; never fail a second provider for
+# that reason. If the directory is new or not private, refuse instead of
+# weakening permissions or attempting an elevation.
+$idaExistingAcl = Get-Acl -LiteralPath $idaVaultRoot
+$idaRules = @($idaExistingAcl.Access)
+$idaPrivate = $idaExistingAcl.AreAccessRulesProtected -and
+    $idaExistingAcl.GetOwner([System.Security.Principal.SecurityIdentifier]).Value -eq $idaOwner.Value -and
+    $idaRules.Count -eq 1 -and
+    $idaRules[0].IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value -eq $idaOwner.Value -and
+    $idaRules[0].AccessControlType -eq [System.Security.AccessControl.AccessControlType]::Allow -and
+    $idaRules[0].FileSystemRights -band [System.Security.AccessControl.FileSystemRights]::FullControl
+if (-not $idaPrivate) {
+    throw 'Le coffre existe mais ses ACL ne sont pas déjà privées pour ce compte. Corrigez-les explicitement puis relancez.'
+}
 Write-Host "Renseigne ta clé $Provider ici. Saisie masquée ; stockage chiffré sur ce PC uniquement."
 Write-Host 'Aucun appel API, aucune connexion ni facturation ne seront activés par cette commande.'
 $idaToken = Read-Host 'Clé API (ne pas la coller dans le Chat IDA ou Codex)' -AsSecureString
