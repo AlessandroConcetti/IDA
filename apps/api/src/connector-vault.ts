@@ -10,8 +10,30 @@ export interface ConnectorSecret {
 
 /** Windows DPAPI CurrentUser : fichier chiffré privé, déchiffrement au dernier moment. */
 export function windowsHomeAssistantSecret(vaultRoot: string, workspaceId: string): ConnectorSecret {
+  return windowsConnectorSecret(vaultRoot, workspaceId, "home-assistant", "HOME_SECRET_UNAVAILABLE");
+}
+
+export const intelligenceSecretProviders = ["groq", "gemini", "mistral", "openai"] as const;
+export type IntelligenceSecretProvider = (typeof intelligenceSecretProviders)[number];
+
+/** Même coffre DPAPI que les connecteurs ; aucun secret issu du navigateur ou de l'environnement. */
+export function windowsIntelligenceSecret(
+  vaultRoot: string,
+  workspaceId: string,
+  provider: IntelligenceSecretProvider,
+): ConnectorSecret {
+  if (!intelligenceSecretProviders.includes(provider)) throw new Error("INVALID_VAULT_BINDING");
+  return windowsConnectorSecret(vaultRoot, workspaceId, provider, "INTELLIGENCE_SECRET_UNAVAILABLE");
+}
+
+function windowsConnectorSecret(
+  vaultRoot: string,
+  workspaceId: string,
+  connector: string,
+  unavailableCode: string,
+): ConnectorSecret {
   if (!isAbsolute(vaultRoot) || !/^wsp_[a-z0-9_]+$/i.test(workspaceId)) throw new Error("INVALID_VAULT_BINDING");
-  const path = resolve(vaultRoot, `${workspaceId}.home-assistant.dpapi`);
+  const path = resolve(vaultRoot, `${workspaceId}.${connector}.dpapi`);
   const script = fileURLToPath(new URL("../../../scripts/read-home-assistant-secret.ps1", import.meta.url));
   async function available() {
     if (process.platform !== "win32") return false;
@@ -26,7 +48,8 @@ export function windowsHomeAssistantSecret(vaultRoot: string, workspaceId: strin
     available,
     async resolve(signal) {
       signal.throwIfAborted();
-      if (!(await available())) throw new Error("HOME_SECRET_UNAVAILABLE");
+      if (!(await available())) throw new Error(unavailableCode);
+      signal.throwIfAborted();
       return await new Promise<string>((done, reject) => {
         // Aucun shell interpolé et aucun token dans les arguments ou l'environnement.
         execFile(
@@ -34,7 +57,7 @@ export function windowsHomeAssistantSecret(vaultRoot: string, workspaceId: strin
           ["-NoProfile", "-NonInteractive", "-File", script, "-Path", path],
           { windowsHide: true, timeout: 5000, maxBuffer: 16_384, signal },
           (error, stdout) => {
-            if (error || signal.aborted) reject(new Error("HOME_SECRET_UNAVAILABLE"));
+            if (error || signal.aborted || !stdout.trim()) reject(new Error(unavailableCode));
             else done(stdout.trim());
           },
         );
