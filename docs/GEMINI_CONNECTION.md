@@ -1,8 +1,8 @@
 # Gemini : authentification vérifiée, Chat cloud encore bloqué par le quota
 
-État au 16 septembre 2026 : la clé Gemini du workspace `wsp_demo_aless` est
-présente dans le coffre DPAPI CurrentUser. Un diagnostic réel, sans prompt ni
-génération, a obtenu `HTTP 200`, a trouvé `gemini-3.8-flash` et a confirmé
+État vérifié le 17 septembre 2026 : la clé Gemini du workspace `wsp_demo_aless`
+est présente dans le coffre DPAPI CurrentUser. Un diagnostic réel, sans prompt
+ni génération, a obtenu `HTTP 200`, a trouvé `gemini-3.8-flash` et a confirmé
 `generateContent` dans les méthodes supportées.
 
 Commande de diagnostic (GET uniquement) :
