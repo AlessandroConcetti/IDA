@@ -18,7 +18,7 @@ describe("Thème global, préférence purement visuelle", () => {
     const root = { dataset: {} } as HTMLElement;
     const setItem = vi.fn();
     applyTheme("scifi", root, { setItem });
-    expect(root.dataset).toEqual({ theme: "scifi" });
+    expect(root.dataset).toEqual({ theme: "scifi", experience: "scifi" });
     expect(setItem).toHaveBeenCalledExactlyOnceWith("ida.ui.theme.v1", "scifi");
     applyTheme("classic", root, {
       setItem: () => {

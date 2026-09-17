@@ -14,23 +14,33 @@ describe("Coffre connecteur — fixture DPAPI sans credential utilisateur", () =
   });
   it.runIf(process.platform === "win32")(
     "respecte la politique Windows, sans contourner le refus de déchiffrement",
-    async () => {
+    async ({ skip }) => {
       const root = await mkdtemp(join(tmpdir(), "ida-vault-fixture-"));
       if (dirname(resolve(root)) !== resolve(tmpdir()) || !root.includes("ida-vault-fixture-"))
         throw new Error("UNEXPECTED_FIXTURE_PATH");
       try {
         const vault = windowsHomeAssistantSecret(root, "wsp_fixture");
         expect(await vault.available()).toBe(false);
-        const protectedFixture = await execute(
-          "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
-          [
-            "-NoProfile",
-            "-NonInteractive",
-            "-Command",
-            "Import-Module 'C:/Windows/System32/WindowsPowerShell/v1.0/Modules/Microsoft.PowerShell.Security/Microsoft.PowerShell.Security.psd1' -ErrorAction Stop; ConvertFrom-SecureString (ConvertTo-SecureString 'SYNTHETIC_DPAPI_FIXTURE_ONLY' -AsPlainText -Force)",
-          ],
-          { windowsHide: true, timeout: 5000 },
-        );
+        let protectedFixture: { stdout: string };
+        try {
+          protectedFixture = await execute(
+            "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+            [
+              "-NoProfile",
+              "-NonInteractive",
+              "-Command",
+              "Import-Module 'C:/Windows/System32/WindowsPowerShell/v1.0/Modules/Microsoft.PowerShell.Security/Microsoft.PowerShell.Security.psd1' -ErrorAction Stop; ConvertFrom-SecureString (ConvertTo-SecureString 'SYNTHETIC_DPAPI_FIXTURE_ONLY' -AsPlainText -Force)",
+            ],
+            { windowsHide: true, timeout: 5000 },
+          );
+        } catch (error) {
+          const detail = error instanceof Error ? error.message : String(error);
+          if (/ProfileMayNotBeLoaded|protection des données a échoué|CryptographicException/iu.test(detail)) {
+            skip("Profil utilisateur Windows non chargé dans le runner ; fixture DPAPI non générable ici.");
+            return;
+          }
+          throw error;
+        }
         const path = join(root, "wsp_fixture.home-assistant.dpapi");
         await writeFile(path, protectedFixture.stdout.trim(), { flag: "wx" });
         expect(await vault.available()).toBe(true);

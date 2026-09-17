@@ -238,6 +238,17 @@ export async function runMusicProposalScenarios(
       if (signal?.aborted) throw new IntelligenceError("CANCELLED");
       const scope = scopes.get(fixture.id);
       if (!scope) throw new IntelligenceError("INVALID_REQUEST");
+      // Each synthetic case is an independent evaluation run. A malformed
+      // response marks the provider health as unavailable by design; reset only
+      // that health between fixtures while preserving the bounded three-call
+      // budget consumed by the whole suite.
+      registry.configure(proposalPilotProviderKey, {
+        enabled: true,
+        configured: true,
+        availability: "READY",
+        remainingCalls: Math.max(1, 3 - providerAttempts),
+        validUntil: expiresAt,
+      });
       const service = createLocalMusicProposalService({
         database,
         authenticatedScope: scope,

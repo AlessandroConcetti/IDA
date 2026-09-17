@@ -139,8 +139,15 @@ describe("Fiches catalogue — lectures HTTP isolées", () => {
     const mediaRead = vi.spyOn(database, "findMedia");
     const response = await app.inject({ method: "GET", url: `/v1/${resource}/${id}` });
     expect(response.statusCode).toBe(400);
+    // Encoded API paths are rejected by the canonical-path guard before
+    // Fastify decodes route parameters; plain malformed IDs reach the route's
+    // resource-specific validator.
     expect(response.json().error.code).toBe(
-      resource === "tracks" ? "INVALID_TRACK_DETAIL_PARAMS" : "INVALID_MEDIA_DETAIL_PARAMS",
+      /%/u.test(id)
+        ? "BROWSER_PATH_INVALID"
+        : resource === "tracks"
+          ? "INVALID_TRACK_DETAIL_PARAMS"
+          : "INVALID_MEDIA_DETAIL_PARAMS",
     );
     expect(trackRead).not.toHaveBeenCalled();
     expect(mediaRead).not.toHaveBeenCalled();
