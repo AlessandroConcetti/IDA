@@ -119,6 +119,8 @@ import { localChatReadTool, localChatWriteTool, registerLocalDialogue } from "./
 import { intelligenceNetworkReadTool, registerIntelligenceNetwork } from "./intelligence-network.js";
 import { homeWeatherTool, registerHomeWeather } from "./home-weather.js";
 import { type HomeAssistantBinding, homeDeviceTool, registerHomeDevice } from "./home-device.js";
+import type { McpFileBinding } from "./mcp-scoped-files.js";
+import { mcpReadFileTool, mcpSearchFilesTool, registerMcpTools } from "./mcp-tools.js";
 import { defaultCalendarRange, getWorkspaceDayRange, type ResolvedCalendarRange } from "./workspace-time.js";
 
 export type CreateAppOptions = DemoDatabaseOptions & {
@@ -128,6 +130,7 @@ export type CreateAppOptions = DemoDatabaseOptions & {
   localDialogueEnabled?: boolean;
   weatherEnabled?: boolean;
   homeAssistant?: HomeAssistantBinding | undefined;
+  mcpFiles?: McpFileBinding | undefined;
   localBuiltWeb?: { root: string; origin: string };
 };
 
@@ -1107,6 +1110,8 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     creativeWriteTool,
     homeWeatherTool,
     homeDeviceTool,
+    mcpReadFileTool,
+    mcpSearchFilesTool,
     { toolKey: "update_artist_profile", moduleKey: "MEMORY", permission: "WRITE" },
     { toolKey: "propose_preference_memory", moduleKey: "MEMORY", permission: "WRITE" },
     { toolKey: "confirm_memory", moduleKey: "MEMORY", permission: "WRITE" },
@@ -2566,6 +2571,13 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     authorize: (request) => assertToolAuthorized(request, homeDeviceTool),
     revalidate: (request) => revalidateCatalogRead(request, homeDeviceTool),
     now: serverNow,
+  });
+
+  registerMcpTools(app, database, {
+    locked: identityMode === "LOCAL_LOCK",
+    binding: options.mcpFiles,
+    authorize: assertToolAuthorized,
+    revalidate: revalidateCatalogRead,
   });
 
   if (options.localBuiltWeb) {

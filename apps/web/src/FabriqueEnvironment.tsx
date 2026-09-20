@@ -4,10 +4,11 @@ import { IdaApiError } from "./api-transport";
 import { CreativeEngineWorkspace } from "./CreativeEngineWorkspace";
 import type { NavigationId } from "./data";
 import { LocalDialogue } from "./LocalDialogue";
+import { McpToolsPanel } from "./McpToolsPanel";
 import { LineIcon, ReferenceRail, Sheet } from "./ReferenceChrome";
 
 type ProjectKind = "Application" | "Agent" | "Automatisation" | "Outil";
-type View = "create" | "templates" | "projects" | "detail" | "collaborate" | "dialogue";
+type View = "create" | "templates" | "projects" | "detail" | "collaborate" | "dialogue" | "mcp";
 const kinds: { name: ProjectKind; icon: string; description: string }[] = [
   { name: "Application", icon: "grid", description: "Dessiner une application utile" },
   { name: "Agent", icon: "agent", description: "Concevoir un agent spécialisé" },
@@ -294,6 +295,14 @@ export function FabriqueEnvironment({
         </header>
         <div className="reference-panels fabrique-panels">
           <section className="reference-glass fabrique-new">
+            <button className="reference-row" type="button" onClick={() => open("mcp")}>
+              <LineIcon kind="tool" />
+              <span>
+                <strong>Outils MCP</strong>
+                <small>Lire et rechercher dans les documents autorisés</small>
+              </span>
+              <span aria-hidden="true">→</span>
+            </button>
             <button className="reference-row" type="button" onClick={() => setEngineOpen(true)}>
               <LineIcon kind="grid" />
               <span>
@@ -401,7 +410,9 @@ export function FabriqueEnvironment({
       {view ? (
         <Sheet
           title={
-            view === "create"
+            view === "mcp"
+              ? "Outils MCP · lecture documentaire"
+              : view === "create"
               ? `Nouveau projet · ${kind}`
               : view === "templates"
                 ? "Templates"
@@ -415,6 +426,7 @@ export function FabriqueEnvironment({
           }
           close={() => open(null)}
         >
+          {view === "mcp" ? <McpToolsPanel /> : null}
           {view === "create" ? (
             <form
               className="fabrique-form"

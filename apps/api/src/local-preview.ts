@@ -19,6 +19,15 @@ const app = await createApp({
     : {}),
   // Lecture météo personnelle uniquement, déclenchée et consentie dans l'écran Home.
   weatherEnabled: true,
+  // Reviewed project documentation only, never a general filesystem/root grant.
+  mcpFiles: {
+    workspaceId: demoContext.workspaceId,
+    root: fileURLToPath(new URL("../../../docs", import.meta.url)),
+    resources: [
+      { id: "mcp-guide", name: "Guide MCP IDA", relativePath: "MCP_INTEGRATION.md" },
+      { id: "open-source-triage", name: "Comparatif GitHub / open source", relativePath: "OPEN_SOURCE_TRIAGE_20260919.md" },
+    ],
+  },
   homeAssistant: await loadHomeAssistantBinding(
     fileURLToPath(new URL("../../../.data", import.meta.url)),
     demoContext.workspaceId,

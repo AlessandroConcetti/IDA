@@ -9,12 +9,14 @@
     "build": "pnpm --filter @ida/contracts build && pnpm --filter @ida/domain build && pnpm --filter @ida/api build && pnpm --filter @ida/web build",
     "typecheck": "pnpm --filter @ida/contracts typecheck && pnpm --filter @ida/domain typecheck && pnpm --filter @ida/api typecheck && pnpm --filter @ida/web typecheck",
     "test": "pnpm --filter @ida/contracts build && pnpm --filter @ida/domain build && vitest run",
+    "test:e2e": "playwright test",
     "lint": "biome check .",
     "format": "biome format --write ."
   },
   "devDependencies": {
-    "@biomejs/biome": "latest",
-    "typescript": "latest",
-    "vitest": "latest"
+    "@biomejs/biome": "2.5.13",
+    "@playwright/test": "1.63.0",
+    "typescript": "7.0.2",
+    "vitest": "4.1.11"
   }
 }

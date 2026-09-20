@@ -10,15 +10,18 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@electric-sql/pglite": "latest",
-    "@fastify/cors": "latest",
+    "@electric-sql/pglite": "0.5.8",
+    "@fastify/cors": "11.3.0",
     "@fastify/multipart": "^10.1.1",
     "@ida/contracts": "workspace:*",
     "@ida/domain": "workspace:*",
+    "@modelcontextprotocol/client": "2.0.0",
+    "@modelcontextprotocol/core": "2.0.0",
+    "@modelcontextprotocol/server": "2.0.0",
     "@simplewebauthn/server": "14.0.1",
-    "fastify": "latest"
+    "fastify": "5.12.1"
   },
   "devDependencies": {
-    "@types/node": "latest"
+    "@types/node": "26.4.0"
   }
 }

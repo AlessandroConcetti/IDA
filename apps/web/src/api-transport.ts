@@ -13,6 +13,7 @@ export const apiBaseUrl = (import.meta.env.VITE_IDA_API_URL?.trim() ?? "").repla
 const pendingWorkspaceRequests = new Set<AbortController>();
 const authenticationListeners = new Set<() => void>();
 const workspaceMutationListeners = new Set<() => void>();
+const workspaceInvalidationListeners = new Set<() => void>();
 let workspaceGeneration = 0;
 
 export function onWorkspaceMutation(listener: () => void): () => void {
@@ -35,6 +36,14 @@ export function invalidateWorkspaceRequests(): void {
   workspaceGeneration += 1;
   for (const controller of pendingWorkspaceRequests) controller.abort();
   pendingWorkspaceRequests.clear();
+  for (const listener of workspaceInvalidationListeners) {
+    try { listener(); } catch { /* Cleanup cannot interrupt session invalidation. */ }
+  }
+}
+
+export function onWorkspaceInvalidated(listener: () => void): () => void {
+  workspaceInvalidationListeners.add(listener);
+  return () => workspaceInvalidationListeners.delete(listener);
 }
 
 export function onAuthenticationRequired(listener: () => void): () => void {
