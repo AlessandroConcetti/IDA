@@ -5,6 +5,7 @@ import {
 } from "@ida/contracts/intelligence-network";
 import { type ProviderCandidate, type ProviderRegistry, QuotaManager } from "@ida/domain";
 import type { FastifyInstance, FastifyRequest } from "fastify";
+import { providerAssignmentRole } from "./intelligence-assignments.js";
 import { preparedIntelligenceOffers } from "./intelligence-offers.js";
 
 export const intelligenceNetworkReadTool = {
@@ -50,7 +51,7 @@ export function buildIntelligenceNetwork(registry: ProviderRegistry, now = new D
       key: provider.manifest.key,
       name: provider.manifest.key,
       model: model.id,
-      role: "Modèle inscrit au registre partagé",
+      role: providerAssignmentRole(provider.manifest.key),
       lifecycle: "REGISTERED" as const,
       status: status(provider, model, now.getTime()),
       locality: provider.manifest.locality,
