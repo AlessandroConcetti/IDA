@@ -1,0 +1,353 @@
+/* Semantic micro-motion: decoration, never telemetry. Every loop rests for most of its duration. */
+.hub-environment .hub-animated-icon {
+  --hub-icon-phase: 0s;
+  display: block;
+  flex: none;
+  overflow: visible;
+}
+.hub-environment .hub-animated-icon * {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-delay: calc(var(--hub-icon-phase, 0s) + var(--hub-icon-part-delay, 0s));
+}
+.hub-environment .hub-agenda .hub-animated-icon {
+  --hub-icon-phase: -1.2s;
+}
+.hub-environment .hub-house .hub-animated-icon {
+  --hub-icon-phase: -3.8s;
+}
+.hub-environment .hub-weather .hub-animated-icon {
+  --hub-icon-phase: -5.1s;
+}
+.hub-environment .hub-messages .hub-animated-icon {
+  --hub-icon-phase: -6.4s;
+}
+.hub-environment .hub-finance .hub-animated-icon {
+  --hub-icon-phase: -2.6s;
+}
+.hub-environment .hub-care .hub-animated-icon {
+  --hub-icon-phase: -4.7s;
+}
+.hub-environment .hub-music .hub-animated-icon {
+  --hub-icon-phase: -8.1s;
+}
+.hub-environment .hub-agents .hub-animated-icon {
+  --hub-icon-phase: -6.9s;
+}
+.hub-environment .hub-activity .hub-animated-icon {
+  --hub-icon-phase: -9.2s;
+}
+.hub-environment .hub-icon-part-2 {
+  --hub-icon-part-delay: 0.18s;
+}
+.hub-environment .hub-icon-part-3 {
+  --hub-icon-part-delay: 0.36s;
+}
+.hub-environment .hub-icon-part-4 {
+  --hub-icon-part-delay: 0.54s;
+}
+
+.hub-environment .hub-icon-flap {
+  transform-origin: 50% 0;
+  animation-name: hub-icon-open-envelope;
+  animation-duration: 10s;
+}
+.hub-environment .hub-icon-letter {
+  animation-name: hub-icon-letter-rise;
+  animation-duration: 10s;
+}
+.hub-environment .hub-icon-bar {
+  transform-origin: 50% 100%;
+  animation-name: hub-icon-chart-breathe;
+  animation-duration: 11s;
+}
+.hub-environment .hub-icon-links path {
+  stroke-dasharray: 1;
+  animation-name: hub-icon-connect;
+  animation-duration: 12s;
+}
+.hub-environment .hub-icon-heart {
+  animation-name: hub-icon-double-beat;
+  animation-duration: 8.6s;
+}
+.hub-environment .hub-icon-note {
+  animation-name: hub-icon-note-sway;
+  animation-duration: 9.8s;
+}
+.hub-environment .hub-icon-weather-sun {
+  animation-name: hub-icon-sun-peek;
+  animation-duration: 12s;
+}
+.hub-environment .hub-icon-rain path {
+  opacity: 0.4;
+  animation-name: hub-icon-rain-drift;
+  animation-duration: 12s;
+}
+.hub-environment .hub-icon-window,
+.hub-environment .hub-icon-date {
+  fill: currentColor;
+  fill-opacity: 0.45;
+  opacity: 0.55;
+  animation-name: hub-icon-light;
+  animation-duration: 10.8s;
+}
+.hub-environment .hub-icon-hand {
+  transform-box: view-box;
+  transform-origin: 12px 12px;
+  animation-name: hub-icon-hand-step;
+  animation-duration: 11s;
+}
+.hub-environment .hub-icon-tile {
+  animation-name: hub-icon-domino;
+  animation-duration: 9.4s;
+}
+.hub-environment .hub-icon-filament {
+  opacity: 0.6;
+  animation-name: hub-icon-light;
+  animation-duration: 8.8s;
+}
+.hub-environment .hub-icon-bulb-rays {
+  opacity: 0.4;
+  animation-name: hub-icon-light;
+  animation-duration: 8.8s;
+}
+.hub-environment .hub-icon-meridian {
+  transform-box: view-box;
+  transform-origin: 12px 12px;
+  animation-name: hub-icon-meridian-turn;
+  animation-duration: 11.7s;
+}
+.hub-environment .hub-icon-written path {
+  stroke-dasharray: 1;
+  animation-name: hub-icon-writing;
+  animation-duration: 10.4s;
+}
+
+@keyframes hub-icon-open-envelope {
+  0%,
+  72%,
+  100% {
+    transform: scaleY(1);
+  }
+  79%,
+  89% {
+    transform: scaleY(-0.7);
+  }
+  95% {
+    transform: scaleY(1);
+  }
+}
+@keyframes hub-icon-letter-rise {
+  0%,
+  77%,
+  100% {
+    transform: translateY(0);
+  }
+  84%,
+  89% {
+    transform: translateY(-1.5px);
+  }
+  95% {
+    transform: translateY(0);
+  }
+}
+@keyframes hub-icon-chart-breathe {
+  0%,
+  75%,
+  100% {
+    transform: scaleY(1);
+  }
+  82% {
+    transform: scaleY(0.68);
+  }
+  90% {
+    transform: scaleY(1.08);
+  }
+  96% {
+    transform: scaleY(1);
+  }
+}
+@keyframes hub-icon-connect {
+  0%,
+  71%,
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  79% {
+    stroke-dashoffset: 0.68;
+    opacity: 0.45;
+  }
+  90%,
+  96% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+}
+@keyframes hub-icon-double-beat {
+  0%,
+  76%,
+  100% {
+    transform: scale(1);
+  }
+  79% {
+    transform: scale(1.08);
+  }
+  82% {
+    transform: scale(1);
+  }
+  86% {
+    transform: scale(1.05);
+  }
+  90% {
+    transform: scale(1);
+  }
+}
+@keyframes hub-icon-note-sway {
+  0%,
+  74%,
+  100% {
+    transform: rotate(0);
+  }
+  80% {
+    transform: rotate(-5deg) translateY(-0.4px);
+  }
+  87% {
+    transform: rotate(4deg);
+  }
+  94% {
+    transform: rotate(0);
+  }
+}
+@keyframes hub-icon-sun-peek {
+  0%,
+  74%,
+  100% {
+    transform: translate(0, 0);
+    opacity: 0.65;
+  }
+  83%,
+  90% {
+    transform: translate(-0.6px, -0.7px);
+    opacity: 1;
+  }
+}
+@keyframes hub-icon-rain-drift {
+  0%,
+  75%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  83% {
+    transform: translateY(0.7px);
+    opacity: 0.85;
+  }
+  90% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+}
+@keyframes hub-icon-light {
+  0%,
+  73%,
+  100% {
+    opacity: 0.55;
+  }
+  83%,
+  88% {
+    opacity: 1;
+  }
+  94% {
+    opacity: 0.55;
+  }
+}
+@keyframes hub-icon-hand-step {
+  0%,
+  76%,
+  100% {
+    transform: rotate(0);
+  }
+  84%,
+  90% {
+    transform: rotate(28deg);
+  }
+  98% {
+    transform: rotate(0);
+  }
+}
+@keyframes hub-icon-domino {
+  0%,
+  74%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  81% {
+    transform: scale(0.84);
+    opacity: 0.65;
+  }
+  90% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+@keyframes hub-icon-meridian-turn {
+  0%,
+  71%,
+  100% {
+    transform: scaleX(1);
+  }
+  83% {
+    transform: scaleX(0.28);
+  }
+  94% {
+    transform: scaleX(1);
+  }
+}
+@keyframes hub-icon-writing {
+  0%,
+  72%,
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  79% {
+    stroke-dashoffset: 0.82;
+    opacity: 0.5;
+  }
+  92%,
+  96% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+}
+
+.hub-environment:is([data-paused="true"], [data-motion-paused="true"], [data-motion-ambient-paused="true"])
+  .hub-animated-icon
+  * {
+  /* biome-ignore lint/complexity/noImportantStyles: User pause must override decorative animation rules. */
+  animation-play-state: paused !important;
+}
+.hub-environment[data-motion-level="LOW"] .hub-animated-icon * {
+  animation-duration: 16s;
+}
+.hub-environment[data-motion-level="OFF"] .hub-animated-icon * {
+  /* biome-ignore lint/complexity/noImportantStyles: OFF must remain authoritative across component styles. */
+  animation: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hub-environment .hub-animated-icon * {
+    /* biome-ignore lint/complexity/noImportantStyles: Honor the operating system reduced-motion preference. */
+    animation: none !important;
+  }
+}
+@media (forced-colors: active) {
+  .hub-environment .hub-animated-icon * {
+    /* biome-ignore lint/complexity/noImportantStyles: Keep high-contrast artwork stable. */
+    animation: none !important;
+    opacity: 1;
+  }
+}

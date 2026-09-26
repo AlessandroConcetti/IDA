@@ -1,0 +1,160 @@
+/* Headlines stay still. The lead excerpt (or metadata fallback) drifts after a long dwell. */
+#root .hub-environment .hub-message-journal {
+  display: grid;
+  gap: calc(3 * var(--hub-u, 1px));
+  padding: 0;
+  margin: 0;
+  list-style: none;
+  min-width: 0;
+  max-height: calc(100% - 47 * var(--hub-u, 1px));
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  overscroll-behavior: contain;
+  scrollbar-color: color-mix(in srgb, currentColor 32%, transparent) transparent;
+}
+#root .hub-environment .hub-message-journal > li {
+  min-width: 0;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 11%, transparent);
+}
+#root .hub-environment .hub-message-journal > li:last-child {
+  border-bottom: 0;
+}
+#root .hub-environment .hub-message-journal__entry {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: calc(28 * var(--hub-u, 1px)) minmax(0, 1fr) calc(8 * var(--hub-u, 1px));
+  gap: calc(9 * var(--hub-u, 1px));
+  align-items: center;
+  text-align: left;
+  padding-block: calc(2 * var(--hub-u, 1px));
+}
+#root .hub-environment .hub-message-journal__seal {
+  display: grid;
+  place-items: center;
+  width: calc(27 * var(--hub-u, 1px));
+  height: calc(27 * var(--hub-u, 1px));
+  border-radius: calc(7 * var(--hub-u, 1px));
+  background: color-mix(in srgb, #69b5f1 18%, transparent);
+  border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+  color: inherit;
+}
+#root .hub-environment .hub-message-journal__seal > svg {
+  width: calc(17 * var(--hub-u, 1px));
+  height: calc(17 * var(--hub-u, 1px));
+}
+#root .hub-environment .hub-message-journal__copy {
+  min-width: 0;
+  display: block;
+  line-height: 1.25;
+}
+#root .hub-environment .hub-message-journal__copy > strong {
+  display: block;
+  min-width: 0;
+  font-size: calc(12.6 * var(--hub-u, 1px));
+  font-weight: 450;
+  letter-spacing: 0.008em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#root .hub-environment .hub-message-journal__viewport {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  font-size: calc(10 * var(--hub-u, 1px));
+  opacity: 0.72;
+}
+#root .hub-environment .hub-message-journal__metadata {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: calc(9.7 * var(--hub-u, 1px));
+  opacity: 0.63;
+}
+#root .hub-environment .hub-message-journal__preview {
+  opacity: 0.86;
+}
+#root .hub-environment .hub-message-journal__detail {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#root .hub-environment .hub-message-journal__open {
+  width: calc(8 * var(--hub-u, 1px));
+  height: calc(12 * var(--hub-u, 1px));
+  opacity: 0.6;
+}
+
+/* Container units give the exact overflow distance: short details never move. */
+@supports (width: 1cqw) {
+  #root .hub-environment .hub-message-journal__viewport {
+    container-type: inline-size;
+  }
+  #root .hub-environment .hub-message-journal__detail {
+    width: max-content;
+    min-width: 100%;
+    overflow: visible;
+    text-overflow: clip;
+    animation: hub-journal-read 24s linear var(--journal-delay, 0s) infinite;
+  }
+}
+@keyframes hub-journal-read {
+  0%,
+  30%,
+  100% {
+    transform: translateX(0);
+  }
+  64%,
+  79% {
+    transform: translateX(min(0px, calc(100cqw - 100%)));
+  }
+  96% {
+    transform: translateX(0);
+  }
+}
+
+#root .hub-environment .hub-message-journal:where(:hover, :focus-within) .hub-message-journal__detail,
+#root
+  .hub-environment:is([data-paused="true"], [data-motion-paused="true"], [data-motion-ambient-paused="true"])
+  .hub-message-journal__detail {
+  animation-play-state: paused;
+}
+#root .hub-environment[data-motion-level="LOW"] .hub-message-journal__detail {
+  animation-duration: 36s;
+}
+#root .hub-environment[data-motion-level="OFF"] .hub-message-journal__detail {
+  animation: none;
+  transform: none;
+  width: auto;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+#root .hub-environment[data-motion-level="OFF"] .hub-message-journal__copy > strong {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+#root .hub-environment[data-motion-level="OFF"] .hub-message-journal__metadata {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 800px), (prefers-reduced-motion: reduce), (forced-colors: active) {
+  #root .hub-environment .hub-message-journal__detail {
+    animation: none;
+    transform: none;
+    width: auto;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  #root .hub-environment .hub-message-journal__copy > strong {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  #root .hub-environment .hub-message-journal__metadata {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}

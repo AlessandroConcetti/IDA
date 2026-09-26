@@ -9,7 +9,7 @@ L'interface reprend la composition de `F:/IDA/FRONTEND VISUELS/INTERFACE METEO.p
 Fonctions utilisables :
 
 - Choisir Genève, Marseille, Paris, Lyon, Londres, New York, Tokyo ou Dubaï ; pas de géolocalisation ni adresse personnelle saisie.
-- Accepter l'envoi du centre de la ville et charger/actualiser son bulletin ; le fournisseur voit également l'IP du serveur. Aucun appel fournisseur à l'ouverture.
+- Depuis la demande utilisateur du 26 septembre : le bulletin se charge automatiquement à l’ouverture de l’outil, à l’ouverture du Hub (Marseille) et au changement de ville. Le cache public mémoire partagé avec les lectures vocales est prioritaire ; un bulletin valide évite un nouvel appel. Actualiser reste facultatif. Open-Meteo reçoit uniquement les coordonnées prédéfinies de la ville ; aucune géolocalisation navigateur n’est lue. Le fournisseur voit l’IP sortante du serveur.
 - Température, ressenti, humidité, vent et direction, pression, UV maximal ; horodatage et fuseau de la ville.
 - Sept jours de prévisions, sélection d'un jour, détail horaire sur l'horizon disponible (48 heures), probabilité de précipitations et chutes de neige prévues.
 - Lever/coucher du soleil et durée du jour. La courbe est illustrative, pas un suivi astronomique temps réel.
@@ -18,7 +18,7 @@ Fonctions utilisables :
 - Pause des reflets et opacité renforcée ; prise en compte des préférences système ; panneaux réorganisés sur petit écran. Choix temporaires, pas de mémoire persistée.
 - Dialogue local existant accessible au clic, mais sans transmission automatique de la météo, sans accès live supposé et sans activation de microphone.
 
-Les tirets sont des inconnues, jamais zéro. Les chiffres de 2024 présents sur la référence ne sont pas repris. Les bulletins expirent après dix minutes et leurs mesures sont masquées jusqu'au prochain chargement volontaire. Lors d'un échec d'actualisation, aucun ancien résultat n'est présenté comme actualisé. Une panne air n'empêche pas les prévisions météo mais produit un état air indisponible.
+Les tirets sont des inconnues, jamais zéro. Les chiffres de 2024 présents sur la référence ne sont pas repris. Les bulletins expirent après dix minutes et leurs mesures sont masquées jusqu’au prochain chargement (réouverture de l’écran ou Actualiser), sans polling à l’expiration. Lors d’un échec d’actualisation, aucun ancien résultat n’est présenté comme actualisé : un cache encore valide conserve son horodatage d’origine. Une panne air n’empêche pas les prévisions météo mais produit un état air indisponible.
 
 ## Connexion réelle et réutilisation
 
@@ -26,9 +26,11 @@ Réutilisés : IDA Core, HOME, ToolGateway, Identity/LOCAL_LOCK, revalidation pe
 
 Créés : contrat météo version 1 et contrat de bord Open-Meteo dans le package contracts, `WeatherAdapter`/`OpenMeteoAdapter`, module HTTP `home-weather`, écran `WeatherEnvironment` et CSS, fonctions de formatage, tests ciblés et décision [ADR 0006](adr/0006-home-weather-read-pilot.md).
 
-`createApp` refuse les lectures externes par défaut. L'entrée locale personnelle `apps/api/src/local-preview.ts` active explicitement la météo, uniquement avec le mode LOCAL_LOCK effectif. Mettre `weatherEnabled: false` désactive la connexion sans supprimer la section. Aucune dépendance nouvelle, clé API, modification de pare-feu ou exposition LAN.
+`createApp` refuse les lectures externes par défaut. L’entrée locale personnelle `apps/api/src/local-preview.ts` active explicitement la météo, uniquement avec le mode LOCAL_LOCK effectif. Le client vérifie `/v1/home/weather/status` avant une nouvelle lecture : un service désactivé ou un statut non valide interdit l’appel météo. L’ouverture du Hub ou de l’outil demande désormais automatiquement le bulletin public conformément à la demande utilisateur ; ce changement reste une couche cliente, sans modification des droits du Core. Le corps est uniquement `{ cityId }` et l’interface indique le fournisseur et la ville traitée. Mettre `weatherEnabled: false` désactive la connexion sans supprimer la section. Aucune dépendance nouvelle, clé API, modification de pare-feu ou exposition LAN.
 
-L'outil `read_home_weather` appartient à HOME/READ. Le serveur impose identité/session/instance/workspace, corps strict avec consentement, catalogue fermé, quota de 30 consultations par heure et une lecture à la fois. Il revalide les droits avant la sortie et avant la livraison, y compris pour un cache hit. L'audit préalable doit réussir ; pas de ville, prompt, secret ou réponse externe brute journalisés. Audit par ajout dans `activity_logs` existant ; pas de nouvelle garantie SQL d'immutabilité ni de projection de ces événements dans la timeline publique.
+Le chargeur `weather-loader.ts` déduplique les demandes en cours pour une même ville et réutilise le cache de `assistant-reads`. L’action Actualiser contourne ce cache valide. Le changement de ville, le démontage et l’onglet masqué annulent le consommateur ; le transport partagé est annulé si aucun consommateur ne reste. Le changement de workspace invalide toutes les lectures en cours. Aucune donnée périmée, d’une autre ville ou reçue après annulation n’est enregistrée. Aucune requête périodique ni boucle de retry n’est ajoutée : une erreur reste visible avec Actualiser disponible. Revenir dans un écran visible peut demander son bulletin s’il n’est plus en cache.
+
+L'outil `read_home_weather` appartient à HOME/READ. Le serveur impose identité/session/instance/workspace, corps strict `{ cityId }`, catalogue fermé, quota de 30 consultations par heure et une lecture à la fois. Il revalide les droits avant la sortie et avant la livraison, y compris pour un cache hit. L'audit préalable doit réussir ; pas de ville, prompt, secret ou réponse externe brute journalisés. Audit par ajout dans `activity_logs` existant ; pas de nouvelle garantie SQL d'immutabilité ni de projection de ces événements dans la timeline publique.
 
 Deux origines HTTPS fixes, aucun redirect/cookie/URL arbitraire ; délai HTTP dix secondes, réponse JSON plafonnée à 128 Kio décompressés par service, schémas et unités validés. Le cache public côté serveur est évincé au plus tard à l'expiration, sans identité dans ses valeurs. Le délai HTTP ne borne pas une panne SQL. Erreurs expurgées, pas de fallback cloud/IA. Contrat HTTP : [home-weather-v1.yaml](openapi/home-weather-v1.yaml).
 

@@ -1,11 +1,7 @@
-import { type CSSProperties, type RefObject, useEffect, useRef, useState } from "react";
-import {
-  type WeatherBulletin,
-  type WeatherCity,
-  weatherBulletinSchema,
-  weatherCities,
-} from "../../../packages/contracts/src/weather";
-import { IdaApiError, requestApi } from "./api-transport";
+import { type CSSProperties, type RefObject, useCallback, useEffect, useRef, useState } from "react";
+import { type WeatherBulletin, type WeatherCity, weatherCities } from "../../../packages/contracts/src/weather";
+import { onWorkspaceInvalidated } from "./api-transport";
+import { cachedWeather } from "./assistant-reads";
 import type { NavigationId } from "./data";
 import { LocalDialogue } from "./LocalDialogue";
 import { LineIcon, Sheet } from "./ReferenceChrome";
@@ -19,6 +15,7 @@ import {
   weatherLabel,
   windCompass,
 } from "./weather-display";
+import { loadWeatherBulletin, weatherLoadMessage } from "./weather-loader";
 
 type Tab = "today" | "forecast" | "maps" | "air" | "alerts";
 type Panel = "dialogue" | "privacy" | "settings" | "hour" | null;
@@ -50,7 +47,7 @@ function Metric({ icon, label, value, detail }: { icon: string; label: string; v
   );
 }
 
-/** La météo est un espace d'IDA Home. Aucun capteur, appel fournisseur ou LLM automatique. */
+/** Public city weather loads on entry. No geolocation, other sensor or LLM is activated. */
 export function WeatherEnvironment({
   titleRef,
   onBack,
@@ -64,24 +61,31 @@ export function WeatherEnvironment({
   onNavigate: (id: NavigationId) => void;
   onSelectWorld: (id: string) => void;
 }) {
-  const [city, setCity] = useState<WeatherCity>(weatherCities[0]);
+  const [city, setCity] = useState<WeatherCity>(weatherCities[1]);
   const [tab, setTab] = useState<Tab>("today");
   const [panel, setPanel] = useState<Panel>(null);
   const [bulletins, setBulletins] = useState<Partial<Record<WeatherCity["id"], WeatherBulletin>>>({});
   const [selectedDate, setSelectedDate] = useState("");
   const [selectedHour, setSelectedHour] = useState<WeatherBulletin["hourly"][number] | null>(null);
   const [enabled, setEnabled] = useState<boolean | null>(null);
-  const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [still, setStill] = useState(false);
   const [solid, setSolid] = useState(false);
-  const [revision, setRevision] = useState(0);
   const [clock, setClock] = useState(Date.now);
   const request = useRef<AbortController | null>(null);
   const picker = useRef<HTMLSelectElement>(null);
   const busyRef = useRef(false);
-  const raw = bulletins[city.id];
+  const localBulletin = bulletins[city.id];
+  const sharedBulletin = cachedWeather(city.id);
+  const raw =
+    sharedBulletin &&
+    bulletinIsCurrent(sharedBulletin, clock) &&
+    (!localBulletin ||
+      !bulletinIsCurrent(localBulletin, clock) ||
+      Date.parse(sharedBulletin.fetchedAt) > Date.parse(localBulletin.fetchedAt))
+      ? sharedBulletin
+      : (localBulletin ?? sharedBulletin);
   const data = bulletinIsCurrent(raw, clock) ? raw : undefined;
   const day =
     (tab === "forecast" ? data?.daily.find((item) => item.date === selectedDate) : undefined) ?? data?.daily[0];
@@ -99,43 +103,14 @@ export function WeatherEnvironment({
   }, [titleRef]);
 
   useEffect(() => {
-    const controller = new AbortController();
-    setEnabled(null);
-    void requestApi("/v1/home/weather/status", { signal: controller.signal })
-      .then((payload) => {
-        if (controller.signal.aborted) return;
-        if (
-          !payload ||
-          typeof payload !== "object" ||
-          !("data" in payload) ||
-          !payload.data ||
-          typeof payload.data !== "object" ||
-          !("enabled" in payload.data) ||
-          typeof payload.data.enabled !== "boolean"
-        )
-          throw new Error("Invalid status");
-        setEnabled(payload.data.enabled);
-      })
-      .catch(() => {
-        if (!controller.signal.aborted) setEnabled(false);
-      });
-    return () => controller.abort();
-  }, [revision]);
-  useEffect(
-    () => () => {
-      request.current?.abort();
-    },
-    [],
-  );
-  useEffect(() => {
-    const nextExpiry = Object.values(bulletins)
-      .filter((item) => Date.parse(item.expiresAt) > Date.now())
+    const nextExpiry = [...Object.values(bulletins), ...(raw ? [raw] : [])]
+      .filter((item) => Date.parse(item.expiresAt) > clock)
       .map((item) => Date.parse(item.expiresAt))
       .sort((a, b) => a - b)[0];
     if (!nextExpiry) return;
     const timer = window.setTimeout(() => setClock(Date.now()), Math.max(1, nextExpiry - Date.now() + 10));
     return () => window.clearTimeout(timer);
-  }, [bulletins, clock]);
+  }, [bulletins, clock, raw]);
 
   function chooseCity(id: string) {
     const next = weatherCities.find((item) => item.id === id);
@@ -145,56 +120,67 @@ export function WeatherEnvironment({
     busyRef.current = false;
     setBusy(false);
     setError("");
-    setConsent(false);
     setCity(next);
     setSelectedDate("");
     setClock(Date.now());
   }
-  async function load() {
-    if (!enabled || !consent || busyRef.current) return;
-    const controller = new AbortController();
-    request.current?.abort();
-    request.current = controller;
-    busyRef.current = true;
-    setBusy(true);
-    setError("");
-    setBulletins((previous) => {
-      const next = { ...previous };
-      delete next[city.id];
-      return next;
-    });
-    try {
-      const payload = await requestApi(
-        "/v1/home/weather",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ cityId: city.id, consent: true }),
-          signal: controller.signal,
-        },
-        false,
-        15_000,
-      );
-      if (!payload || typeof payload !== "object" || !("data" in payload)) throw new Error("Invalid bulletin");
-      const received = weatherBulletinSchema.parse(payload.data);
-      if (received.cityId !== city.id || !bulletinIsCurrent(received)) throw new Error("Invalid bulletin");
-      if (controller.signal.aborted || request.current !== controller) return;
-      setBulletins((previous) => ({ ...previous, [city.id]: received }));
-      setClock(Date.now());
-      setSelectedDate(received.daily[0]?.date ?? "");
-    } catch (failure) {
-      if (!controller.signal.aborted && request.current === controller)
-        setError(
-          failure instanceof IdaApiError ? failure.message : "Le bulletin reçu est incomplet. Réessayez le chargement.",
-        );
-    } finally {
-      if (!controller.signal.aborted && request.current === controller) {
-        busyRef.current = false;
-        setBusy(false);
-        request.current = null;
+  const load = useCallback(
+    async (force = false) => {
+      if (document.hidden || busyRef.current) return;
+      const controller = new AbortController();
+      request.current?.abort();
+      request.current = controller;
+      busyRef.current = true;
+      setBusy(true);
+      setEnabled(null);
+      setError("");
+      try {
+        const received = await loadWeatherBulletin(city.id, controller.signal, force);
+        if (controller.signal.aborted || request.current !== controller) return;
+        setEnabled(true);
+        setBulletins((previous) => ({ ...previous, [city.id]: received }));
+        setClock(Date.now());
+        setSelectedDate(received.daily[0]?.date ?? "");
+      } catch (failure) {
+        if (!controller.signal.aborted && request.current === controller) {
+          setEnabled(false);
+          setError(weatherLoadMessage(failure));
+        }
+      } finally {
+        if (!controller.signal.aborted && request.current === controller) {
+          busyRef.current = false;
+          setBusy(false);
+          request.current = null;
+        }
       }
-    }
-  }
+    },
+    [city.id],
+  );
+
+  useEffect(() => {
+    const cancel = () => {
+      request.current?.abort();
+      request.current = null;
+      busyRef.current = false;
+      setBusy(false);
+    };
+    const visibility = () => {
+      if (document.hidden) cancel();
+      else void load();
+    };
+    const unsubscribe = onWorkspaceInvalidated(cancel);
+    document.addEventListener("visibilitychange", visibility);
+    window.addEventListener("pagehide", cancel);
+    void load();
+    return () => {
+      request.current?.abort();
+      request.current = null;
+      busyRef.current = false;
+      unsubscribe();
+      document.removeEventListener("visibilitychange", visibility);
+      window.removeEventListener("pagehide", cancel);
+    };
+  }, [load]);
   function stop() {
     request.current?.abort();
     request.current = null;
@@ -234,7 +220,7 @@ export function WeatherEnvironment({
         <p className="weather-empty">
           {data
             ? "Les prévisions horaires ne couvrent pas cette journée. Consultez son résumé ci-dessous."
-            : "Chargez le bulletin pour afficher les températures et probabilités de précipitations."}
+            : "Les températures et probabilités de précipitations apparaîtront dès que le bulletin sera disponible."}
         </p>
       )}
     </section>
@@ -402,7 +388,9 @@ export function WeatherEnvironment({
             <p className="weather-observed">
               {current
                 ? `Modélisation du ${new Intl.DateTimeFormat("fr-FR", { timeZone: city.timezone, dateStyle: "long" }).format(new Date(current.at))} · ${time(current.at, city.timezone)}`
-                : "Choisissez votre ville, puis chargez son bulletin."}
+                : busy
+                  ? "Le bulletin de votre ville se charge…"
+                  : "Bulletin indisponible · vous pouvez réessayer."}
             </p>
             <div className="weather-temperature">
               <span>{number(current?.temperature)}</span>
@@ -414,7 +402,9 @@ export function WeatherEnvironment({
             <p className="weather-greeting">
               {data
                 ? `Bonjour. Retrouvez les prévisions pour ${city.name}.`
-                : "Bonjour. Aucun bulletin n’a encore été chargé pour cette ville."}
+                : busy
+                  ? "Bonjour. Je récupère les prévisions de votre ville."
+                  : "Bonjour. Le bulletin n’est pas disponible pour le moment."}
             </p>
             <blockquote>
               « Chaque jour a son ciel. »<cite>IDA</cite>
@@ -437,7 +427,7 @@ export function WeatherEnvironment({
             className="weather-load weather-card"
             onSubmit={(event) => {
               event.preventDefault();
-              void load();
+              void load(true);
             }}
           >
             <div>
@@ -460,26 +450,17 @@ export function WeatherEnvironment({
                       : "Service indisponible ou désactivé"}
               </p>
             </div>
-            <label>
-              <input
-                type="checkbox"
-                checked={consent}
-                onChange={(event) => setConsent(event.target.checked)}
-                disabled={busy}
-              />
-              J’autorise l’envoi du centre de {city.name} à Open-Meteo. Le fournisseur voit aussi l’IP du serveur.
-            </label>
-            <button className="weather-load-button" type="submit" disabled={!consent || !enabled || busy}>
-              {busy ? "Chargement…" : data ? "Actualiser" : "Charger les prévisions"}
+            <p>
+              Prévisions Open-Meteo pour {city.name}. Seules les coordonnées publiques du centre de la ville sont
+              transmises ; aucune géolocalisation de votre appareil.
+            </p>
+            <button className="weather-load-button" type="submit" disabled={busy}>
+              {busy ? "Chargement…" : "Actualiser"}
               <span aria-hidden="true">↻</span>
             </button>
             {busy ? (
               <button type="button" onClick={stop}>
                 Annuler
-              </button>
-            ) : !enabled ? (
-              <button type="button" onClick={() => setRevision((value) => value + 1)}>
-                Revérifier
               </button>
             ) : null}
           </form>
@@ -751,22 +732,23 @@ export function WeatherEnvironment({
           {panel === "dialogue" ? (
             <>
               <p className="reference-hint">
-                Aucun bulletin météo n’est transmis automatiquement au modèle. Il n’a pas accès aux prévisions
-                actuelles.
+                Demandez la météo d’une ville du catalogue, aujourd’hui ou demain. IDA lit les prévisions réelles via
+                son outil météo ; aucun bulletin n’est envoyé automatiquement à un modèle.
               </p>
               <LocalDialogue />
             </>
           ) : panel === "privacy" ? (
             <>
               <p>
-                Seul le centre de la ville sélectionnée est transmis à l’API officielle Open-Meteo après votre clic. Le
-                fournisseur voit l’adresse IP sortante du serveur. Aucun nom, adresse de domicile, donnée Care ou
-                fichier n’est envoyé.
+                Le bulletin se charge à l’ouverture et au changement de ville, sans clic supplémentaire. Seul le centre
+                de la ville sélectionnée est transmis à l’API officielle Open-Meteo si aucun bulletin valide n’est en
+                cache. Le fournisseur voit l’adresse IP sortante du serveur. Aucun nom, adresse de domicile, donnée Care
+                ou fichier n’est envoyé.
               </p>
               <p>
                 Votre choix de ville est temporaire. Un bulletin public peut être réutilisé pendant dix minutes ; les
-                permissions de votre session sont contrôlées à chaque consultation. Pas de géolocalisation, de mémoire
-                permanente ni de requête IA implicite.
+                permissions de votre session sont contrôlées côté serveur à chaque requête API. Pas de géolocalisation,
+                de mémoire permanente ni de requête IA implicite.
               </p>
               <a {...external} href="https://open-meteo.com/en/terms">
                 Conditions et confidentialité du fournisseur ↗
@@ -787,9 +769,15 @@ export function WeatherEnvironment({
                 sont respectées.
               </p>
               <p>
-                Connexion : {enabled ? "service local activé, chargement volontaire" : "indisponible ou désactivée"}.
+                Connexion :{" "}
+                {enabled
+                  ? "bulletin disponible, cache partagé prioritaire à l’ouverture"
+                  : busy
+                    ? "vérification en cours"
+                    : "indisponible ou désactivée"}
+                .
               </p>
-              <button type="button" onClick={() => setRevision((value) => value + 1)}>
+              <button type="button" disabled={busy} onClick={() => void load(true)}>
                 Revérifier le service IDA
               </button>
             </>

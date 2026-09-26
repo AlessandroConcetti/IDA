@@ -1,0 +1,90 @@
+/* One identity in every wheel: the existing IDA orb above the supplied Hub scenery. */
+#root .hub-world-emblem {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 76px;
+  aspect-ratio: 1;
+  flex: none;
+  border-radius: 50%;
+  isolation: isolate;
+  pointer-events: none;
+}
+#root .hub-world-emblem::before {
+  content: "";
+  position: absolute;
+  inset: -26%;
+  z-index: -1;
+  border-radius: 50%;
+  background: radial-gradient(circle, #d9f3ff55, #72bcff22 46%, transparent 72%);
+  animation: hub-world-aura 5.4s ease-in-out infinite alternate;
+}
+#root .hub-world-emblem > .ida-quickbar__orb {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  box-shadow:
+    inset 0 0 12px #ffffffbd,
+    0 0 17px #a8dcffba,
+    0 0 34px #77bdff60;
+}
+#root .hub-world-emblem--bubble {
+  width: clamp(58px, 24%, 94px);
+  margin: auto 0 20px;
+}
+#root .hub-world-emblem--orbital {
+  width: 58%;
+}
+#root [data-theme="classic"] .hub-world-emblem::before {
+  background: radial-gradient(circle, #fff7dc66, #8acbff2e 46%, transparent 72%);
+}
+#root [data-motion-level="OFF"] .hub-world-emblem,
+#root [data-motion-level="OFF"] .hub-world-emblem *,
+#root [data-motion-level="OFF"] .hub-world-emblem::before,
+#root [data-motion-level="OFF"] .hub-world-emblem *::before,
+#root [data-motion-level="OFF"] .hub-world-emblem *::after {
+  animation: none;
+}
+#root
+  :is([data-motion-paused="true"], [data-motion-ambient-paused="true"], [data-bubble-nearby="false"])
+  .hub-world-emblem,
+#root
+  :is([data-motion-paused="true"], [data-motion-ambient-paused="true"], [data-bubble-nearby="false"])
+  .hub-world-emblem
+  *,
+#root
+  :is([data-motion-paused="true"], [data-motion-ambient-paused="true"], [data-bubble-nearby="false"])
+  .hub-world-emblem::before,
+#root
+  :is([data-motion-paused="true"], [data-motion-ambient-paused="true"], [data-bubble-nearby="false"])
+  .hub-world-emblem
+  *::before,
+#root
+  :is([data-motion-paused="true"], [data-motion-ambient-paused="true"], [data-bubble-nearby="false"])
+  .hub-world-emblem
+  *::after {
+  animation-play-state: paused;
+}
+@keyframes hub-world-aura {
+  from {
+    opacity: 0.6;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  #root .hub-world-emblem,
+  #root .hub-world-emblem *,
+  #root .hub-world-emblem::before,
+  #root .hub-world-emblem *::before,
+  #root .hub-world-emblem *::after {
+    /* biome-ignore lint/complexity/noImportantStyles: OS motion preference must override theme animation rules regardless of lazy CSS loading order. */
+    animation: none !important;
+  }
+}

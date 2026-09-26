@@ -1,0 +1,122 @@
+#root .hub-main-orb > .hub-orb-filaments {
+  position: absolute;
+  inset: -5%;
+  display: block;
+  width: 110%;
+  height: 110%;
+  max-width: none;
+  overflow: visible;
+  pointer-events: none;
+  fill: none;
+  stroke: none;
+  --orb-core: #06183b;
+  --orb-volume: #338bef;
+  --orb-edge: #c1f5ff;
+  --orb-violet: #aaa2ff;
+}
+
+#root .hub-environment[data-theme="classic"] .hub-orb-filaments {
+  --orb-core: #2a4563;
+  --orb-volume: #a1c9ef;
+  --orb-edge: #f0fcff;
+  --orb-violet: #fff2e0;
+}
+
+.hub-orb-filaments__current {
+  transform-origin: 200px 200px;
+}
+
+.hub-orb-filaments__current--one {
+  animation: hub-orb-current-one 29s ease-in-out infinite;
+}
+
+.hub-orb-filaments__current--two {
+  animation: hub-orb-current-two 37s ease-in-out infinite;
+}
+
+.hub-orb-filaments__current--three {
+  animation: hub-orb-current-three 43s linear infinite;
+}
+
+.hub-orb-filaments__reflection {
+  transform-origin: 200px 200px;
+  animation: hub-orb-reflection 12s ease-in-out infinite alternate;
+}
+
+@keyframes hub-orb-current-one {
+  0%,
+  100% {
+    transform: rotate(-13deg) scale(0.99, 1.01);
+    opacity: 0.83;
+  }
+  38% {
+    transform: rotate(19deg) scale(1.015, 0.97);
+    opacity: 1;
+  }
+  72% {
+    transform: rotate(42deg) scale(0.98, 1.01);
+    opacity: 0.9;
+  }
+}
+
+@keyframes hub-orb-current-two {
+  0%,
+  100% {
+    transform: rotate(34deg) scale(0.98, 1);
+    opacity: 0.8;
+  }
+  50% {
+    transform: rotate(-44deg) scale(1.01, 0.98);
+    opacity: 1;
+  }
+}
+
+@keyframes hub-orb-current-three {
+  from {
+    transform: rotate(12deg) scale(0.98);
+  }
+  to {
+    transform: rotate(372deg) scale(0.98);
+  }
+}
+
+@keyframes hub-orb-reflection {
+  from {
+    opacity: 0.48;
+    transform: rotate(-7deg);
+  }
+  to {
+    opacity: 0.85;
+    transform: rotate(9deg);
+  }
+}
+
+#root
+  :is(
+    [data-paused="true"],
+    [data-motion-paused="true"],
+    [data-motion-ambient-paused="true"],
+    [data-motion-state="paused"],
+    [data-motion-state="off"],
+    [data-motion-level="OFF"]
+  )
+  .hub-orb-filaments
+  * {
+  animation-play-state: paused;
+}
+
+#root [data-motion-level="LOW"] .hub-orb-filaments__bloom {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #root .hub-main-orb > .hub-orb-filaments * {
+    animation: none;
+  }
+}
+
+@media (forced-colors: active) {
+  #root .hub-main-orb > .hub-orb-filaments {
+    display: none;
+  }
+}
