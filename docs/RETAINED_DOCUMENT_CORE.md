@@ -70,6 +70,13 @@ aux transactions du coffre. Son argument `verifiedBackup` est une attestation fo
 par l'appelant, pas une preuve cryptographique : aucune sauvegarde durable vérifiable
 n'existe encore. Les tests ne démontrent donc pas une rotation de production.
 
+`countRetainedVaultKeyReferences` lit le nombre d'enveloppes par `keyId` dans un
+snapshot PGlite cohérent et read-only, séparément pour CARE ou Finance. Les documents
+révoqués sont comptés car ils restent conservés et doivent rester déchiffrables. Un
+`keyId` absent/inconnu fait échouer le comptage. Ce résultat est un instantané, pas un
+verrou : il ne peut pas autoriser à lui seul une activation ultérieure si des écritures
+peuvent survenir entre le comptage et la migration.
+
 Limite importante : ce tombstone dans PGlite ne constitue pas une protection contre
 le rejeu d'une sauvegarde plus ancienne que le marqueur ; cette copie ne contient pas
 encore le tombstone. IDA ne fournit toujours pas de sauvegarde/restauration de

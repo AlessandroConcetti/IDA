@@ -39,6 +39,12 @@
 - Vérification de reprise : 44 tests synthétiques sur les suites coffre,
   sauvegarde, chiffrement et trousseau ; TypeScript API réussi. Aucun coffre réel,
   secret ou profil DPAPI utilisateur n'a été sollicité.
+- Ajout d'un compteur interne et read-only des enveloppes par version de clé, dans
+  un snapshot PGlite `REPEATABLE READ`. Il traite séparément CARE et Finance, inclut
+  les documents révoqués (toujours conservés) et refuse les identifiants de clé
+  absents ou inconnus. C'est une mesure ponctuelle ; elle ne verrouille pas le coffre
+  contre les écritures qui surviendraient ensuite. Les tests synthétiques ciblés
+  passent maintenant à 46.
 - Le registre comporte maintenant les deux coffres locaux chiffrés :
   `/v1/care/documents` et `/v1/finance/documents`. Le checkpoint du 26 septembre
   ne reflétait pas encore l’activation du coffre Finance déjà présente dans le code.
