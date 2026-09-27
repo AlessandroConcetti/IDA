@@ -180,7 +180,7 @@ export function HubEnvironment({
             onClick={requestAssistantHome}
             aria-label="Le Hub · retour à l’accueil IDA"
           >
-            <span className="hub-wordmark">I D Λ</span>
+            <HubOrb className="hub-brand__orb" />
             <span className="hub-brand__name">LE HUB</span>
             <small>
               UN SEUL SYSTÈME.
@@ -286,7 +286,15 @@ export function HubEnvironment({
                 <br />
                 AGIT
               </span>
-              <HubIcon kind="music" />
+              <span className="hub-presence__wave" aria-hidden="true">
+                <i />
+                <i />
+                <i />
+                <i />
+                <i />
+                <i />
+                <i />
+              </span>
             </span>
             <span className="hub-presence__reflection" aria-hidden="true" />
           </button>

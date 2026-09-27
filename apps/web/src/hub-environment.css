@@ -114,6 +114,12 @@
   white-space: nowrap;
   text-shadow: 0 1px 10px #9fd2ff55;
 }
+#root .hub-brand .hub-brand__orb {
+  width: calc(56 * var(--hub-u));
+  height: auto;
+  aspect-ratio: 1;
+  margin: calc(3 * var(--hub-u));
+}
 #root .hub-brand__name {
   font-size: calc(17 * var(--hub-u));
   letter-spacing: calc(7 * var(--hub-u));
@@ -463,7 +469,7 @@
   width: 1em;
   height: 1em;
 }
-#root .hub-board .hub-presence {
+#root .hub-environment .hub-board button.hub-presence {
   position: relative;
   display: grid;
   place-items: center;
@@ -474,28 +480,33 @@
   aspect-ratio: 1;
   isolation: isolate;
   border-radius: 50%;
+  /* The hit target is larger than the glass sphere. Never paint the generic
+   * button material here: it produces an opaque disc behind the orb. */
+  background: transparent;
+  box-shadow: none;
+  animation: none;
 }
 #root .hub-main-orb {
   width: 88%;
   height: auto;
   aspect-ratio: 1;
-  border: 2px solid #d7f3ff;
+  border: 1px solid #d7f3ffb3;
   background: radial-gradient(
     circle at 33% 23%,
-    #d8f4ffdb,
-    #508de5dc 16%,
-    #092550ef 38%,
-    #040e29f2 59%,
-    #123b8ec7 74%,
-    #a8d4ffe8 95%
+    #d8f4ff96,
+    #508de5a3 16%,
+    #092550c4 38%,
+    #040e29d1 59%,
+    #123b8e8a 80%,
+    #a8d4ffad 100%
   );
   box-shadow:
-    inset 0 0 25px 6px #c8f2ff,
-    inset -8px -12px 20px #94c3ff,
-    inset 6px 12px 40px #fff8,
-    0 0 12px 4px #d0efff,
-    0 0 40px #56abff99,
-    0 0 80px #1b71ea4d;
+    inset 0 0 9px 1px #c8f2ffad,
+    inset -5px -8px 16px #94c3ff7a,
+    inset 6px 12px 32px #ffffff30,
+    0 0 5px 1px #d0efffa3,
+    0 0 32px #56abff66,
+    0 0 65px #1b71ea33;
   animation: hub-orb-breathe 7s ease-in-out infinite alternate;
 }
 #root .hub-main-orb::before {
@@ -530,20 +541,20 @@
 #root .hub-environment[data-theme="classic"] .hub-main-orb {
   background: radial-gradient(
     ellipse at 31% 19%,
-    #f1fbffcf,
-    #c5e0f49c 18%,
-    #739abac7 32%,
-    #365779e0 52%,
-    #688aafb8 69%,
-    #c3e2fbad 88%
+    #f1fbff99,
+    #c5e0f466 18%,
+    #739aba75 32%,
+    #365779a8 52%,
+    #688aaf73 73%,
+    #c3e2fb91 100%
   );
   box-shadow:
-    inset 0 0 17px 2px #d6efffc4,
-    inset -8px -12px 25px #91b9e0ad,
-    inset 6px 12px 30px #ffffff55,
-    0 0 12px 2px #e5f6ffc7,
-    0 0 36px #eefaff73,
-    0 0 85px #d9e6ff50;
+    inset 0 0 8px 1px #d6efffa3,
+    inset -5px -8px 20px #91b9e066,
+    inset 6px 12px 30px #ffffff33,
+    0 0 5px 1px #e5f6ff91,
+    0 0 32px #eefaff59,
+    0 0 65px #d9e6ff38;
 }
 #root .hub-presence__label {
   position: absolute;
@@ -561,12 +572,48 @@
   font-weight: 200;
   letter-spacing: calc(5 * var(--hub-u));
 }
-#root .hub-presence__label > span {
+#root .hub-presence__label > span:not(.hub-presence__wave) {
   display: block;
   font-size: calc(11 * var(--hub-u));
   letter-spacing: calc(5 * var(--hub-u));
   line-height: 1.8;
   margin-top: calc(8 * var(--hub-u));
+}
+#root .hub-presence__wave {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: calc(4 * var(--hub-u));
+  height: calc(34 * var(--hub-u));
+  margin-top: calc(14 * var(--hub-u));
+  filter: drop-shadow(0 0 5px #97caff);
+}
+#root .hub-presence__wave i {
+  width: max(1px, calc(2 * var(--hub-u)));
+  height: 24%;
+  border-radius: 2px;
+  background: #d1eeff;
+  animation: hub-presence-wave 3.8s ease-in-out infinite alternate;
+}
+#root .hub-presence__wave i:nth-child(2),
+#root .hub-presence__wave i:nth-child(6) {
+  height: 45%;
+  animation-delay: -1.6s;
+}
+#root .hub-presence__wave i:nth-child(3),
+#root .hub-presence__wave i:nth-child(5) {
+  height: 70%;
+  animation-delay: -0.8s;
+}
+#root .hub-presence__wave i:nth-child(4) {
+  height: 100%;
+  animation-delay: -2.4s;
+}
+@keyframes hub-presence-wave {
+  to {
+    transform: scaleY(0.55);
+    opacity: 0.65;
+  }
 }
 #root .hub-presence__label svg {
   margin: calc(12 * var(--hub-u)) auto 0;
@@ -1673,5 +1720,9 @@
   #root .hub-main-orb {
     background: Canvas;
     border-color: ButtonText;
+  }
+  #root .hub-environment .hub-board button.hub-presence {
+    background: Canvas;
+    border: 1px solid ButtonText;
   }
 }

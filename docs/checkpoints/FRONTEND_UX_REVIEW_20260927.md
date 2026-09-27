@@ -2,6 +2,11 @@
 
 ## Point de reprise
 
+**Suite :** l'utilisateur a inversé l'ordre après cet audit. Point de reprise
+le plus récent : [`VISUAL_REFINEMENT_20260927.md`](./VISUAL_REFINEMENT_20260927.md),
+premier lot orbe Hub et filaments Workspace. Les sections ci-dessous gardent
+l'historique de l'audit initial.
+
 L'utilisateur demande maintenant un audit de **tout le frontend restant**, trié
 du fonctionnement le plus important aux finitions, avant poursuite de la
 consolidation. Référence active :

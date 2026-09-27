@@ -13,6 +13,12 @@ function unexpectedHubMutation(path: string, method: string) {
 
 const animatedHubParts = [
   {
+    selector: ".hub-presence__wave i:nth-child(4)",
+    animation: "hub-presence-wave",
+    property: "transform",
+    peak: 0.85,
+  },
+  {
     selector: ".hub-messages .hub-widget__head .hub-icon-flap",
     animation: "hub-icon-open-envelope",
     property: "transform",
@@ -221,6 +227,12 @@ for (const theme of ["classic", "scifi"] as const) {
       }
       await expect(hub).toHaveAttribute("data-motion-level", "OFF");
       await expect(hub.locator(".hub-main-orb")).toHaveCSS("animation-name", "none");
+      await expect(hub.locator(".hub-presence")).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+      await expect(hub.locator(".hub-presence")).toHaveCSS("background-image", "none");
+      await expect(hub.locator(".hub-brand__orb.ida-quickbar__orb")).toBeVisible();
+      await expect(hub.locator(".hub-wordmark")).toHaveCount(0);
+      await expect(hub.locator(".hub-presence__wave i")).toHaveCount(7);
+      await expect(hub.locator(".hub-presence__wave i").first()).toHaveCSS("animation-name", "none");
       await expect(page.locator(".ida-quickbar")).toHaveCount(1);
       await expect(page.locator("#ida-global-message")).toBeVisible();
       await expect(hub.locator("form")).toHaveCount(0);
@@ -732,6 +744,18 @@ test.describe("Le Hub · animation réelle du décor", () => {
       context,
       page,
     }) => {
+      // Exercise the CSS/SVG fallback deterministically. A working WebGL
+      // enhancement intentionally hides it; WebGL has its own spatial suite.
+      await context.addInitScript(() => {
+        const getContext = HTMLCanvasElement.prototype.getContext;
+        Object.defineProperty(HTMLCanvasElement.prototype, "getContext", {
+          value: function (this: HTMLCanvasElement, kind: string, ...args: unknown[]) {
+            if (kind === "webgl" || kind === "webgl2" || kind === "experimental-webgl") return null;
+            return Reflect.apply(getContext, this, [kind, ...args]);
+          },
+          configurable: true,
+        });
+      });
       await context.addInitScript((value) => {
         localStorage.setItem("ida.ui.theme.v1", value);
         localStorage.setItem("ida.ui.motion.v1", "STANDARD");

@@ -3,6 +3,25 @@
 État du 27 septembre 2026, reprise Astra. Ce document devient le point d’entrée
 frontend ; le backend Agentic Library reste au checkpoint de Luna.
 
+## Ordre actif — inversé à la demande de l’utilisateur
+
+La séquence ci-dessous remplace l'ordre proposé dans l'audit initial, conservé
+plus bas pour la traçabilité. Aucune demande n'est retirée :
+
+1. Fidélité visuelle, orbe commun, animations et finitions.
+2. Données utiles du Hub et du Workspace.
+3. Menuiserie dans La Fabrique.
+4. Coffres CARE/Finance et résultats des agents.
+5. Mail et calendrier utilisables.
+6. Démarrage desktop et voix mains libres.
+7. Navigation, modales et retour Accueil global.
+
+Premier lot vérifié : identité de l'orbe du Hub et filaments organiques du
+Workspace. Voir [`VISUAL_REFINEMENT_20260927.md`](../checkpoints/VISUAL_REFINEMENT_20260927.md)
+pour les changements, captures et limites des tests. La fidélité globale reste
+ouverte, en particulier Chat/Mail et la bulle Windows. Les constats ci-dessous
+décrivent l'état initial avant ce lot, sans annuler les limites fonctionnelles.
+
 ## Verdict
 
 **Non, toutes les demandes UX ne sont pas encore terminées.** Le Hub, La baraque
