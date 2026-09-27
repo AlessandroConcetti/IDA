@@ -1,0 +1,225 @@
+/* Positions use the original room coordinate system, never viewport percentages. */
+.music-room-ambience {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  contain: paint;
+  mix-blend-mode: screen;
+}
+.music-room-ambience > svg {
+  width: 100%;
+  height: 100%;
+}
+.music-room-ambience__flame {
+  transform-box: fill-box;
+  transform-origin: center bottom;
+  animation: music-hearth-flame var(--flame-speed) ease-in-out var(--flame-delay) infinite alternate;
+}
+.music-room-ambience__hearth-glow {
+  animation: music-hearth-glow 3.6s ease-in-out infinite alternate;
+}
+.music-room-ambience__embers {
+  animation: music-hearth-glow 4.4s ease-in-out -2s infinite alternate;
+}
+.music-room-ambience__neons {
+  transition:
+    color 700ms,
+    opacity 350ms;
+}
+.music-room-ambience__wash {
+  animation: music-neon-breathe 7.5s ease-in-out infinite alternate;
+}
+.music-room-ambience__trim {
+  stroke-width: 3;
+  filter: drop-shadow(0 0 6px currentColor);
+  animation: music-neon-breathe 6.8s ease-in-out -3s infinite alternate;
+}
+.music-room-controls {
+  position: relative;
+  margin-left: auto;
+}
+#root .reference-environment[data-world="music"] .reference-intro h1 {
+  color: #edf3f5;
+  text-shadow: 0 2px 20px #0008;
+}
+@media (min-width: 701px) {
+  #root .reference-environment[data-world="music"] .reference-top {
+    right: 210px; /* Keep the existing phone-connection shortcut uncovered. */
+  }
+}
+#root .music-room-controls > summary {
+  cursor: pointer;
+  border: 1px solid #ece3d14d;
+  border-radius: 99px;
+  padding: 8px 14px;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  font-size: 0.8rem;
+  background: #101925b8;
+  color: #f4f0e8;
+}
+#root .music-room-controls > summary:focus-visible {
+  outline: 2px solid #b6e4ff;
+  outline-offset: 4px;
+}
+.music-room-controls__panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 10px);
+  width: min(330px, calc(100vw - 44px));
+  padding: 18px;
+  border: 1px solid #e7d8c052;
+  border-radius: 20px;
+  background: #101925ed;
+  color: #f3eee6;
+  box-shadow: 0 18px 48px #0006;
+  backdrop-filter: blur(18px);
+}
+.music-room-controls fieldset {
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+.music-room-controls legend {
+  margin-bottom: 12px;
+  font-size: 0.87rem;
+}
+.music-room-controls__swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+#root .music-room-controls__swatches button {
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+  border-radius: 12px;
+  padding: 8px;
+  min-height: 56px;
+  background: #ffffff08;
+  border: 1px solid #ffffff20;
+  color: inherit;
+}
+.music-room-controls__swatches button > span {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--swatch);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--swatch) 45%, transparent);
+}
+#root .music-room-controls__swatches button[aria-pressed="true"] {
+  border-color: #ecf4ff;
+  background: #ffffff1c;
+}
+.music-room-controls__intensity {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+  font-size: 0.83rem;
+}
+.music-room-controls__intensity output {
+  margin-left: auto;
+}
+#root .music-room-controls__intensity input {
+  width: 100%;
+  min-height: 32px;
+  accent-color: #b6d7f5;
+}
+.music-room-controls__panel p {
+  font-size: 0.72rem;
+  line-height: 1.5;
+  color: #cec9c2;
+  margin-bottom: 0;
+}
+:root[data-theme="classic"] #root .music-room-controls > summary,
+:root[data-theme="classic"] #root .music-room-controls__panel {
+  color: #302b26;
+  background: #fff5e4df;
+  border-color: #fff8ece6;
+}
+:root[data-theme="classic"] #root .music-room-controls__swatches button {
+  background: #fffdf688;
+  border-color: #91775240;
+}
+:root[data-theme="classic"] #root .music-room-controls__swatches button[aria-pressed="true"] {
+  color: #302b26;
+  background: #e8d5b799;
+  border-color: #87673d;
+}
+:root[data-theme="classic"] #root .music-room-controls__panel p {
+  color: #5c5142;
+}
+@keyframes music-hearth-flame {
+  0% {
+    transform: skewX(-9deg) scale(0.78, 0.55);
+    opacity: 0.6;
+  }
+  47% {
+    transform: skewX(5deg) scale(0.9, 1);
+    opacity: 0.95;
+  }
+  100% {
+    transform: skewX(-2deg) scale(1.07, 0.72);
+    opacity: 0.78;
+  }
+}
+@keyframes music-hearth-glow {
+  from {
+    opacity: 0.32;
+  }
+  to {
+    opacity: 0.8;
+  }
+}
+@keyframes music-neon-breathe {
+  from {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 0.94;
+  }
+}
+.music-room-ambience:is([data-motion-level="OFF"], [data-motion-paused="true"], [data-motion-ambient-paused="true"]) * {
+  animation-play-state: paused;
+}
+.music-room-ambience[data-motion-level="LOW"] .music-room-ambience__trim {
+  filter: none;
+}
+@media (max-width: 700px) {
+  .reference-environment[data-world="music"] .reference-top {
+    flex-wrap: wrap;
+  }
+  .music-room-controls__panel {
+    right: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .music-room-ambience * {
+    animation: none;
+    transition: none;
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .music-room-controls__panel {
+    background: #101925;
+    backdrop-filter: none;
+  }
+}
+@media (forced-colors: active) {
+  .music-room-ambience {
+    display: none;
+  }
+  #root .music-room-controls > summary,
+  .music-room-controls__panel {
+    background: Canvas;
+    color: CanvasText;
+    border-color: CanvasText;
+  }
+  #root .music-room-controls__swatches button[aria-pressed="true"] {
+    outline: 2px solid Highlight;
+  }
+}

@@ -3,6 +3,14 @@
 État du 27 septembre 2026, reprise Astra. Ce document devient le point d’entrée
 frontend ; le backend Agentic Library reste au checkpoint de Luna.
 
+Complément actif : [`FRONTEND_REFERENCE_REGISTER_20260927.md`](FRONTEND_REFERENCE_REGISTER_20260927.md)
+conserve les sept maquettes renvoyées, la vraie orbite du Carrousel, l'orbe à
+gauche, le feu/néons Music Studio et le défaut de son d'accueil signalé ensuite.
+
+Lot suivant vérifié : [`FRONTEND_ORBITS_MUSIC_SOUND_20260927.md`](../checkpoints/FRONTEND_ORBITS_MUSIC_SOUND_20260927.md).
+Orbe du Hub à gauche, révolution du Carrousel, feu/néons du Music Studio et
+nappe sonore locale à la connexion. Aucun changement de priorité backend.
+
 ## Ordre actif — inversé à la demande de l’utilisateur
 
 La séquence ci-dessous remplace l'ordre proposé dans l'audit initial, conservé

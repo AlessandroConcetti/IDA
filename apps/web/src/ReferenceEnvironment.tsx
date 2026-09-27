@@ -19,6 +19,7 @@ import { DestinationMenu } from "./DestinationMenu";
 import type { MediaAsset, NavigationId } from "./data";
 import { LocalDialogue } from "./LocalDialogue";
 import { MusicFolderImport } from "./MusicFolderImport";
+import { initialMusicRoomLighting, MusicRoomAmbience, MusicRoomControls } from "./MusicRoomAmbience";
 import { LineIcon, ReferenceRail, Sheet } from "./ReferenceChrome";
 import { StudioPlayer } from "./StudioPlayer";
 import { TravelNotebook, type TravelSession } from "./TravelNotebook";
@@ -114,6 +115,7 @@ export function ReferenceEnvironment({
   const [activeAudio, setActiveAudio] = useState<MediaAsset | null>(null);
   const [currentTrack, setCurrentTrack] = useState<TrackReference | null>(null);
   const [motion, setMotion] = useState(true);
+  const [musicLighting, setMusicLighting] = useState(initialMusicRoomLighting);
   const [refresh, setRefresh] = useState(0);
   const [travel, setTravel] = useState<TravelSession>(() => freshTravelSession(""));
   const [pendingTravel, setPendingTravel] = useState<TravelSession | null>(null);
@@ -312,12 +314,14 @@ export function ReferenceEnvironment({
       }}
       style={{ "--environment-image": `url("/design/user-20260909/${environment}-scene-v1.png")` } as CSSProperties}
     >
+      {environment === "music" ? <MusicRoomAmbience paused={Boolean(tool) || !motion} lighting={musicLighting} /> : null}
       <ReferenceRail active={environment} onBack={onBack} onSelect={onSelect} onNavigate={onNavigate} />
       <main className="reference-main">
         <div className="reference-top">
           <button type="button" onClick={onBack}>
             ← La Roue des Mondes
           </button>
+          {environment === "music" ? <MusicRoomControls lighting={musicLighting} onChange={setMusicLighting} /> : null}
           <button type="button" aria-pressed={motion} onClick={() => setMotion(!motion)}>
             {motion ? "Ⅱ" : "▷"} Reflets
           </button>

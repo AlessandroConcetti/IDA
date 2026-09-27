@@ -1,4 +1,7 @@
 .access-shell {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   min-height: 100svh;
   display: flex;
   flex-direction: column;
@@ -6,6 +9,69 @@
   justify-content: center;
   padding: 42px 20px;
   background: radial-gradient(ellipse at 50% 12%, #c5cddd16, transparent 60%), #080a0f;
+}
+
+.access-video-background,
+.access-video-shade {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.access-video-background {
+  z-index: -2;
+  object-fit: cover;
+  object-position: center;
+  filter: brightness(0.9) saturate(0.92);
+}
+.access-video-shade {
+  z-index: -1;
+  background:
+    linear-gradient(180deg, #070a1052 0%, #080b1261 28%, #090c1278 100%),
+    radial-gradient(ellipse at 50% 42%, #0a101b08 0%, #080a0f45 100%);
+}
+.access-sound-controls {
+  position: absolute;
+  z-index: 2;
+  top: max(20px, env(safe-area-inset-top));
+  right: max(20px, env(safe-area-inset-right));
+  max-width: calc(100vw - 40px);
+}
+.access-sound-notice {
+  max-width: 300px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: #101722ed;
+  color: #e6ebf5;
+  font-size: 0.8rem;
+}
+.access-sound-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 42px;
+  padding: 8px 14px;
+  border: 1px solid #e5ecff38;
+  border-radius: 999px;
+  background: #101722a6;
+  color: #e6ebf5;
+  box-shadow: 0 8px 30px #0003;
+  backdrop-filter: blur(14px);
+  font-size: 0.76rem;
+  cursor: pointer;
+}
+.access-sound-toggle:hover {
+  border-color: #c7d9ff80;
+  background: #172130d9;
+}
+.access-sound-toggle:focus-visible {
+  outline: 2px solid #b9d4ff;
+  outline-offset: 3px;
+}
+.access-sound-toggle span {
+  color: #d8e7ff;
+  font-size: 1rem;
 }
 
 .access-brand {
@@ -185,6 +251,62 @@
   font-size: 0.68rem;
   color: #abb3c7;
 }
+/* L'authentification suit le thème déjà appliqué sur <html> avant le verrou.
+   La variante Classic réchauffe uniquement ce parcours ; les autres surfaces
+   restent dans la tranche frontend confiée à Astra. */
+:root[data-theme="classic"] .access-shell {
+  color: #30271e;
+  background:
+    radial-gradient(ellipse at 50% 8%, #fff9eea8, transparent 58%),
+    linear-gradient(145deg, #e9d7bd, #f6ede0 48%, #d9c2a4);
+}
+:root[data-theme="classic"] .access-video-background {
+  filter: brightness(1.08) saturate(0.82);
+}
+:root[data-theme="classic"] .access-video-shade {
+  background:
+    linear-gradient(180deg, #f5e9d527 0%, #ead9c45c 48%, #f0e3d3a6 100%),
+    radial-gradient(ellipse at 50% 42%, #fff8eb08 0%, #604b3526 100%);
+}
+:root[data-theme="classic"] #root .access-card {
+  color: #30271e;
+  background: linear-gradient(145deg, #fffaf0d9, #f3e7d5c7);
+  border-color: #fffaf0d9;
+  box-shadow: inset 0 1px #ffffffd9, inset 0 0 0 1px #ffffff91, 0 28px 90px #4d37222b;
+  -webkit-backdrop-filter: blur(24px) saturate(125%);
+  backdrop-filter: blur(24px) saturate(125%);
+}
+:root[data-theme="classic"] :is(.access-brand, .access-card h1, .access-form label) {
+  color: #30271e;
+}
+:root[data-theme="classic"] :is(.access-brand span, .access-intro, .access-help, .access-footnote, .access-recovery, .access-local-note) {
+  color: #675744;
+}
+:root[data-theme="classic"] .access-notice {
+  color: #594733;
+}
+:root[data-theme="classic"] #root .access-form input {
+  color: #30271e;
+  background: #fffaf0bd;
+  border-color: #80684961;
+}
+:root[data-theme="classic"] .access-reveal,
+:root[data-theme="classic"] .access-secondary {
+  color: #5b4834;
+}
+:root[data-theme="classic"] .access-orb {
+  color: #fff8ed;
+  border-color: #fff7e4b8;
+  background: radial-gradient(circle at 35% 30%, #fff8eaa8, #b58b5d9c 52%, #473725ed);
+  box-shadow: inset 0 0 18px #fff3d477, 0 0 24px #b9915c47;
+}
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  :root[data-theme="classic"] #root .access-card {
+    background: #f5ead9;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
 @media (max-width: 540px) {
   .access-shell {
     padding: 28px 16px;
@@ -197,6 +319,9 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  .access-video-background {
+    display: none;
+  }
   .access-shell *,
   .local-lock-button {
     animation: none;

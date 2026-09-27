@@ -1,6 +1,7 @@
 import { type FormEvent, type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { type AccessView, LocalAccessController } from "./local-access";
 import { CareOnboarding } from "./CareProfile";
+import { type AccessView, LocalAccessController } from "./local-access";
+import { UnlockAmbience } from "./UnlockAmbience";
 import "./local-access.css";
 
 function AccessForm({
@@ -129,6 +130,57 @@ function AccessForm({
   );
 }
 
+function UnlockBackground() {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [reducedMotion, setReducedMotion] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+  );
+
+  useEffect(() => {
+    const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const update = () => setReducedMotion(preference.matches);
+    preference.addEventListener("change", update);
+    return () => preference.removeEventListener("change", update);
+  }, []);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || reducedMotion) return;
+    video.muted = true;
+    void video.play().catch(() => undefined);
+    const onVisibilityChange = () => {
+      if (document.hidden) video.pause();
+      else void video.play().catch(() => undefined);
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      video.pause();
+    };
+  }, [reducedMotion]);
+
+  return (
+    <>
+      {!reducedMotion ? (
+        <video
+          ref={videoRef}
+          className="access-video-background"
+          src="/design/ida-unlock-background.mp4"
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="metadata"
+          aria-hidden="true"
+          tabIndex={-1}
+        />
+      ) : null}
+      <div className="access-video-shade" aria-hidden="true" />
+      <UnlockAmbience />
+    </>
+  );
+}
+
 export function LocalAccessGate({ children }: { children: (onLock?: () => void) => ReactNode }) {
   const [controller] = useState(() => new LocalAccessController());
   const view = useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getSnapshot);
@@ -177,6 +229,7 @@ export function LocalAccessGate({ children }: { children: (onLock?: () => void) 
 
   return (
     <main className="access-shell">
+      <UnlockBackground />
       <div className="access-brand">
         I D A<span>TON UNIVERS. UNE PRÉSENCE.</span>
       </div>
