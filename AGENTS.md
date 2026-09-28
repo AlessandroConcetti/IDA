@@ -9,6 +9,7 @@ IDA est un assistant personnel extensible, pas un gestionnaire de réseaux socia
 ## Portée et progression
 
 - Travailler par petites tranches verticales vérifiables.
+- Avant toute implémentation importante, consulter `docs/IDA_PERMANENT_BUILD_CONTRACT.md`. Ce contrat définit le niveau de preuve attendu pour les fonctionnalités, l’UX, les intégrations, les agents et les systèmes 3D dans IDA, La Fabrique et tous les environnements présents ou futurs.
 - Ne pas coder une phase future sans demande explicite.
 - Ne pas ajouter une dépendance avant de justifier son besoin immédiat.
 - Ne pas réécrire des fichiers sans nécessité ; préserver les modifications existantes.
@@ -25,6 +26,9 @@ IDA est un assistant personnel extensible, pas un gestionnaire de réseaux socia
 - Un nouvel agent doit déclarer son domaine, ses outils autorisés, son contexte autorisé, sa politique d'approbation, ses prompts versionnés et ses tests d'évaluation.
 - La démo est consolidée en français avant toute internationalisation. Le futur anglais réutilise les mêmes codes, contrats et données métier ; seules les ressources d'interface, de dialogue et de formatage sont localisées.
 - Lorsqu'un domaine correspond à une responsabilité professionnelle ou réglementaire humaine, son manifeste doit prévoir un agent de gouvernance spécialisé et une escalade humaine identifiée. Cet agent contrôle et alerte ; il ne prétend jamais remplacer, certifier ou engager le professionnel concerné.
+- Toute fonctionnalité ajoutée ou modifiée dans un monde IDA possède son élément visuel correspondant dans cet environnement : une entrée clairement repérable, un écran ou panneau métier accessible, une action reliée au comportement réel et des états fidèles aux données (chargement, vide, succès, erreur ou indisponible selon le cas). Aucun faux contrôle ni résultat de démonstration ne doit être présenté comme opérationnel.
+- Cette règle s'applique à tout le projet et aux prochaines évolutions de chaque monde. Harmoniser les mondes un par un ; avant de déclarer une tranche finie, vérifier que chaque capacité livrée se rejoint dans l'interface de son monde et conduit au bon parcours.
+- Respecter aussi le contrat permanent de construction IDA : une fonction destinée à l’utilisateur n’est achevée qu’après vérification du parcours de bout en bout, de sa persistance et de ses états d’échec. La pause du chantier de refonte visuelle n’écarte pas le point d’entrée et l’interface minimale nécessaires à une nouvelle fonction.
 
 ## IA, outils et mémoire
 
