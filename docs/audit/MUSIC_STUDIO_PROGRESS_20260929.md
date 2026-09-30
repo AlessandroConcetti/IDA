@@ -5,18 +5,19 @@ Relevé du 29 septembre, actualisé le 30 septembre 2026. Référence : `docs/MU
 
 ## Bilan honnête
 
-**Environ 38 % du Music OS demandé.** Estimation de périmètre fonctionnel, pas
+**Environ 43 % du Music OS demandé.** Estimation de périmètre fonctionnel, pas
 pourcentage de couverture de tests, de fidélité artistique ou de fonctionnalités
 entièrement closes. Le catalogue et les premiers parcours fichiers/releases
-existent ; les chaînes CRM, booking, recherche sourcée et échanges entre mondes
+existent ; le carnet de contacts et les étapes manuelles sont vérifiés. Les
+chaînes CRM complètes, booking, recherche sourcée et mails entre mondes
 restent majoritairement à construire. Une infrastructure commune disponible
 ailleurs dans IDA ne vaut pas un parcours musical livré.
 
 Le pourcentage est désormais calculé avec une grille stable sur les 17 critères
 de la Definition of Done : 0 = absent, 25 = amorce, 50 = parcours partiel
 prouvé, 75 = parcours vérifié mais incomplet, 100 = parcours complet avec
-persistance, reprise et erreurs. Le dernier état validé est **650 / 1 700,
-soit 38,2 % arrondi à 38 %**. L’ancien 23 % était une estimation antérieure,
+persistance, reprise et erreurs. Le dernier état validé est **725 / 1 700,
+soit 42,6 % arrondi à 43 %**. L’ancien 23 % était une estimation antérieure,
 pas un nouveau relevé ; il n’est plus utilisé pour comparer les sessions.
 
 La tranche du jour rend le relevé consultable depuis Music et relie un fichier
@@ -36,9 +37,9 @@ n’importe pas les 59,3 Go d’originaux. Le total comprend 1 828 groupes à at
 | 6. Créer une release | PARTIAL — création, fiche éditable, relations morceaux, médias directs, historique et statuts déclaratifs ; persistance/retry/conflits et UI vérifiés | Tracklist ordonnée, rôles/versionnement des assets, pipeline de readiness, contacts/distribution et approbation finale |
 | 7. Vérifier ce qu’il manque | PARTIAL — checklist de morceau calculée depuis métadonnées, master/analyse du propriétaire, image Artwork et tâches partagées ; accès aux parcours réels, persistance et erreurs vérifiés | Édition des métadonnées depuis la checklist, validation artistique, crédits/droits, distribution, approbation finale et bilan complet de release |
 | 8. Associer artwork/assets | PARTIAL — média privé liant track/release ; demande partagée et retour d’image importée avec hash/date, aperçu contrôlé, reprise sans doublon, persistance et UI dans les trois mondes | Versionnement/retrait du rattachement, rôles artwork/master/promo, validation artistique et autres types de médias |
-| 9. Recherche labels/clubs sourcés | NOT_IMPLEMENTED | Recherche officielle/autorisée, provenance, date et qualification sans faux contact |
-| 10. Enregistrer les contacts | NOT_IMPLEMENTED en parcours Music | Réutiliser le moteur de contacts avec identité, rôle musical, source et dédoublonnage |
-| 11. Pipeline CRM | NOT_IMPLEMENTED | Étapes métier, historique, tâches/relances et vue Music réellement reliée |
+| 9. Recherche labels/clubs sourcés | NOT_IMPLEMENTED comme moteur intégré ; cinq suggestions éditoriales officielles datées consultables et préremplissables | Recherche officielle/autorisée actualisée, provenance, date et qualification sans faux contact |
+| 10. Enregistrer les contacts | PARTIAL — identité/provenance partagée, relation par projet, coordonnées facultatives, dédoublonnage, édition et persistance vérifiés dans Music | Annuaire général Workspace, rôles multiples, historique consultable et purge/rétention pilotée |
+| 11. Pipeline CRM | PARTIAL — étapes déclaratives et prochaine action par projet, filtres, audit et UI Music | Historique visible, tâches datées/relances et pipeline d’opportunités ; aucun état d’envoi réel encore |
 | 12. Préparer un mail | NOT_IMPLEMENTED en parcours Music complet | Brouillon musical lié à un contact et une release/booking |
 | 13. Transmettre à Workspace | NOT_IMPLEMENTED pour le mail de §80 ; dossier/tâche de préparation désormais partagé et testé | Transmettre le brouillon de démarchage musical, validation et retour d’envoi ; ne pas compter la tâche comme un mail |
 | 14. Valider avant envoi | PARTIAL — mécanismes d’approbation communs existants | Parcours musical de révision/approbation puis retour d’état ; aucune émission test faite |
@@ -50,7 +51,7 @@ n’importe pas les 59,3 Go d’originaux. Le total comprend 1 828 groupes à at
 
 | Critère | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Score | 75 | 75 | 75 | 50 | 50 | 75 | 50 | 75 | 0 | 0 | 0 | 0 | 0 | 25 | 25 | 25 | 50 |
+| Score | 75 | 75 | 75 | 50 | 50 | 75 | 50 | 75 | 0 | 50 | 25 | 0 | 0 | 25 | 25 | 25 | 50 |
 
 ### Deltas vérifiés, sans changement de grille
 
@@ -78,6 +79,16 @@ n’importe pas les 59,3 Go d’originaux. Le total comprend 1 828 groupes à at
   médias, historique, erreur et réouverture). Redémarrage API/base vérifié.
   Aucun gain pour CRM, pipeline complet, crédits ou distribution encore absents.
   Détail : `docs/MUSIC_RELEASES.md` ; checkpoint B.8 dédié.
+
+- Après contacts et suivi manuel (B.9, 30 septembre) : critères 10 de 0 à 50
+  et 11 de 0 à 25, soit 725/1700 → 43 %. Huit tests API nouveaux et un test
+  des cinq pistes éditoriales ; 187 tests ciblés et 12 recettes navigateur PASS,
+  dont deux nouvelles Classic/Sci-Fi. Création, réponse perdue/retry sans doublon,
+  révisions/conflit, filtres, panne/réessai, mobile et réouverture prouvés ; vraie
+  fermeture/réouverture API/base testée. Les cinq sources ne valent pas un moteur
+  de recherche ; aucune hausse des critères 9, 12 ou 13. Détails :
+  `docs/MUSIC_CONTACTS.md` et checkpoint B.9. Le runtime personnel n’est pas
+  redémarré par ces recettes isolées.
 
 À chaque reprise : lire ce calcul, annoncer périmètre et preuve attendue sauf
 demande contraire, puis écrire le delta après vérification. Aucun gain pour du
@@ -164,7 +175,7 @@ audio, la waveform, les stems ni les releases de bout en bout.
 
 ## Ordre concret de continuation
 
-1. Priorité utilisateur du 30 septembre : contacts labels/lieux sourcés, qualification et prochaine action visibles dans Music, puis brouillons de démarchage partagés avec Workspace. Objectif concret : candidatures et dates, sans promesse de résultat ni envoi automatique.
+1. Priorité utilisateur du 30 septembre : contacts labels/lieux et suivi manuel désormais vérifiés (B.9). Prochaine tranche : brouillons de démarchage partagés avec Workspace, reliés au contact et au projet. Deux projets, Marseille/alentours prioritaires, puis Avignon/Montpellier/Lyon ; prestations privées comprises. Objectif concret : candidatures et dates, sans promesse de résultat ni envoi automatique.
 2. Construire la checklist agrégée de release et compléter rôles/versionnement des assets ; les checklists morceau (B.7) et la fiche release (B.8) sont vérifiées.
 3. Compléter le carnet de sessions et les autres rôles de fichiers (draft/mix/stems).
 4. Booking, label et échanges Finance, sans copier les données financières.
@@ -174,7 +185,9 @@ IDA Finance est la prochaine grande étape souhaitée par Alessandro. Aucun chan
 Finance n’a été ajouté à cette tranche Music et aucun paiement n’a été activé.
 
 Vérification d’architecture B.9 : contrairement à l’hypothèse de l’ancien audit,
-l’annuaire Contacts partagé et les brouillons Mail ne sont pas encore implémentés
-dans le runtime inspecté. Le moteur Tasks existe ; il ne vaut ni annuaire ni
-moteur d’envoi. Construire les primitives partagées nécessaires sans second moteur
-mail, puis relier les dossiers Music. Ne pas considérer une tâche comme un mail.
+l’annuaire Contacts partagé et les brouillons Mail n’étaient pas implémentés
+dans le runtime inspecté. B.9 ajoute l’identité partagée et le parcours Music,
+pas encore la surface Contacts générale de Workspace. Le moteur Tasks existe ;
+il ne vaut pas moteur d’envoi. Construire le brouillon partagé nécessaire sans
+second moteur mail, puis relier les dossiers Music. Ne pas considérer une tâche
+comme un mail.

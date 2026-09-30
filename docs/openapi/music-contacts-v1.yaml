@@ -1,0 +1,182 @@
+openapi: 3.1.0
+info:
+  title: IDA Music contacts
+  version: 1.0.0
+  description: |
+    Local sourced contacts; no external fetch or sending. Workspace identity is server-resolved.
+    Strict executable schemas are packages/contracts/src/music-contacts.ts.
+    Body limit 20480 bytes. READ/WRITE Tool Gateway and transaction revalidation.
+security:
+  - localSession: []
+paths:
+  /v1/music/contacts:
+    get:
+      operationId: listMusicContacts
+      description: Literal search, 25 rows per page; unknown query fields rejected.
+      parameters:
+        - { name: projectId, in: query, schema: { $ref: '#/components/schemas/ProjectId' } }
+        - { name: kind, in: query, schema: { $ref: '#/components/schemas/Kind' } }
+        - { name: stage, in: query, schema: { $ref: '#/components/schemas/Stage' } }
+        - { name: q, in: query, schema: { type: string, minLength: 1, maxLength: 160 } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, maximum: 20000, default: 0 } }
+      responses:
+        '200':
+          description: Scoped page
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [data, nextOffset]
+                properties:
+                  data: { type: array, maxItems: 25, items: { $ref: '#/components/schemas/Contact' } }
+                  nextOffset: { type: [integer, 'null'], minimum: 0 }
+        '400': { description: Invalid or unknown query }
+        '401': { description: Authentication required }
+        '403': { description: Identity, grant or READ denied }
+    post:
+      operationId: createMusicContact
+      description: |
+        Creates a DISCOVERED relationship. Matching shared identity can be reused for another project;
+        conflicting identity fields never silently overwrite. No project chosen automatically.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Create' }
+      responses:
+        '201': { $ref: '#/components/responses/Record' }
+        '200': { $ref: '#/components/responses/Record' }
+        '400': { description: Invalid input or unknown fields/query }
+        '401': { description: Authentication required }
+        '403': { description: WRITE denied or session revoked }
+        '404': { description: Project absent from workspace }
+        '408': { description: Interrupted request; transaction rolled back }
+        '409': { description: Duplicate identity, already linked project, or idempotency payload conflict }
+        '413': { description: Body larger than 20480 bytes }
+  /v1/music/contacts/{contactId}:
+    parameters:
+      - name: contactId
+        in: path
+        required: true
+        schema: { type: string, pattern: '^mct_[a-f0-9]{32}$' }
+    get:
+      operationId: getMusicContact
+      responses:
+        '200': { $ref: '#/components/responses/Record' }
+        '400': { description: Invalid ID or unexpected query }
+        '401': { description: Authentication required }
+        '403': { description: READ denied }
+        '404': { description: Record absent from workspace }
+    patch:
+      operationId: updateMusicContact
+      description: |
+        At least one changed-field intent besides expectedRevision required. Omitted fields preserved;
+        nullable optional fields cleared with null. Exact desired-state retry succeeds without another audit.
+        Shared identity edits invalidate revisions of all its Music relationships.
+        CONTACTED/REPLIED are manual declarations, not proof of sending or reception.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Patch' }
+      responses:
+        '200': { $ref: '#/components/responses/Record' }
+        '400': { description: Invalid input, ID, empty patch or unexpected query }
+        '401': { description: Authentication required }
+        '403': { description: WRITE denied or session revoked }
+        '404': { description: Record absent from workspace }
+        '408': { description: Interrupted request; transaction rolled back }
+        '409': { description: Revision conflict or duplicate shared identity }
+        '413': { description: Body larger than 20480 bytes }
+components:
+  securitySchemes:
+    localSession: { type: apiKey, in: cookie, name: ida_local_session }
+  responses:
+    Record:
+      description: Persisted contact; replayed is present on POST
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [data]
+            properties:
+              data: { $ref: '#/components/schemas/Contact' }
+              replayed: { type: boolean }
+  schemas:
+    ProjectId: { type: string, pattern: '^prj_[a-zA-Z0-9_-]{1,76}$' }
+    Kind:
+      type: string
+      enum: [LABEL, BAR, CLUB, EVENT_PLANNER, PRIVATE_VENUE, PROMOTER, BOOKER, PRESS, RADIO, DJ, ARTIST, MANAGER, OTHER]
+    Stage:
+      type: string
+      enum: [DISCOVERED, QUALIFIED, TO_CONTACT, CONTACTED, REPLIED, FOLLOW_UP, INTERESTED, DECLINED, CLOSED]
+    PublicUrl:
+      type: string
+      format: uri
+      maxLength: 2048
+      description: HTTPS public reference; no credentials, nonstandard port, IP or local hostname. Never fetched by this API.
+    Fields:
+      type: object
+      properties:
+        organisation: { type: string, minLength: 1, maxLength: 240 }
+        personName: { type: string, minLength: 1, maxLength: 160 }
+        city: { type: string, minLength: 1, maxLength: 120 }
+        country: { type: string, minLength: 1, maxLength: 120 }
+        email: { type: string, format: email, maxLength: 254 }
+        website: { $ref: '#/components/schemas/PublicUrl' }
+        sourceUrl: { $ref: '#/components/schemas/PublicUrl' }
+        sourceNote: { type: string, minLength: 1, maxLength: 1000 }
+        kind: { $ref: '#/components/schemas/Kind' }
+        notes: { type: string, minLength: 1, maxLength: 4000 }
+        nextAction: { type: string, minLength: 1, maxLength: 500 }
+    Create:
+      allOf:
+        - { $ref: '#/components/schemas/Fields' }
+        - type: object
+          required: [idempotencyKey, artistProjectId, organisation, kind, sourceUrl]
+          properties:
+            idempotencyKey: { type: string, format: uuid }
+            artistProjectId: { $ref: '#/components/schemas/ProjectId' }
+      unevaluatedProperties: false
+    NullableFields:
+      type: object
+      properties:
+        organisation: { type: string, minLength: 1, maxLength: 240 }
+        personName: { type: [string, 'null'], minLength: 1, maxLength: 160 }
+        city: { type: [string, 'null'], minLength: 1, maxLength: 120 }
+        country: { type: [string, 'null'], minLength: 1, maxLength: 120 }
+        email: { type: [string, 'null'], format: email, maxLength: 254 }
+        website: { anyOf: [{ $ref: '#/components/schemas/PublicUrl' }, { type: 'null' }] }
+        sourceUrl: { $ref: '#/components/schemas/PublicUrl' }
+        sourceNote: { type: [string, 'null'], minLength: 1, maxLength: 1000 }
+        kind: { $ref: '#/components/schemas/Kind' }
+        stage: { $ref: '#/components/schemas/Stage' }
+        notes: { type: [string, 'null'], minLength: 1, maxLength: 4000 }
+        nextAction: { type: [string, 'null'], minLength: 1, maxLength: 500 }
+    Patch:
+      allOf:
+        - { $ref: '#/components/schemas/NullableFields' }
+        - type: object
+          required: [expectedRevision]
+          properties:
+            expectedRevision: { type: integer, minimum: 0, maximum: 2147483646 }
+      minProperties: 2
+      unevaluatedProperties: false
+    Contact:
+      allOf:
+        - { $ref: '#/components/schemas/NullableFields' }
+        - type: object
+          required: [id, contactId, artistProjectId, projectName, organisation, personName, city, country, email, website, sourceUrl, sourceNote, sourceRecordedAt, verification, kind, stage, notes, nextAction, revision, createdAt, updatedAt]
+          properties:
+            id: { type: string, pattern: '^mct_[a-f0-9]{32}$' }
+            contactId: { type: string, pattern: '^wct_[a-f0-9]{32}$' }
+            artistProjectId: { $ref: '#/components/schemas/ProjectId' }
+            projectName: { type: string, minLength: 1, maxLength: 240 }
+            sourceRecordedAt: { type: string, format: date-time }
+            verification: { type: string, const: USER_RECORDED }
+            revision: { type: integer, minimum: 0 }
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+      unevaluatedProperties: false
