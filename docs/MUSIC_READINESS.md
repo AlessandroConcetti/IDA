@@ -11,6 +11,11 @@ La fenêtre hérite du `Sheet` commun : verre et palette Classic/Sci-Fi,
 navigation, profondeur, réduction de mouvement, clavier et adaptation mobile.
 Elle n’utilise aucun chat générique et ne crée aucune tâche automatiquement.
 
+Depuis B.8, **Music Studio → Mes releases → Morceaux → Vérifier** ouvre aussi
+la checklist sur le morceau exact. Éditer la date de sa release ou changer son
+association se reflète à la prochaine lecture ; la date propre au morceau reste
+prioritaire, sans écrasement automatique. Voir `MUSIC_RELEASES.md`.
+
 Dix points affichent **Enregistré**, **À compléter**, **À examiner** ou **Non
 vérifié**, avec l’explication et les seules actions disponibles :
 

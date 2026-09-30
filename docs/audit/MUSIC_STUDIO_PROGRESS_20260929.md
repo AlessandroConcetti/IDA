@@ -5,7 +5,7 @@ Relevé du 29 septembre, actualisé le 30 septembre 2026. Référence : `docs/MU
 
 ## Bilan honnête
 
-**Environ 37 % du Music OS demandé.** Estimation de périmètre fonctionnel, pas
+**Environ 38 % du Music OS demandé.** Estimation de périmètre fonctionnel, pas
 pourcentage de couverture de tests, de fidélité artistique ou de fonctionnalités
 entièrement closes. Le catalogue et les premiers parcours fichiers/releases
 existent ; les chaînes CRM, booking, recherche sourcée et échanges entre mondes
@@ -15,8 +15,8 @@ ailleurs dans IDA ne vaut pas un parcours musical livré.
 Le pourcentage est désormais calculé avec une grille stable sur les 17 critères
 de la Definition of Done : 0 = absent, 25 = amorce, 50 = parcours partiel
 prouvé, 75 = parcours vérifié mais incomplet, 100 = parcours complet avec
-persistance, reprise et erreurs. Le dernier état validé est **625 / 1 700,
-soit 36,8 % arrondi à 37 %**. L’ancien 23 % était une estimation antérieure,
+persistance, reprise et erreurs. Le dernier état validé est **650 / 1 700,
+soit 38,2 % arrondi à 38 %**. L’ancien 23 % était une estimation antérieure,
 pas un nouveau relevé ; il n’est plus utilisé pour comparer les sessions.
 
 La tranche du jour rend le relevé consultable depuis Music et relie un fichier
@@ -33,7 +33,7 @@ n’importe pas les 59,3 Go d’originaux. Le total comprend 1 828 groupes à at
 | 3. Preview réelle | PARTIAL — préécoute authentifiée et éphémère de l’original local, sans copie, plafonnée à 1 Gio et testée sur WAV synthétique | Recette sur un original choisi, matrice codecs/navigateurs et parcours des masters dépassant la limite locale |
 | 4. Waveform/analyse | PARTIAL — analyse WAV locale mesurée, waveform 256 segments, crête et RMS persistés et visibles ; BPM, tonalité, loudness LUFS et autres formats restent absents | Ajouter les mesures audio restantes seulement si elles sont nécessaires, avec la même preuve locale et des limites explicites |
 | 5. Notes/tâches | PARTIAL — demandes de préparation liées au morceau, tâche partagée avec échéance, notes/plans/revues consultables dans les trois mondes et fin explicite depuis Workspace | Carnet de sessions de morceau et parcours de tâches musicales au-delà de la préparation promotionnelle |
-| 6. Créer une release | PARTIAL — création persistante et projet contrôlé | Fiche release complète avec gestion de ses relations et changements d’état |
+| 6. Créer une release | PARTIAL — création, fiche éditable, relations morceaux, médias directs, historique et statuts déclaratifs ; persistance/retry/conflits et UI vérifiés | Tracklist ordonnée, rôles/versionnement des assets, pipeline de readiness, contacts/distribution et approbation finale |
 | 7. Vérifier ce qu’il manque | PARTIAL — checklist de morceau calculée depuis métadonnées, master/analyse du propriétaire, image Artwork et tâches partagées ; accès aux parcours réels, persistance et erreurs vérifiés | Édition des métadonnées depuis la checklist, validation artistique, crédits/droits, distribution, approbation finale et bilan complet de release |
 | 8. Associer artwork/assets | PARTIAL — média privé liant track/release ; demande partagée et retour d’image importée avec hash/date, aperçu contrôlé, reprise sans doublon, persistance et UI dans les trois mondes | Versionnement/retrait du rattachement, rôles artwork/master/promo, validation artistique et autres types de médias |
 | 9. Recherche labels/clubs sourcés | NOT_IMPLEMENTED | Recherche officielle/autorisée, provenance, date et qualification sans faux contact |
@@ -50,7 +50,7 @@ n’importe pas les 59,3 Go d’originaux. Le total comprend 1 828 groupes à at
 
 | Critère | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Score | 75 | 75 | 75 | 50 | 50 | 50 | 50 | 75 | 0 | 0 | 0 | 0 | 0 | 25 | 25 | 25 | 50 |
+| Score | 75 | 75 | 75 | 50 | 50 | 75 | 50 | 75 | 0 | 0 | 0 | 0 | 0 | 25 | 25 | 25 | 50 |
 
 ### Deltas vérifiés, sans changement de grille
 
@@ -71,6 +71,13 @@ n’importe pas les 59,3 Go d’originaux. Le total comprend 1 828 groupes à at
   de checklist Classic/Sci-Fi (master, analyse, création de demande, relecture,
   erreur/réessai, mobile). Aucun gain pour droits/distribution non implémentés.
   Détail : `docs/MUSIC_READINESS.md` ; checkpoint B.7 dédié.
+- Après fiche release réelle (B.8, 30 septembre) : critère 6 de 50 à 75,
+  soit 650/1 700 → 38 %. Huit nouveaux tests API et deux de transport ;
+  178 tests ciblés et 10 recettes navigateur PASS (Classic/Sci-Fi, 390 px,
+  perte de réponse après écriture, retry, conflit, association, checklist,
+  médias, historique, erreur et réouverture). Redémarrage API/base vérifié.
+  Aucun gain pour CRM, pipeline complet, crédits ou distribution encore absents.
+  Détail : `docs/MUSIC_RELEASES.md` ; checkpoint B.8 dédié.
 
 À chaque reprise : lire ce calcul, annoncer périmètre et preuve attendue sauf
 demande contraire, puis écrire le delta après vérification. Aucun gain pour du
@@ -157,11 +164,17 @@ audio, la waveform, les stems ni les releases de bout en bout.
 
 ## Ordre concret de continuation
 
-1. Construire la checklist de release à partir des données réelles ; le retour d’image importée est validé (B.6). Compléter ensuite rôles/versionnement des assets.
-2. Compléter le carnet de sessions et les autres rôles de fichiers (draft/mix/stems).
-3. Contacts sourcés et pipeline CRM musical, puis brouillons et handoff mail Workspace.
+1. Priorité utilisateur du 30 septembre : contacts labels/lieux sourcés, qualification et prochaine action visibles dans Music, puis brouillons de démarchage partagés avec Workspace. Objectif concret : candidatures et dates, sans promesse de résultat ni envoi automatique.
+2. Construire la checklist agrégée de release et compléter rôles/versionnement des assets ; les checklists morceau (B.7) et la fiche release (B.8) sont vérifiées.
+3. Compléter le carnet de sessions et les autres rôles de fichiers (draft/mix/stems).
 4. Booking, label et échanges Finance, sans copier les données financières.
 5. Recettes complètes §75 et §76, avec mobile, redémarrage et erreurs.
 
 IDA Finance est la prochaine grande étape souhaitée par Alessandro. Aucun chantier
 Finance n’a été ajouté à cette tranche Music et aucun paiement n’a été activé.
+
+Vérification d’architecture B.9 : contrairement à l’hypothèse de l’ancien audit,
+l’annuaire Contacts partagé et les brouillons Mail ne sont pas encore implémentés
+dans le runtime inspecté. Le moteur Tasks existe ; il ne vaut ni annuaire ni
+moteur d’envoi. Construire les primitives partagées nécessaires sans second moteur
+mail, puis relier les dossiers Music. Ne pas considérer une tâche comme un mail.

@@ -1,0 +1,230 @@
+openapi: 3.1.0
+info:
+  title: IDA Music — release workspace
+  version: 1.0.0
+  description: >-
+    Métadonnées et relations du catalogue existant. Statuts locaux déclaratifs,
+    aucune publication. Identity et Tool Gateway du runtime local commun ;
+    LOCAL_DEMO utilise un contexte serveur, LOCAL_LOCK un cookie opaque HttpOnly.
+    Aucun workspace, utilisateur, projet ou credential accepté depuis ces payloads.
+servers:
+  - url: http://127.0.0.1:8787
+x-ida-security:
+  identity: même garde /v1 que phase1-local.yaml
+  workspaceIsolation: toutes les requêtes, revalidation transactionnelle avant et après
+  readTool: read_music_release (MUSIC/READ)
+  writeTool: update_music_release (MUSIC/WRITE)
+  linkTool: link_music_release_track (MUSIC/WRITE)
+  externalEffects: none
+paths:
+  /v1/music/releases/{releaseId}:
+    parameters:
+      - $ref: '#/components/parameters/ReleaseId'
+    get:
+      operationId: readMusicRelease
+      description: Aucun paramètre query accepté.
+      responses:
+        '200':
+          description: Fiche existante avec révision courante.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/ReleaseDetail' }
+        default: { $ref: '#/components/responses/Error' }
+    patch:
+      operationId: updateMusicRelease
+      description: >-
+        Maximum 12000 octets, aucun query. Omettre un champ le conserve ; null
+        efface date, label ou description. Révision périmée et changement réel =
+        409. Intention déjà satisfaite = succès inchangé sans nouvel audit.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Patch' }
+      responses:
+        '200': { $ref: '#/components/responses/Mutation' }
+        default: { $ref: '#/components/responses/Error' }
+  /v1/music/releases/{releaseId}/tracks:
+    parameters:
+      - $ref: '#/components/parameters/ReleaseId'
+    get:
+      operationId: readMusicReleaseTracks
+      description: >-
+        Même workspace/projet uniquement. linked inclut les archives ; available
+        exclut archives et morceaux déjà associés. Aucun autre query accepté.
+      parameters:
+        - $ref: '#/components/parameters/Offset'
+        - name: scope
+          in: query
+          schema: { type: string, enum: [linked, available], default: linked }
+      responses:
+        '200':
+          description: Page triée par id, 25 morceaux maximum.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [data, nextOffset]
+                properties:
+                  nextOffset: { $ref: '#/components/schemas/NextOffset' }
+                  data:
+                    type: array
+                    maxItems: 25
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [id, title, artistCredit, status, releaseDate]
+                      properties:
+                        id: { type: string }
+                        title: { type: string }
+                        artistCredit: { type: string }
+                        status: { type: string }
+                        releaseDate: { $ref: '#/components/schemas/NullableDate' }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      operationId: linkMusicReleaseTrack
+      description: >-
+        Maximum 2048 octets, aucun query. Associer ou retirer un lien sans
+        suppression. Refuse une autre release, une archive ou une dépendance
+        média/campagne contradictoire. Répétition déjà satisfaite sans effet.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [trackId, attached, expectedRevision]
+              properties:
+                trackId: { type: string, pattern: '^[Tt][Rr][Kk]_[a-zA-Z0-9_-]{1,76}$' }
+                attached: { type: boolean }
+                expectedRevision: { type: integer, minimum: 0 }
+      responses:
+        '200': { $ref: '#/components/responses/Mutation' }
+        default: { $ref: '#/components/responses/Error' }
+  /v1/music/releases/{releaseId}/history:
+    parameters:
+      - $ref: '#/components/parameters/ReleaseId'
+    get:
+      operationId: readMusicReleaseHistory
+      description: Trois actions du module, audit append-only, plus récentes d'abord. Aucun autre query accepté.
+      parameters:
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Page triée par date puis id décroissants, 25 événements maximum.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [data, nextOffset]
+                properties:
+                  nextOffset: { $ref: '#/components/schemas/NextOffset' }
+                  data:
+                    type: array
+                    maxItems: 25
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [id, action, fields, at, revision, trackId, fromStatus, toStatus]
+                      properties:
+                        id: { type: string }
+                        action: { enum: [music.release.updated, music.release.track_linked, music.release.track_unlinked] }
+                        fields: { type: array, items: { type: string } }
+                        at: { type: string, format: date-time }
+                        revision: { type: integer, minimum: 1 }
+                        trackId: { type: [string, 'null'] }
+                        fromStatus: { enum: [DRAFT, SCHEDULED, RELEASED, ARCHIVED, null] }
+                        toStatus: { enum: [DRAFT, SCHEDULED, RELEASED, ARCHIVED, null] }
+        default: { $ref: '#/components/responses/Error' }
+components:
+  parameters:
+    ReleaseId:
+      name: releaseId
+      in: path
+      required: true
+      schema: { type: string, pattern: '^[Rr][Ee][Ll]_[a-zA-Z0-9_-]{1,76}$' }
+    Offset:
+      name: offset
+      in: query
+      schema: { type: integer, minimum: 0, maximum: 20000, default: 0 }
+  responses:
+    Error:
+      description: >-
+        400 entrée/query invalides ; 401 session absente ou révoquée ; 403 refus
+        policy/client ; 404 absent ou étranger indistinguables ; 409 conflit de
+        révision/lien/dépendance/archive ; 413 body trop grand. Aucun effet conservé.
+      content:
+        application/json:
+          schema: { $ref: './phase1-local.yaml#/components/schemas/ErrorResponse' }
+    Mutation:
+      description: Fiche relue dans la transaction et indicateur de répétition sans effet.
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [data, unchanged]
+            properties:
+              data: { $ref: '#/components/schemas/ReleaseDetail' }
+              unchanged: { type: boolean }
+  schemas:
+    Status: { type: string, enum: [DRAFT, SCHEDULED, RELEASED, ARCHIVED] }
+    NextOffset: { type: [integer, 'null'], minimum: 0 }
+    Date:
+      type: string
+      format: date
+      pattern: '^(?!0000)\d{4}-\d{2}-\d{2}$'
+      description: Date civile grégorienne réelle, sans conversion de fuseau.
+    NullableDate:
+      anyOf:
+        - $ref: '#/components/schemas/Date'
+        - type: 'null'
+    Tags:
+      type: array
+      maxItems: 30
+      items: { type: string, minLength: 1, maxLength: 80 }
+    Patch:
+      type: object
+      additionalProperties: false
+      minProperties: 2
+      required: [expectedRevision]
+      description: Textes nettoyés des espaces de bord ; aucun défaut de création appliqué.
+      properties:
+        expectedRevision: { type: integer, minimum: 0 }
+        title: { type: string, minLength: 1, maxLength: 240 }
+        releaseType: { type: string, minLength: 1, maxLength: 80 }
+        releaseDate: { $ref: '#/components/schemas/NullableDate' }
+        label: { type: [string, 'null'], minLength: 1, maxLength: 240 }
+        description: { type: [string, 'null'], minLength: 1, maxLength: 4000 }
+        status: { $ref: '#/components/schemas/Status' }
+        tags: { $ref: '#/components/schemas/Tags' }
+    ReleaseDetail:
+      type: object
+      additionalProperties: false
+      required: [id, workspaceId, artistProjectId, title, releaseType, status, links, tags, createdAt, updatedAt, editRevision, projectName, trackCount, publicationAuthorized]
+      properties:
+        id: { type: string }
+        workspaceId: { type: string }
+        artistProjectId: { type: string }
+        title: { type: string, minLength: 1, maxLength: 240 }
+        releaseType: { type: string, minLength: 1, maxLength: 80 }
+        releaseDate: { $ref: '#/components/schemas/Date' }
+        label: { type: string, minLength: 1, maxLength: 240 }
+        description: { type: string, minLength: 1, maxLength: 4000 }
+        status: { $ref: '#/components/schemas/Status' }
+        links: { type: array, items: { type: string, format: uri } }
+        tags: { $ref: '#/components/schemas/Tags' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        editRevision: { type: integer, minimum: 0 }
+        projectName: { type: string }
+        trackCount: { type: integer, minimum: 0 }
+        publicationAuthorized: { type: boolean, const: false }
