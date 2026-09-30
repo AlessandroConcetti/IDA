@@ -5,7 +5,7 @@ Relevé du 29 septembre, actualisé le 30 septembre 2026. Référence : `docs/MU
 
 ## Bilan honnête
 
-**Environ 34 % du Music OS demandé.** Estimation de périmètre fonctionnel, pas
+**Environ 37 % du Music OS demandé.** Estimation de périmètre fonctionnel, pas
 pourcentage de couverture de tests, de fidélité artistique ou de fonctionnalités
 entièrement closes. Le catalogue et les premiers parcours fichiers/releases
 existent ; les chaînes CRM, booking, recherche sourcée et échanges entre mondes
@@ -15,8 +15,8 @@ ailleurs dans IDA ne vaut pas un parcours musical livré.
 Le pourcentage est désormais calculé avec une grille stable sur les 17 critères
 de la Definition of Done : 0 = absent, 25 = amorce, 50 = parcours partiel
 prouvé, 75 = parcours vérifié mais incomplet, 100 = parcours complet avec
-persistance, reprise et erreurs. Le dernier état validé est **575 / 1 700,
-soit 33,8 % arrondi à 34 %**. L’ancien 23 % était une estimation antérieure,
+persistance, reprise et erreurs. Le dernier état validé est **625 / 1 700,
+soit 36,8 % arrondi à 37 %**. L’ancien 23 % était une estimation antérieure,
 pas un nouveau relevé ; il n’est plus utilisé pour comparer les sessions.
 
 La tranche du jour rend le relevé consultable depuis Music et relie un fichier
@@ -34,7 +34,7 @@ n’importe pas les 59,3 Go d’originaux. Le total comprend 1 828 groupes à at
 | 4. Waveform/analyse | PARTIAL — analyse WAV locale mesurée, waveform 256 segments, crête et RMS persistés et visibles ; BPM, tonalité, loudness LUFS et autres formats restent absents | Ajouter les mesures audio restantes seulement si elles sont nécessaires, avec la même preuve locale et des limites explicites |
 | 5. Notes/tâches | PARTIAL — demandes de préparation liées au morceau, tâche partagée avec échéance, notes/plans/revues consultables dans les trois mondes et fin explicite depuis Workspace | Carnet de sessions de morceau et parcours de tâches musicales au-delà de la préparation promotionnelle |
 | 6. Créer une release | PARTIAL — création persistante et projet contrôlé | Fiche release complète avec gestion de ses relations et changements d’état |
-| 7. Vérifier ce qu’il manque | NOT_IMPLEMENTED comme checklist musicale | Critères de readiness à partir des métadonnées, versions, assets et validations réelles |
+| 7. Vérifier ce qu’il manque | PARTIAL — checklist de morceau calculée depuis métadonnées, master/analyse du propriétaire, image Artwork et tâches partagées ; accès aux parcours réels, persistance et erreurs vérifiés | Édition des métadonnées depuis la checklist, validation artistique, crédits/droits, distribution, approbation finale et bilan complet de release |
 | 8. Associer artwork/assets | PARTIAL — média privé liant track/release ; demande partagée et retour d’image importée avec hash/date, aperçu contrôlé, reprise sans doublon, persistance et UI dans les trois mondes | Versionnement/retrait du rattachement, rôles artwork/master/promo, validation artistique et autres types de médias |
 | 9. Recherche labels/clubs sourcés | NOT_IMPLEMENTED | Recherche officielle/autorisée, provenance, date et qualification sans faux contact |
 | 10. Enregistrer les contacts | NOT_IMPLEMENTED en parcours Music | Réutiliser le moteur de contacts avec identité, rôle musical, source et dédoublonnage |
@@ -50,7 +50,7 @@ n’importe pas les 59,3 Go d’originaux. Le total comprend 1 828 groupes à at
 
 | Critère | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Score | 75 | 75 | 75 | 50 | 50 | 50 | 0 | 75 | 0 | 0 | 0 | 0 | 0 | 25 | 25 | 25 | 50 |
+| Score | 75 | 75 | 75 | 50 | 50 | 50 | 50 | 75 | 0 | 0 | 0 | 0 | 0 | 25 | 25 | 25 | 50 |
 
 ### Deltas vérifiés, sans changement de grille
 
@@ -65,6 +65,12 @@ n’importe pas les 59,3 Go d’originaux. Le total comprend 1 828 groupes à at
   puis disponible, conservation après redémarrage API. Ni rôle master artwork,
   ni génération, ni publication ne sont comptés.
 - La tranche ne vaut pas une chaîne complète de promotion ou de démarchage.
+- Après checklist réelle de préparation (B.7, 30 septembre) : critère 7 de 0 à
+  50, soit 625/1 700 → 37 %. Six nouveaux tests API, scénario de versions étendu,
+  93 tests ciblés et huit recettes navigateur PASS, dont deux nouvelles recettes
+  de checklist Classic/Sci-Fi (master, analyse, création de demande, relecture,
+  erreur/réessai, mobile). Aucun gain pour droits/distribution non implémentés.
+  Détail : `docs/MUSIC_READINESS.md` ; checkpoint B.7 dédié.
 
 À chaque reprise : lire ce calcul, annoncer périmètre et preuve attendue sauf
 demande contraire, puis écrire le delta après vérification. Aucun gain pour du

@@ -148,6 +148,12 @@ validation, historique, réouverture et archivage à 390 px.
 
 ## Récupération
 
+Depuis **Music Studio → Checklist de préparation**, les versions rattachées
+peuvent maintenant s’ouvrir directement pour le morceau choisi. Le retour au
+bilan relit le rôle master et l’analyse persistée de cette version. Cette
+projection ne relit pas l’original ni ne certifie sa qualité : voir
+`MUSIC_READINESS.md`.
+
 En cas de relevé altéré : l’interface affiche une erreur, sans exposer les données
 partielles. Régénérer un relevé depuis le dossier choisi puis l’activer explicitement,
 ou réactiver un relevé antérieur intact. L’activation sauvegarde l’ancien manifeste.
