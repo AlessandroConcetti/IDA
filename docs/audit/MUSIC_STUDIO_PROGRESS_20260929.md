@@ -1,18 +1,26 @@
 # Music Studio — avancement face au prompt complet
 
-29 septembre 2026. Référence : `docs/MUSIC_STUDIO_PRODUCT_BRIEF_20260928.md`
+Relevé du 29 septembre, actualisé le 30 septembre 2026. Référence : `docs/MUSIC_STUDIO_PRODUCT_BRIEF_20260928.md`
 (86 sections), notamment sa Definition of Done §80 et ses recettes §75–76.
 
 ## Bilan honnête
 
-**Environ 20 % du Music OS demandé.** Estimation de périmètre fonctionnel, pas
+**Environ 34 % du Music OS demandé.** Estimation de périmètre fonctionnel, pas
 pourcentage de couverture de tests, de fidélité artistique ou de fonctionnalités
 entièrement closes. Le catalogue et les premiers parcours fichiers/releases
 existent ; les chaînes CRM, booking, recherche sourcée et échanges entre mondes
 restent majoritairement à construire. Une infrastructure commune disponible
 ailleurs dans IDA ne vaut pas un parcours musical livré.
 
-La tranche du jour rend le relevé local réellement consultable depuis Music.
+Le pourcentage est désormais calculé avec une grille stable sur les 17 critères
+de la Definition of Done : 0 = absent, 25 = amorce, 50 = parcours partiel
+prouvé, 75 = parcours vérifié mais incomplet, 100 = parcours complet avec
+persistance, reprise et erreurs. Le dernier état validé est **575 / 1 700,
+soit 33,8 % arrondi à 34 %**. L’ancien 23 % était une estimation antérieure,
+pas un nouveau relevé ; il n’est plus utilisé pour comparer les sessions.
+
+La tranche du jour rend le relevé consultable depuis Music et relie un fichier
+local explicitement choisi à un track existant, avec préécoute réelle bornée.
 Elle ne transforme pas les 1 970 groupes trouvés en discographie approuvée et
 n’importe pas les 59,3 Go d’originaux. Le total comprend 1 828 groupes à attribuer.
 
@@ -20,23 +28,52 @@ n’importe pas les 59,3 Go d’originaux. Le total comprend 1 828 groupes à at
 
 | §80 | État vérifiable | Manque pour clôturer le parcours musical complet |
 | --- | --- | --- |
-| 1. Importer/enregistrer un morceau | PARTIAL — création de tracks, sélection du projet, import privé borné et inventaire local | Liaison explicite candidat du relevé → track ; traitement des gros masters au-delà de l’import 25 Mio |
-| 2. Conserver plusieurs versions | PARTIAL — toutes les versions du relevé sont conservées et consultables | Versions métier rattachées au track, validation et changement de version de référence |
-| 3. Preview réelle | PARTIAL — lecteur réel des médias privés importés | Preview à partir de la bibliothèque choisie ; erreurs de fichier déplacé/codec et gros fichiers |
-| 4. Waveform/analyse | NOT_IMPLEMENTED pour le parcours demandé ; quelques en-têtes WAV seulement | Waveform persistée, analyse DSP mesurée, statut/coût/limites, aucune valeur audio inventée |
-| 5. Notes/tâches | PARTIAL — idées/briefs vers tâches communes | Notes de morceau, sessions, liens stables et historique consultable depuis sa fiche |
+| 1. Importer/enregistrer un morceau | PARTIAL — création de tracks, sélection du projet, import privé borné, inventaire local et rattachement explicite d’une référence locale vérifiée au track | Liaison et import unifiés de tous les assets ; validation du parcours sur un original choisi et limites pour les gros masters |
+| 2. Conserver plusieurs versions | PARTIAL — références locales, SHA-256, rôles REVIEW/CURRENT/MASTER/ARCHIVED avec validation explicite, historique et remplacement atomique vérifiés | Étendre aux autres assets/imports et rôles draft/mix/stems sans perdre la traçabilité |
+| 3. Preview réelle | PARTIAL — préécoute authentifiée et éphémère de l’original local, sans copie, plafonnée à 1 Gio et testée sur WAV synthétique | Recette sur un original choisi, matrice codecs/navigateurs et parcours des masters dépassant la limite locale |
+| 4. Waveform/analyse | PARTIAL — analyse WAV locale mesurée, waveform 256 segments, crête et RMS persistés et visibles ; BPM, tonalité, loudness LUFS et autres formats restent absents | Ajouter les mesures audio restantes seulement si elles sont nécessaires, avec la même preuve locale et des limites explicites |
+| 5. Notes/tâches | PARTIAL — demandes de préparation liées au morceau, tâche partagée avec échéance, notes/plans/revues consultables dans les trois mondes et fin explicite depuis Workspace | Carnet de sessions de morceau et parcours de tâches musicales au-delà de la préparation promotionnelle |
 | 6. Créer une release | PARTIAL — création persistante et projet contrôlé | Fiche release complète avec gestion de ses relations et changements d’état |
 | 7. Vérifier ce qu’il manque | NOT_IMPLEMENTED comme checklist musicale | Critères de readiness à partir des métadonnées, versions, assets et validations réelles |
-| 8. Associer artwork/assets | PARTIAL — média privé liant track/release | Rôles artwork/master/promo, provenance, version et demande à La Baraque suivie |
+| 8. Associer artwork/assets | PARTIAL — média privé liant track/release ; demande partagée et retour d’image importée avec hash/date, aperçu contrôlé, reprise sans doublon, persistance et UI dans les trois mondes | Versionnement/retrait du rattachement, rôles artwork/master/promo, validation artistique et autres types de médias |
 | 9. Recherche labels/clubs sourcés | NOT_IMPLEMENTED | Recherche officielle/autorisée, provenance, date et qualification sans faux contact |
 | 10. Enregistrer les contacts | NOT_IMPLEMENTED en parcours Music | Réutiliser le moteur de contacts avec identité, rôle musical, source et dédoublonnage |
 | 11. Pipeline CRM | NOT_IMPLEMENTED | Étapes métier, historique, tâches/relances et vue Music réellement reliée |
 | 12. Préparer un mail | NOT_IMPLEMENTED en parcours Music complet | Brouillon musical lié à un contact et une release/booking |
-| 13. Transmettre à Workspace | NOT_IMPLEMENTED en parcours Music complet | Handoff persistant avec référence, états et retour visible dans Music |
+| 13. Transmettre à Workspace | NOT_IMPLEMENTED pour le mail de §80 ; dossier/tâche de préparation désormais partagé et testé | Transmettre le brouillon de démarchage musical, validation et retour d’envoi ; ne pas compter la tâche comme un mail |
 | 14. Valider avant envoi | PARTIAL — mécanismes d’approbation communs existants | Parcours musical de révision/approbation puis retour d’état ; aucune émission test faite |
 | 15. Suivre booking/release | PARTIAL pour les releases, NOT_IMPLEMENTED pour bookings | Venue/contact/calendrier/documents/états et historique de booking |
 | 16. Conserver documents | PARTIAL — stockage privé partagé | Dossier de release/booking, catégories et récupération depuis sa fiche |
 | 17. Historique après redémarrage | PARTIAL — données catalogue et relevé persistants ; relevé revalidé après réouverture du runtime | Historique de l’ensemble des chaînes musicales et de leurs handoffs |
+
+### Calcul de l’avancement
+
+| Critère | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Score | 75 | 75 | 75 | 50 | 50 | 50 | 0 | 75 | 0 | 0 | 0 | 0 | 0 | 25 | 25 | 25 | 50 |
+
+### Deltas vérifiés, sans changement de grille
+
+- Après analyse WAV : 475/1 700 → 28 %.
+- Après rôles/historique des versions locales : critère 2 de 50 à 75,
+  soit 500/1 700 → 29 %.
+- Après dossier Music → La Baraque → Workspace : critères 5 et 8 de 25 à 50,
+  soit 550/1 700 → 32 %. Le critère 13 reste à 0 : pas encore de mail transmis.
+- Après retour d’image privée vérifiée dans le dossier (B.6, 30 septembre) :
+  critère 8 de 50 à 75, soit 575/1 700 → 34 %. Preuves : 7 nouveaux tests API,
+  2 parcours navigateur étendus Classic/Sci-Fi, reprise réseau, aperçu en erreur
+  puis disponible, conservation après redémarrage API. Ni rôle master artwork,
+  ni génération, ni publication ne sont comptés.
+- La tranche ne vaut pas une chaîne complète de promotion ou de démarchage.
+
+À chaque reprise : lire ce calcul, annoncer périmètre et preuve attendue sauf
+demande contraire, puis écrire le delta après vérification. Aucun gain pour du
+code seul. Voir `docs/MUSIC_CONTENT_HANDOFF.md` pour le parcours et ses limites.
+
+Ce calcul explique pourquoi une tranche complète peut faire avancer le total de
+quelques points : le prompt couvre beaucoup de domaines encore absents (CRM,
+labels, bookings, handoff, outreach et documents), alors que la tranche traite
+une seule capacité avec une preuve de bout en bout.
 
 ## Tranche validée : bibliothèque locale
 
@@ -58,19 +95,67 @@ Entrée : **Music Studio → Bibliothèque → Consulter la sélection locale**.
 - Build et typecheck de tous les packages : PASS. Lint des neuf nouveaux fichiers
   vérifiés : PASS. La seconde lecture du relevé réel mesure 131 ms pour 13 913 octets.
 
+## Tranche B.3 : analyse WAV locale et waveform
+
+Entrée : une version WAV déjà rattachée dans **Music Studio → Bibliothèque →
+Consulter mes versions rattachées**. Le bouton **Analyser ce WAV** vérifie à
+nouveau l’original sous la racine configurée, lit par blocs bornés et enregistre
+une analyse déterministe. **Consulter l’analyse enregistrée** reste disponible
+après fermeture ou lorsque le disque n’est plus accessible ; cette lecture
+historique indique explicitement que l’original n’a pas été revérifié.
+
+- Formats analysés : WAV RIFF standard PCM 8/16/24/32 bits et float 32/64 bits,
+  1 à 8 canaux, 8–192 kHz, 1 heure et 256 Mio maximum.
+- Résultat réel : durée, fréquence, canaux, crête d’échantillon en dBFS, RMS en
+  dBFS et waveform de 256 segments min/max. Le résultat est présenté comme une
+  analyse, pas comme une mesure LUFS ou un master approuvé.
+- Le fichier reste local, n’est ni copié ni envoyé à un modèle. Toute modification
+  pendant la lecture, annulation, dépassement de temps, erreur de format ou
+  révocation de session produit un état d’erreur explicite.
+- Smoke test IDA sur un WAV réel de `F:\MUSIQUES 2K26` : PASS via `createApp` et
+  les routes IDA, 54 754 640 octets, 44,1 kHz, 2 canaux, 310,4 s, crête −0,30
+  dBFS, RMS −6,05 dBFS, 256 segments, relecture persistée PASS. La base de test
+  était en mémoire et le fichier personnel n’a pas été modifié.
+- Tests API ciblés : 43 PASS sur cinq fichiers Music, dont 22 tests du décodeur
+  WAV (formats, signal stéréo en opposition, silence, chunks, corruption,
+  annulation, dépassement et revalidation) et les parcours de liaison,
+  persistance, reprise hors disque et contrôle de scope.
+- Playwright : 4 PASS Classic/Sci-Fi, analyse visible, waveform, préécoute réelle
+  synthétique, fermeture/réouverture, consultation historique, réutilisation,
+  erreur de fichier et responsive 390 px.
+- Typecheck et builds Contracts/Domain/API/Web : PASS ; Biome des fichiers de la
+  tranche : PASS. Le warning de taille du bundle Web reste présent (~972 Ko).
+
 Voir `docs/MUSIC_LIBRARY_REVIEW.md` et le checkpoint pour les dernières commandes
 de validation. CPU/GPU/RAM de l’ensemble d’IDA ne sont pas requalifiés par cette
 petite tranche ; le coût mesuré est celui de la lecture du relevé et de sa réponse.
 
+## Tranche B.2 : rattachement et préécoute locale
+
+Entrée : Music Studio → Bibliothèque → bibliothèque locale → **Rattacher / préécouter**.
+
+- Choix explicite d’un track déjà présent ; aucun rapprochement automatique à partir du nom du fichier.
+- Le serveur revalide le snapshot, le propriétaire/workspace, le chemin sous la racine configurée, les métadonnées et le SHA-256 avant d’écrire la référence.
+- Les versions enregistrées sont persistantes, liées au track, dédoublonnées par contrainte DB et journalisées sans chemin absolu ni contenu audio.
+- La préécoute ouvre l’original en lecture seule par plages, après vérification d’empreinte ; accès temporaire lié à la session et au workspace, révocable, `no-store`, sans duplication ni transfert à un fournisseur.
+- Limites vérifiées dans le code : 1 Gio par fichier, hachage par blocs de 128 Kio, plafond de 60 s par vérification et accès de préécoute de 120 s.
+- Tests API : 2 tests PASS (persistance après recréation du runtime, répétition idempotente, plages HTTP, arrêt/expiration du ticket, isolation d’identité, Gateway, entrées invalides et fichier changé/déplacé). Le refus de liens symboliques existe dans le lecteur ; cette recette ne crée pas de symlink Windows réel.
+- Non-régression API Music : 5 fichiers, 33 tests PASS — inventaire, bibliothèque, choix du projet, références locales et médias liés.
+- Playwright : 4 tests PASS Classic/Sci-Fi, relevé et lien/préécoute, lecture effective d’un WAV synthétique de 4 s, arrêt, réouverture persistante, erreur de fichier et responsive 390 px. Aucune chanson personnelle n’a été lue pendant cette recette.
+- Typecheck Contracts/Domain/API/Web : PASS ; builds Contracts/Domain/API/Web : PASS ; Biome sur les 9 fichiers de cette tranche : PASS.
+- La taille du bundle principal Web reste élevée (environ 968 Ko minifiés) : avertissement du build, sans régression fonctionnelle constatée.
+
+Cette tranche rend les références de versions persistantes et la préécoute
+opérationnelles, mais elle ne gère pas encore l’approbation de master, l’analyse
+audio, la waveform, les stems ni les releases de bout en bout.
+
 ## Ordre concret de continuation
 
-1. Relier les candidats locaux aux morceaux, avec choix d’identité et de version,
-   références persistantes et preview réelle sans dupliquer les masters.
-2. Ajouter analyse audio/waveform locale bornée avec résultat visible dans la fiche.
-3. Compléter notes, sessions et checklist de release en réutilisant tâches/documents.
-4. Contacts sourcés et pipeline CRM musical, puis brouillons et handoff Workspace.
-5. Booking, label et échanges La Baraque/Finance, sans copier les données financières.
-6. Recettes complètes §75 et §76, avec mobile, redémarrage et erreurs.
+1. Construire la checklist de release à partir des données réelles ; le retour d’image importée est validé (B.6). Compléter ensuite rôles/versionnement des assets.
+2. Compléter le carnet de sessions et les autres rôles de fichiers (draft/mix/stems).
+3. Contacts sourcés et pipeline CRM musical, puis brouillons et handoff mail Workspace.
+4. Booking, label et échanges Finance, sans copier les données financières.
+5. Recettes complètes §75 et §76, avec mobile, redémarrage et erreurs.
 
 IDA Finance est la prochaine grande étape souhaitée par Alessandro. Aucun chantier
 Finance n’a été ajouté à cette tranche Music et aucun paiement n’a été activé.

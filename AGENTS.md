@@ -15,6 +15,7 @@ IDA est un assistant personnel extensible, pas un gestionnaire de réseaux socia
 - Ne pas réécrire des fichiers sans nécessité ; préserver les modifications existantes.
 - Mettre à jour la documentation concernée avec chaque changement de comportement ou de contrat.
 - Réaliser un commit logique après une unité terminée et vérifiée.
+- À chaque reprise de chantier, annoncer l’avancement du périmètre demandé avec la grille du dernier audit, la tranche validée et la prochaine preuve attendue, sauf demande contraire de l’utilisateur. Ne pas reprendre un ancien pourcentage comme s’il venait d’être vérifié, ni compter un simple fichier codé comme une fonction livrée. Conserver le delta et ses preuves dans l’audit du monde concerné.
 
 ## Architecture
 
