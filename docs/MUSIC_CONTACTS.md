@@ -90,7 +90,12 @@ Depuis B.10, **Brouillons pour ce contact** prépare un vrai brouillon partagé
 avec Workspace et Mail, avec morceau facultatif du même projet. Voir
 `WORKSPACE_MAIL_DRAFTS.md`. Aucune étape CRM ne change lors de sa préparation.
 
-Restent : annuaire général Workspace, approbation et envoi, relance/tâche datée, historique de suivi dans
+Depuis B.11, **Relances datées** crée une tâche partagée Workspace avec échéance,
+retour au contact et achèvement commun vérifiés. Voir `MUSIC_FOLLOWUPS.md`.
+Ni notification programmée ni envoi automatique ; la prochaine action textuelle
+ne devient une tâche qu'après l'enregistrement explicite du formulaire.
+
+Restent : annuaire général Workspace, approbation et envoi, historique complet de suivi dans
 l’interface, pipeline booking complet et recherche officielle intégrée.
 Les cinq pistes éditoriales ne ferment pas le critère « recherche labels/clubs ».
 

@@ -1,0 +1,189 @@
+openapi: 3.1.0
+info:
+  title: IDA Music dated followups with shared Workspace tasks
+  version: 1.0.0
+  description: |
+    Music owns a contact-to-task reference and its time zone; shared TASKS owns the task
+    content, due date and status. No email, notification, external call or automatic CRM
+    stage change is performed. Completion uses the existing POST /v1/tasks/{taskId}/complete
+    route; this contract introduces no separate completion endpoint.
+    Workspace and actor are resolved from authenticated server identity. Required tools,
+    identity and permissions are revalidated inside the transaction before and after access.
+    Strict executable schemas are in packages/contracts/src/music-followups.ts.
+    All documented string-length limits are JavaScript UTF-16 code units, rather than
+    Unicode code points as in standard JSON Schema. Trimmed fields are validated after trim.
+security:
+  - localSession: []
+paths:
+  /v1/music/followups:
+    get:
+      operationId: listMusicFollowups
+      description: |
+        Requires TASKS READ (read_music_followups) and MUSIC READ (read_music_contacts).
+        Returns at most 25 references from the authorized workspace, with current joined
+        contact/project names and shared task data. Optional contact and task filters are
+        combined with AND. Missing or foreign references produce an empty page.
+        OPEN includes TODO and IN_PROGRESS; CLOSED includes DONE and CANCELLED; ALL is
+        the default. Order is followup created_at descending, then followup id ascending.
+        nextOffset is offset + 25 when another record exists, otherwise null.
+        Unknown query parameters are rejected. Offset is coerced to a number and then
+        validated as an integer from 0 through 20000.
+      x-ida-required-tools:
+        - { toolKey: read_music_followups, moduleKey: TASKS, permission: READ }
+        - { toolKey: read_music_contacts, moduleKey: MUSIC, permission: READ }
+      parameters:
+        - { name: musicContactId, in: query, schema: { $ref: '#/components/schemas/ContactId' } }
+        - { name: taskId, in: query, schema: { $ref: '#/components/schemas/TaskId' } }
+        - { name: state, in: query, schema: { type: string, enum: [OPEN, CLOSED, ALL], default: ALL } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, maximum: 20000, default: 0 } }
+      responses:
+        '200':
+          description: Workspace-scoped page of current followups
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/List' }
+        '400': { description: 'MUSIC_FOLLOWUP_INPUT; invalid or unknown query parameter' }
+        '401': { description: Authentication required or identity no longer valid }
+        '403': { description: TASKS READ or MUSIC READ denied }
+        '408': { description: 'MUSIC_FOLLOWUP_CANCELLED; interrupted request' }
+  /v1/music/contacts/{contactId}/followups:
+    parameters:
+      - { name: contactId, in: path, required: true, schema: { $ref: '#/components/schemas/ContactId' } }
+    post:
+      operationId: createMusicFollowup
+      description: |
+        Requires MUSIC WRITE (create_music_followup), TASKS WRITE (create_task), and
+        MUSIC READ (read_music_contacts), including on an idempotent retry.
+        Creates one shared TODO task, one Music reference and both creation audits in
+        the same transaction. The contact must belong to the authorized workspace and
+        its current revision must equal expectedContactRevision for a new creation.
+        Past due dates are allowed. The date is normalized to UTC ISO format; the supplied
+        Intl-valid time zone is retained separately and is not used to reinterpret dueAt.
+        An omitted description becomes null in the shared task. No body field can set
+        the workspace, actor, generated IDs, task status or completion metadata.
+        Idempotency is scoped to workspace, actor and idempotencyKey. The content hash
+        covers contactId, trimmed title, trimmed description or null, normalized dueAt
+        and the exact timeZone string. expectedContactRevision is not part of this hash.
+        A matching retry returns the current joined record with replayed=true, even if
+        the contact revision or shared task status has changed; no new task or audit is
+        created. A different hashed payload for the same key returns 409.
+        Unknown body fields and all query parameters are rejected. The HTTP JSON body
+        limit is 65536 bytes (64 KiB), independent of the UTF-16 field-length limits.
+      x-body-limit-bytes: 65536
+      x-ida-required-tools:
+        - { toolKey: create_music_followup, moduleKey: MUSIC, permission: WRITE }
+        - { toolKey: create_task, moduleKey: TASKS, permission: WRITE }
+        - { toolKey: read_music_contacts, moduleKey: MUSIC, permission: READ }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Create' }
+      responses:
+        '201':
+          description: New shared task and Music reference created; replayed=false
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Record' }
+        '200':
+          description: Existing current followup returned after an idempotent retry; replayed=true
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Record' }
+        '400': { description: 'MUSIC_FOLLOWUP_INPUT; invalid path/body or unexpected query' }
+        '401': { description: Authentication required or identity no longer valid; write rolled back }
+        '403': { description: MUSIC WRITE, TASKS WRITE or MUSIC READ denied; write rolled back }
+        '404': { description: 'MUSIC_FOLLOWUP_CONTACT_NOT_FOUND or MUSIC_FOLLOWUP_NOT_FOUND; reference absent from authorized workspace' }
+        '408': { description: 'MUSIC_FOLLOWUP_CANCELLED; interrupted request and transaction rolled back' }
+        '409': { description: 'MUSIC_FOLLOWUP_CONTACT_CHANGED or MUSIC_FOLLOWUP_IDEMPOTENCY_CONFLICT; no new task or audit' }
+        '413': { description: HTTP JSON body exceeds 65536 bytes }
+components:
+  securitySchemes:
+    localSession: { type: apiKey, in: cookie, name: ida_local_session }
+  schemas:
+    ContactId: { type: string, pattern: '^mct_[a-f0-9]{32}$' }
+    FollowupId: { type: string, pattern: '^mfu_[a-f0-9]{32}$' }
+    TaskId:
+      type: string
+      pattern: '^[tT][aA][sS\u017f][kK\u212a]_[a-zA-Z0-9_\u017f\u212a]{1,76}$'
+      description: Mirrors /^task_[a-z0-9_]{1,76}$/iu, including Unicode case folding.
+    Title:
+      type: string
+      minLength: 1
+      maxLength: 240
+      pattern: '^[^\u0000]*$'
+      description: Trimmed plain text; 1 through 240 UTF-16 code units after trim; NUL rejected.
+      x-length-unit: utf16-code-units
+    UtcTimestamp:
+      type: string
+      format: date-time
+      pattern: 'Z$'
+      description: UTC ISO timestamp accepted by z.string().datetime(); numeric offsets and local times rejected.
+    TimeZone:
+      type: string
+      minLength: 1
+      maxLength: 80
+      description: |
+        1 through 80 UTF-16 code units; not trimmed. Must be accepted by
+        new Intl.DateTimeFormat('fr', { timeZone: value }) in the server runtime.
+        Stored as supplied, including any accepted alias.
+      x-length-unit: utf16-code-units
+    Create:
+      type: object
+      additionalProperties: false
+      required: [idempotencyKey, expectedContactRevision, title, dueAt, timeZone]
+      properties:
+        idempotencyKey: { type: string, format: uuid }
+        expectedContactRevision: { type: integer, minimum: 0, maximum: 2147483646 }
+        title: { $ref: '#/components/schemas/Title' }
+        description:
+          type: string
+          minLength: 1
+          maxLength: 4000
+          pattern: '^[^\u0000]*$'
+          description: Optional trimmed text; 1 through 4000 UTF-16 code units after trim; NUL and null rejected.
+          x-length-unit: utf16-code-units
+        dueAt:
+          allOf:
+            - { $ref: '#/components/schemas/UtcTimestamp' }
+          description: Required UTC timestamp; Date.parse(value) must additionally be finite. Past dates are allowed.
+        timeZone: { $ref: '#/components/schemas/TimeZone' }
+    Task:
+      type: object
+      additionalProperties: false
+      required: [id, title, description, status, dueAt, createdAt, completedAt]
+      properties:
+        id: { $ref: '#/components/schemas/TaskId' }
+        title: { $ref: '#/components/schemas/Title' }
+        description: { type: [string, 'null'] }
+        status: { type: string, enum: [TODO, IN_PROGRESS, DONE, CANCELLED] }
+        dueAt: { anyOf: [{ $ref: '#/components/schemas/UtcTimestamp' }, { type: 'null' }] }
+        createdAt: { $ref: '#/components/schemas/UtcTimestamp' }
+        completedAt: { anyOf: [{ $ref: '#/components/schemas/UtcTimestamp' }, { type: 'null' }] }
+    Followup:
+      type: object
+      additionalProperties: false
+      required: [id, musicContactId, artistProjectId, projectName, organisation, timeZone, task, createdAt]
+      properties:
+        id: { $ref: '#/components/schemas/FollowupId' }
+        musicContactId: { $ref: '#/components/schemas/ContactId' }
+        artistProjectId: { type: string, minLength: 1, maxLength: 100, x-length-unit: utf16-code-units }
+        projectName: { type: string }
+        organisation: { type: string }
+        timeZone: { $ref: '#/components/schemas/TimeZone' }
+        task: { $ref: '#/components/schemas/Task' }
+        createdAt: { $ref: '#/components/schemas/UtcTimestamp' }
+    Record:
+      type: object
+      additionalProperties: false
+      required: [data, replayed]
+      properties:
+        data: { $ref: '#/components/schemas/Followup' }
+        replayed: { type: boolean }
+    List:
+      type: object
+      additionalProperties: false
+      required: [data, nextOffset]
+      properties:
+        data: { type: array, maxItems: 25, items: { $ref: '#/components/schemas/Followup' } }
+        nextOffset: { type: [integer, 'null'], minimum: 0 }

@@ -58,7 +58,7 @@ micro, provider ou nouvelle dépendance. Requêtes abandonnées au démontage.
 Classic/Sci-Fi, clavier, bureau et 390 px.
 
 Non livré : pièces jointes, rattachement direct release/booking, génération IA,
-copie externe, validation finale, expédition, accusé de réception, relance datée
+copie externe, validation finale, expédition, accusé de réception
 ou pipeline commercial complet. Les statuts autorisés sont DRAFT et ARCHIVED,
 jamais APPROVED/SENT. Changer le champ lien n'altère pas automatiquement le texte.
 
@@ -66,6 +66,8 @@ Contrat exécutable : `packages/contracts/src/workspace-mail-drafts.ts`.
 Contrat API : `docs/openapi/workspace-mail-drafts-v1.yaml`.
 Preuves et restauration : `docs/checkpoints/MUSIC_MAIL_DRAFTS_20260930.md`.
 
-Prochain lot prioritaire : relier les prochaines actions du contact aux tâches
-datées partagées Workspace, avec retour visible dans Music. L'envoi externe
-restera une tranche distincte avec approbation du message et destinataire exacts.
+Depuis B.11, les tâches datées du contact sont partagées avec Workspace et
+consultables dans Music (`MUSIC_FOLLOWUPS.md`). Elles ne prouvent pas un envoi
+du brouillon. L'envoi externe reste une tranche distincte avec approbation du
+message et destinataire exacts ; l'historique du suivi contact doit aussi être
+rendu consultable avant de prétendre à une chaîne CRM complète.
