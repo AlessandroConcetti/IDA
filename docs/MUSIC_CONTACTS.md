@@ -86,8 +86,11 @@ manuelles**, pas des événements de transport email. La prochaine action est un
 note, pas un rappel programmé. La vérification enregistrée est USER_RECORDED,
 jamais une certification de source, de délivrabilité ou de booking disponible.
 
-Restent : annuaire général Workspace, brouillon partagé lié au contact et au
-morceau, approbation et envoi, relance/tâche datée, historique de suivi dans
+Depuis B.10, **Brouillons pour ce contact** prépare un vrai brouillon partagé
+avec Workspace et Mail, avec morceau facultatif du même projet. Voir
+`WORKSPACE_MAIL_DRAFTS.md`. Aucune étape CRM ne change lors de sa préparation.
+
+Restent : annuaire général Workspace, approbation et envoi, relance/tâche datée, historique de suivi dans
 l’interface, pipeline booking complet et recherche officielle intégrée.
 Les cinq pistes éditoriales ne ferment pas le critère « recherche labels/clubs ».
 

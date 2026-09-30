@@ -1,0 +1,27 @@
+.mail-drafts p {
+  margin-block: 6px;
+}
+.mail-drafts__editor fieldset {
+  gap: 12px;
+}
+.mail-drafts__editor fieldset > p {
+  margin: 0;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+.mail-drafts__record {
+  overflow-wrap: anywhere;
+  font-size: 0.8rem;
+}
+.mail-drafts__warning {
+  border-left: 3px solid #b78239;
+  padding: 12px;
+}
+.mail-drafts a {
+  color: inherit;
+  text-underline-offset: 3px;
+}
+.mail-drafts__editor textarea {
+  resize: vertical;
+  min-height: 100px;
+}

@@ -1,0 +1,166 @@
+openapi: 3.1.0
+info:
+  title: IDA Workspace mail drafts with Music origin
+  version: 1.0.0
+  description: |
+    Internal drafts only; no delivery, cloud, attachments or external draft synchronization.
+    Requires IDA READ/WRITE plus MUSIC READ. Workspace resolved by server identity.
+    Strict executable schemas in packages/contracts/src/workspace-mail-drafts.ts.
+    HTTP JSON body limit 131072 bytes; string lengths are JS UTF-16 code units.
+security:
+  - localSession: []
+paths:
+  /v1/music/contacts/{contactId}/mail-drafts:
+    parameters:
+      - { name: contactId, in: path, required: true, schema: { $ref: '#/components/schemas/ContactId' } }
+    post:
+      operationId: createMusicMailDraft
+      description: |
+        Music contact and optional track must belong to the same authorized project.
+        Unknown fields/query rejected. Exact idempotency retry returns the existing current draft;
+        contact revision is checked for a new write, not part of the idempotent content hash.
+        Creating a draft does not change contact stage or send anything.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Create' }
+      responses:
+        '201': { $ref: '#/components/responses/Record' }
+        '200': { $ref: '#/components/responses/Record' }
+        '400': { description: Invalid input or unknown query }
+        '401': { description: Authentication required }
+        '403': { description: IDA WRITE or MUSIC READ denied, or identity revoked }
+        '404': { description: Contact or track absent from authorized workspace/project }
+        '408': { description: Interrupted request; transaction rolled back }
+        '409': { description: Contact revision stale or idempotency payload conflict }
+        '413': { description: HTTP JSON body exceeds 131072 bytes }
+  /v1/workspace/mail-drafts:
+    get:
+      operationId: listWorkspaceMusicMailDrafts
+      description: At most 25 drafts ordered newest creation first; both internal statuses included by default.
+      parameters:
+        - { name: musicContactId, in: query, schema: { $ref: '#/components/schemas/ContactId' } }
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/Status' } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, maximum: 20000, default: 0 } }
+      responses:
+        '200':
+          description: Workspace-scoped page
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [data, nextOffset]
+                properties:
+                  data: { type: array, maxItems: 25, items: { $ref: '#/components/schemas/Draft' } }
+                  nextOffset: { type: [integer, 'null'], minimum: 0 }
+        '400': { description: Invalid or unknown query }
+        '401': { description: Authentication required }
+        '403': { description: IDA READ or MUSIC READ denied }
+  /v1/workspace/mail-drafts/{draftId}:
+    parameters:
+      - { name: draftId, in: path, required: true, schema: { $ref: '#/components/schemas/DraftId' } }
+    get:
+      operationId: getWorkspaceMailDraft
+      responses:
+        '200': { $ref: '#/components/responses/Record' }
+        '400': { description: Invalid ID or unexpected query }
+        '401': { description: Authentication required }
+        '403': { description: IDA READ or MUSIC READ denied }
+        '404': { description: Draft absent from workspace }
+    patch:
+      operationId: editWorkspaceMailDraft
+      description: |
+        At least one editable field required besides expectedRevision. Omitted fields preserved;
+        recipientEmail/listeningUrl can be cleared with null. Exact desired-state retry is successful
+        without incrementing revision or duplicating audit. Origin/purpose/track are immutable here.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Patch' }
+      responses:
+        '200': { $ref: '#/components/responses/Record' }
+        '400': { description: Invalid input, empty patch, unsupported status or unexpected query }
+        '401': { description: Authentication required }
+        '403': { description: IDA WRITE or MUSIC READ denied, or identity revoked }
+        '404': { description: Draft absent from workspace }
+        '408': { description: Interrupted request; transaction rolled back }
+        '409': { description: Revision conflict; preserve unsaved text and reread explicitly }
+        '413': { description: HTTP JSON body exceeds 131072 bytes }
+components:
+  securitySchemes:
+    localSession: { type: apiKey, in: cookie, name: ida_local_session }
+  responses:
+    Record:
+      description: Shared internal draft; replayed is included on creation/retry
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [data]
+            properties:
+              data: { $ref: '#/components/schemas/Draft' }
+              replayed: { type: boolean }
+  schemas:
+    ContactId: { type: string, pattern: '^mct_[a-f0-9]{32}$' }
+    DraftId: { type: string, pattern: '^wmd_[a-f0-9]{32}$' }
+    Revision: { type: integer, minimum: 0, maximum: 2147483646 }
+    Purpose: { type: string, enum: [LABEL_DEMO, GIG, PRIVATE_EVENT] }
+    Status: { type: string, enum: [DRAFT, ARCHIVED] }
+    PublicUrl:
+      type: string
+      format: uri
+      maxLength: 2048
+      description: Public HTTPS only; no credentials, IP, local hostname or nonstandard port. Never fetched.
+    Editable:
+      type: object
+      properties:
+        recipientEmail: { type: [string, 'null'], format: email, maxLength: 254 }
+        listeningUrl: { anyOf: [{ $ref: '#/components/schemas/PublicUrl' }, { type: 'null' }] }
+        subject: { type: string, minLength: 1, maxLength: 240, description: Trimmed single line; no control or bidi override characters }
+        body: { type: string, minLength: 1, maxLength: 12000, description: Trimmed plain text; CR LF TAB allowed, other controls and bidi overrides rejected }
+    Create:
+      allOf:
+        - { $ref: '#/components/schemas/Editable' }
+        - type: object
+          required: [idempotencyKey, expectedContactRevision, purpose, recipientEmail, subject, body]
+          properties:
+            idempotencyKey: { type: string, format: uuid }
+            expectedContactRevision: { $ref: '#/components/schemas/Revision' }
+            purpose: { $ref: '#/components/schemas/Purpose' }
+            trackId: { type: [string, 'null'], pattern: '^[a-zA-Z0-9_-]{1,100}$' }
+      unevaluatedProperties: false
+    Patch:
+      allOf:
+        - { $ref: '#/components/schemas/Editable' }
+        - type: object
+          minProperties: 2
+          required: [expectedRevision]
+          properties:
+            expectedRevision: { $ref: '#/components/schemas/Revision' }
+            status: { $ref: '#/components/schemas/Status' }
+      unevaluatedProperties: false
+    Draft:
+      allOf:
+        - { $ref: '#/components/schemas/Editable' }
+        - type: object
+          required: [id, musicContactId, artistProjectId, projectName, organisation, contactSourceUrl, currentContactEmail, purpose, trackId, trackTitle, listeningUrl, recipientEmail, subject, body, status, revision, createdAt, updatedAt]
+          properties:
+            id: { $ref: '#/components/schemas/DraftId' }
+            musicContactId: { $ref: '#/components/schemas/ContactId' }
+            artistProjectId: { type: string, minLength: 1, maxLength: 100 }
+            projectName: { type: string, minLength: 1, maxLength: 240 }
+            organisation: { type: string, minLength: 1, maxLength: 240 }
+            contactSourceUrl: { $ref: '#/components/schemas/PublicUrl' }
+            currentContactEmail: { type: [string, 'null'], format: email, maxLength: 254 }
+            purpose: { $ref: '#/components/schemas/Purpose' }
+            trackId: { type: [string, 'null'], pattern: '^[a-zA-Z0-9_-]{1,100}$' }
+            trackTitle: { type: [string, 'null'], minLength: 1, maxLength: 240 }
+            status: { $ref: '#/components/schemas/Status' }
+            revision: { $ref: '#/components/schemas/Revision' }
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+      unevaluatedProperties: false
