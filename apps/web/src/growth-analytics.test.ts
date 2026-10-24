@@ -37,6 +37,11 @@ describe("IDA GROWTH — ads import must never mistake Results for leads",()=>{
   expect(r.spend).toBe(1234.5);expect(r.leads).toBe(2);
   expect(r.alerts[0]?.costPerLead).toBe(617.25);
  });
+ it("flags exceeding the user's cap for the period without pausing anything",()=>{
+  const r=analyzeAdsCsv("Campaign,Spend\\nLocal leads,42\\n",{maxCampaignSpend:30});
+  expect(r.alerts).toHaveLength(1);
+  expect(r.alerts[0]?.reason).toContain("plafond défini");
+ });
  it("never infers leads or ROI when missing",()=>{
   const r=analyzeAdsCsv("Campaign,Spend\nNo leads exported,10\n");
   expect(r.leads).toBeNull();expect(r.alerts).toEqual([]);
