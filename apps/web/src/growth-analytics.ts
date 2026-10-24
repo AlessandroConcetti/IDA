@@ -64,7 +64,7 @@ export function analyzeSearchConsoleCsv(csv:string):SeoReport{
 }
 export interface AdAlert {campaign:string;spend:number;clicks:number;impressions:number;leads:number|null;costPerLead:number|null;clickCost:number|null;reason:string;severity:"WATCH"|"REVIEW"}
 export interface AdsReport {totalCampaigns:number;spend:number;clicks:number;impressions:number;leads:number|null;leadColumnDetected:boolean;alerts:AdAlert[];missingRows:number;currency:string}
-export function analyzeAdsCsv(csv:string,opts:{maxCpc?:number;maxCostPerLead?:number;currency?:string}={}):AdsReport {
+export function analyzeAdsCsv(csv:string,opts:{maxCpc?:number;maxCostPerLead?:number;maxCampaignSpend?:number;currency?:string}={}):AdsReport {
  const {headers,rows}=rowsFor(csv);
  const ni=col(headers,["Campaign name","Nom de la campagne","Campaign","Campagne"]);
  const si=col(headers,["Amount spent (EUR)","Montant dépensé (EUR)","Amount spent","Montant dépensé","Coût","Cost","Spend","Dépenses"]);
@@ -76,6 +76,7 @@ export function analyzeAdsCsv(csv:string,opts:{maxCpc?:number;maxCostPerLead?:nu
  const alerts:AdAlert[]=[];
  const maxCpc=opts.maxCpc&&opts.maxCpc>0?opts.maxCpc:null;
  const maxCpl=opts.maxCostPerLead&&opts.maxCostPerLead>0?opts.maxCostPerLead:null;
+ const maxCampaignSpend=opts.maxCampaignSpend&&opts.maxCampaignSpend>0?opts.maxCampaignSpend:null;
  for(const row of rows){
   const name=(row[ni]||"").trim().slice(0,130),money=number(row[si]);
   if(!name||money===null){missingRows++;continue;}
@@ -87,6 +88,7 @@ export function analyzeAdsCsv(csv:string,opts:{maxCpc?:number;maxCostPerLead?:nu
   if(money>0&&l===0&&li>=0)reasons.push("Dépenses sans prospect enregistré.");
   if(maxCpc!==null&&cpc!==null&&cpc>maxCpc)reasons.push("Coût par clic supérieur au plafond indicatif.");
   if(maxCpl!==null&&cpl!==null&&cpl>maxCpl)reasons.push("Coût par prospect supérieur à l'objectif indicatif.");
+  if(maxCampaignSpend!==null&&money>maxCampaignSpend)reasons.push("Dépenses de la campagne supérieures au plafond défini pour la période de cet export.");
   if(reasons.length)alerts.push({campaign:name,spend:Number(money.toFixed(2)),clicks:c||0,impressions:im||0,leads:l,clickCost:cpc?Number(cpc.toFixed(2)):null,costPerLead:cpl?Number(cpl.toFixed(2)):null,reason:reasons.join(" "),severity:money>=30?"REVIEW":"WATCH"});
  }
  alerts.sort((a,b)=>b.spend-a.spend);
