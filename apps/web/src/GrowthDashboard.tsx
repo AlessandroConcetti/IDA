@@ -19,6 +19,7 @@ export default function GrowthDashboard(){
  const [error,setError]=useState("");
  const [maxCpc,setMaxCpc]=useState("");
  const [maxCpl,setMaxCpl]=useState("");
+ const [maxCampaignSpend,setMaxCampaignSpend]=useState("");
  const [adsRawCurrency,setAdsRawCurrency]=useState("");
  const [loading,setLoading]=useState(false);
  const [lastName,setLastName]=useState("");
@@ -31,7 +32,7 @@ export default function GrowthDashboard(){
    if(!/\.csv$/i.test(f.name))throw new Error("Choisis un export au format CSV.");
    const value=await f.text();
    if(tab==="seo")setSeo(analyzeSearchConsoleCsv(value));
-   else if(tab==="ads")setAds(analyzeAdsCsv(value,{maxCpc:Number(maxCpc.replace(",","."))||undefined,maxCostPerLead:Number(maxCpl.replace(",","."))||undefined,currency:adsRawCurrency.trim()||undefined}));
+   else if(tab==="ads")setAds(analyzeAdsCsv(value,{maxCpc:Number(maxCpc.replace(",","."))||undefined,maxCostPerLead:Number(maxCpl.replace(",","."))||undefined,maxCampaignSpend:Number(maxCampaignSpend.replace(",","."))||undefined,currency:adsRawCurrency.trim()||undefined}));
    setLastName(f.name.slice(0,90));
   }catch(e){setError(e instanceof Error?e.message:"Impossible d'analyser le fichier.");}
   finally{setLoading(false);}
@@ -64,6 +65,7 @@ export default function GrowthDashboard(){
    <div className="ida-growth-thresholds">
     <label>Coût par clic maximum <small>(facultatif)</small><input value={maxCpc} onChange={e=>{setMaxCpc(e.target.value);setAds(null)}} inputMode="decimal" placeholder="ex. 1,50" type="text"/></label>
     <label>Coût par prospect visé <small>(facultatif)</small><input value={maxCpl} onChange={e=>{setMaxCpl(e.target.value);setAds(null)}} inputMode="decimal" placeholder="ex. 20" type="text"/></label>
+    <label>Plafond par campagne <small>(sur la période du CSV)</small><input value={maxCampaignSpend} onChange={e=>{setMaxCampaignSpend(e.target.value);setAds(null)}} inputMode="decimal" placeholder="ex. 30" type="text"/></label>
     <label>Devise du compte <small>(facultatif)</small><input value={adsRawCurrency} onChange={e=>{setAdsRawCurrency(e.target.value.slice(0,4));setAds(null)}} placeholder="€ / $"/></label>
    </div>
    <p className="ida-growth-disclaimer">Un changement de seuil efface les résultats précédents : réimporte le CSV pour recalculer les alertes.</p><label className="ida-growth-upload"><span className="ida-growth-upload-icon"><Mark name="ads"/></span><span><strong>{loading?"Lecture du fichier…":"Importer les campagnes CSV"}</strong><small>Export Meta Ads / Google Ads · une devise par fichier · sans synchronisation</small></span><input aria-label="Importer un export publicitaire au format CSV" type="file" accept=".csv,text/csv" disabled={loading} onChange={onImport}/></label>
