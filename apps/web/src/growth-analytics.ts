@@ -47,20 +47,17 @@ export function analyzeSearchConsoleCsv(csv:string):SeoReport{
  const {headers,rows}=rowsFor(csv);
  const qi=col(headers,["Requêtes les plus fréquentes","Requête","Requêtes","Query","Top queries","Search query"]);
  const ci=col(headers,["Clics","Clicks"]);const ii=col(headers,["Impressions"]);
- const pi=col(headers,["Position","Average position"]);const ti=col(headers,["CTR","CTR moyen","Average CTR"],false);
+ const pi=col(headers,["Position","Average position"]);
  let clicks=0,impressions=0,missingRows=0;const opportunities:SeoOpportunity[]=[];
  for(const r of rows){
   const query=(r[qi]||"").trim().slice(0,160);
-  const c=number(r[ci]),i=number(r[ii]),p=number(r[pi]),t=ti>=0?number(r[ti]):null;
+  const c=number(r[ci]),i=number(r[ii]),p=number(r[pi]);
   if(!query||c===null||i===null||p===null||c>i){missingRows++;continue;}
   clicks+=c;impressions+=i;const ctr=i===0?0:c/i*100;
-  const percent=t!==null?(t<=1&&r[ti]?.includes("%")===false?t*100:t):ctr;
   if(i>=30&&p>=3&&p<=25&&ctr<3){
    const priority=i>=150&&p<=15?"HIGH":"MEDIUM";
    opportunities.push({query,clicks:c,impressions:i,ctr:Number(ctr.toFixed(2)),position:Number(p.toFixed(1)),priority,reason:priority==="HIGH"?"Impressions élevées, peu de clics : vérifier l'intention et le titre.":"Potentiel SEO : revoir contenu et métadonnées."});
   }
-  // percent is parsed to ensure optional column syntax, but never used to override the verifiable click/impression ratio
-  void percent;
  }
  opportunities.sort((a,b)=>(a.priority===b.priority?b.impressions-a.impressions:a.priority==="HIGH"?-1:1));
  return {totalRows:rows.length-missingRows,clicks,impressions,ctr:impressions?Number((clicks/impressions*100).toFixed(2)):0,opportunities:opportunities.slice(0,25),missingRows};
@@ -93,5 +90,5 @@ export function analyzeAdsCsv(csv:string,opts:{maxCpc?:number;maxCostPerLead?:nu
   if(reasons.length)alerts.push({campaign:name,spend:Number(money.toFixed(2)),clicks:c||0,impressions:im||0,leads:l,clickCost:cpc?Number(cpc.toFixed(2)):null,costPerLead:cpl?Number(cpl.toFixed(2)):null,reason:reasons.join(" "),severity:money>=30?"REVIEW":"WATCH"});
  }
  alerts.sort((a,b)=>b.spend-a.spend);
- return {totalCampaigns:rows.length-missingRows,spend:Number(spend.toFixed(2)),clicks,impressions,leads:li>=0?leads:null,leadColumnDetected:li>=0,alerts:alerts.slice(0,25),missingRows,currency:(opts.currency||"€").slice(0,4)};
+ return {totalCampaigns:rows.length-missingRows,spend:Number(spend.toFixed(2)),clicks,impressions,leads:li>=0?leads:null,leadColumnDetected:li>=0,alerts:alerts.slice(0,25),missingRows,currency:(opts.currency||(headers.some(h=>h.includes("eur"))?"€":headers.some(h=>h.includes("usd"))?"$":"")).slice(0,4)};
 }
