@@ -25,7 +25,7 @@ export default function GrowthDashboard(){
  async function onImport(event:ChangeEvent<HTMLInputElement>){
   const f=event.target.files?.[0];event.target.value="";
   if(!f)return;
-  setError("");setLoading(true);
+  setError("");setLastName("");if(tab==="seo")setSeo(null);if(tab==="ads")setAds(null);setLoading(true);
   try{
    if(f.size>GROWTH_MAX_CSV_BYTES)throw new Error("Export trop volumineux : limite 2 Mo.");
    if(!/\.csv$/i.test(f.name))throw new Error("Choisis un export au format CSV.");
@@ -62,11 +62,11 @@ export default function GrowthDashboard(){
   {tab==="ads"&&<section className="ida-growth-workspace" aria-labelledby="ida-growth-ads-heading">
    <div className="ida-growth-section-head"><div><p className="ida-growth-kicker">02 / META OU GOOGLE ADS</p><h3 id="ida-growth-ads-heading">Repérer les dépenses à surveiller.</h3><p>Lecture d'exports de campagnes. Une alerte est une proposition d'analyse, jamais une interruption automatique de publicité.</p></div><span className="ida-growth-state">AUCUNE DÉPENSE AUTORISÉE</span></div>
    <div className="ida-growth-thresholds">
-    <label>Coût par clic maximum <small>(facultatif)</small><input value={maxCpc} onChange={e=>setMaxCpc(e.target.value)} inputMode="decimal" placeholder="ex. 1,50" type="text"/></label>
-    <label>Coût par prospect visé <small>(facultatif)</small><input value={maxCpl} onChange={e=>setMaxCpl(e.target.value)} inputMode="decimal" placeholder="ex. 20" type="text"/></label>
-    <label>Devise du compte <small>(facultatif)</small><input value={adsRawCurrency} onChange={e=>setAdsRawCurrency(e.target.value.slice(0,4))} placeholder="€ / $"/></label>
+    <label>Coût par clic maximum <small>(facultatif)</small><input value={maxCpc} onChange={e=>{setMaxCpc(e.target.value);setAds(null)}} inputMode="decimal" placeholder="ex. 1,50" type="text"/></label>
+    <label>Coût par prospect visé <small>(facultatif)</small><input value={maxCpl} onChange={e=>{setMaxCpl(e.target.value);setAds(null)}} inputMode="decimal" placeholder="ex. 20" type="text"/></label>
+    <label>Devise du compte <small>(facultatif)</small><input value={adsRawCurrency} onChange={e=>{setAdsRawCurrency(e.target.value.slice(0,4));setAds(null)}} placeholder="€ / $"/></label>
    </div>
-   <label className="ida-growth-upload"><span className="ida-growth-upload-icon"><Mark name="ads"/></span><span><strong>{loading?"Lecture du fichier…":"Importer les campagnes CSV"}</strong><small>Export Meta Ads / Google Ads · une devise par fichier · sans synchronisation</small></span><input aria-label="Importer un export publicitaire au format CSV" type="file" accept=".csv,text/csv" disabled={loading} onChange={onImport}/></label>
+   <p className="ida-growth-disclaimer">Un changement de seuil efface les résultats précédents : réimporte le CSV pour recalculer les alertes.</p><label className="ida-growth-upload"><span className="ida-growth-upload-icon"><Mark name="ads"/></span><span><strong>{loading?"Lecture du fichier…":"Importer les campagnes CSV"}</strong><small>Export Meta Ads / Google Ads · une devise par fichier · sans synchronisation</small></span><input aria-label="Importer un export publicitaire au format CSV" type="file" accept=".csv,text/csv" disabled={loading} onChange={onImport}/></label>
    {ads?<><div className="ida-growth-metrics"><Metric title="Dépenses exportées" value={money(ads.spend,ads.currency)} detail="Période de l'export non vérifiée"/><Metric title="Clics exportés" value={metric(ads.clicks)} detail="Si la colonne existe"/><Metric title="Prospects" value={ads.leads===null?"Inconnus":metric(ads.leads)} detail={ads.leadColumnDetected?"Colonne Leads explicite":"« Results » n'est pas un prospect"}/><Metric title="Alertes à vérifier" value={String(ads.alerts.length)} detail="Aucune campagne modifiée"/></div>
     <div className="ida-growth-subheading"><h4>Campagnes à revoir</h4><small>{ads.totalCampaigns} lignes valides · {ads.missingRows} ignorées</small></div>
     {ads.alerts.length?<div className="ida-growth-results">{ads.alerts.map((row,i)=><article className="ida-growth-result" key={row.campaign+"-"+i}><div><span className="ida-growth-priority">{row.severity==="REVIEW"?"REVOIR LE BUDGET":"SURVEILLER"}</span><h5>{row.campaign}</h5><p>{row.reason}</p></div><div className="ida-growth-numbers"><span>{money(row.spend,ads.currency)}</span><span>{metric(row.clicks)} clics</span><span>{row.leads===null?"Prospects inconnus":metric(row.leads)+" prospects"}</span></div></article>)}</div>:<p className="ida-growth-empty">Aucune alerte selon les colonnes présentes et les plafonds indiqués. Cela ne valide pas la rentabilité de la campagne.</p>}
