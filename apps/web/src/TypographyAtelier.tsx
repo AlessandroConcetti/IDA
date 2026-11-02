@@ -232,9 +232,9 @@ export function TypographyAtelier({ onClose }: { onClose: () => void }) {
             />
           </div>
           <p className="typo-disclaimer">
-            Six polices variables libres sont embarquées localement dans le prototype. Helvetica Neue et Georgia
-            restent des polices système. Pour exporter ce style vers un site client, installez les packages Fontsource
-            indiqués dans le CSS ou le JSON.
+            Six polices variables libres sont embarquées localement dans le prototype. Helvetica Neue et Georgia restent
+            des polices système. Pour exporter ce style vers un site client, installez les packages Fontsource indiqués
+            dans le CSS ou le JSON.
           </p>
           {duplicate && (
             <p className="typo-warning" role="alert">
