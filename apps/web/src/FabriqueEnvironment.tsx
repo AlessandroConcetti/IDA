@@ -152,7 +152,7 @@ export function FabriqueEnvironment({
     setOwner("");
     open("create");
   }
-  function useTemplate(template: (typeof templates)[number]) {
+  function applyTemplate(template: (typeof templates)[number]) {
     setKind(template.kind);
     setName(template.title);
     setGoal(template.goal);
@@ -542,7 +542,7 @@ export function FabriqueEnvironment({
                     <span>{item.kind}</span>
                     <h3>{item.title}</h3>
                     <p>{item.goal}</p>
-                    <button type="button" onClick={() => useTemplate(item)}>
+                    <button type="button" onClick={() => applyTemplate(item)}>
                       Utiliser ce modèle →
                     </button>
                   </article>
