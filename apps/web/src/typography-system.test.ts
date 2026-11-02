@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { brandIds, defaultTypography, duplicateOf, parseTypography, sameTypography, typographyCss } from "./typography-system";
+import { brandIds, defaultTypography, duplicateOf, parseTypography, sameTypography, sameTypefacePair, typographyCss } from "./typography-system";
 
 describe("La Fabrique — typographie", () => {
   it("livre quatre identités distinctes", () => {
@@ -17,6 +17,10 @@ describe("La Fabrique — typographie", () => {
     const same = { ...defaultTypography.alessandro, brand: "egeri" as const };
     expect(sameTypography(same, defaultTypography.alessandro)).toBe(true);
     expect(duplicateOf(same, defaultTypography)).toBe("alessandro");
+    const changedOnlyMotion = { ...same, motion: "rise" as const, weight: 700 as const };
+    expect(sameTypography(changedOnlyMotion, defaultTypography.alessandro)).toBe(false);
+    expect(sameTypefacePair(changedOnlyMotion, defaultTypography.alessandro)).toBe(true);
+    expect(duplicateOf(changedOnlyMotion, defaultTypography)).toBe("alessandro");
   });
   it("exporte des tokens adaptatifs sans requête réseau ni animation imposée", () => {
     const css = typographyCss({ ...defaultTypography.egeri, motion: "none" });
