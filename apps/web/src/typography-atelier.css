@@ -30,6 +30,10 @@
 .typo-brands small { font-size: 11px; line-height: 1.4; color: var(--typo-muted); }
 .typo-workspace { display: grid; grid-template-columns: minmax(0, 1fr) minmax(245px, 298px); gap: 28px; align-items: start; }
 .typo-stage { min-width: 0; }
+.typo-sample-input { display: grid; gap: 8px; margin-bottom: 16px; font-size: 12px; color: #c9d3d6; }
+.typo-sample-input input { width: 100%; background: #ffffff0b; color: #f5f1e8; border: 1px solid var(--typo-edge); border-radius: 10px; font: inherit; font-size: 16px; padding: 12px; }
+.typo-font-note { font-size: 11px; line-height: 1.5; padding: 10px 12px; margin: 0; border: 1px solid #bcd3d324; border-radius: 10px; background: #ffffff09; }
+
 .typo-stage-heading { display: flex; justify-content: space-between; align-items: center; gap: 18px; margin-bottom: 18px; }
 .typo-stage-heading h2 { font-size: 24px; margin: 6px 0; }
 .typo-previews { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
