@@ -1,3 +1,9 @@
+import "@fontsource-variable/bodoni-moda";
+import "@fontsource-variable/cormorant-garamond";
+import "@fontsource-variable/ibm-plex-sans";
+import "@fontsource-variable/manrope";
+import "@fontsource-variable/space-grotesk";
+import "@fontsource-variable/syne";
 import { type CSSProperties, useEffect, useState } from "react";
 import {
   type BrandId,
@@ -12,6 +18,7 @@ import {
   sameTypography,
   type TypographyConfig,
   typographyCss,
+  typographyFontPackages,
 } from "./typography-system";
 import "./typography-atelier.css";
 
@@ -153,7 +160,8 @@ export function TypographyAtelier({ onClose }: { onClose: () => void }) {
             {
               format: "ida-typography-v1",
               status: "design-proposal",
-              requiresFontInstallation: true,
+              requiresFontInstallation: false,
+      fontPackages: typographyFontPackages(draft),
               ...draft,
             },
             null,
@@ -164,7 +172,7 @@ export function TypographyAtelier({ onClose }: { onClose: () => void }) {
       text,
       format === "css" ? "text/css;charset=utf-8" : "application/json;charset=utf-8",
     );
-    setNotice("Export demandé. Aucun déploiement automatique. Vérifier les fichiers et licences des polices.");
+    setNotice("Export demandé. Aucun déploiement automatique. Ajouter les packages Fontsource exportés au site client avant publication.");
   }
   return (
     <section className="environment-screen typography-atelier" aria-label="Atelier typographique IDA">
