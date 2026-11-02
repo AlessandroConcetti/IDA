@@ -7,6 +7,7 @@ import {
   sameTypefacePair,
   sameTypography,
   typographyCss,
+  typographyFontPackages,
 } from "./typography-system";
 
 describe("La Fabrique — typographie", () => {
@@ -41,5 +42,11 @@ describe("La Fabrique — typographie", () => {
     expect(css).not.toContain("animation: ida-type");
     const animated = typographyCss(defaultTypography["ida-studio"]);
     expect(animated).toContain("prefers-reduced-motion");
+    expect(typographyFontPackages(defaultTypography["ida-studio"])).toEqual([
+      "@fontsource-variable/ibm-plex-sans",
+      "@fontsource-variable/space-grotesk",
+    ]);
+    expect(css).toContain("@fontsource-variable/bodoni-moda");
+    expect(css).not.toContain("https://fonts.googleapis.com");
   });
 });
