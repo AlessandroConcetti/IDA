@@ -2,6 +2,7 @@ import { type CSSProperties, type RefObject, useEffect, useRef, useState } from 
 import { completeTask, createTask, fetchTasks, type TaskRecord } from "./api";
 import { IdaApiError } from "./api-transport";
 import { CreativeEngineWorkspace } from "./CreativeEngineWorkspace";
+import { TypographyAtelier } from "./TypographyAtelier";
 import type { NavigationId } from "./data";
 import { LocalDialogue } from "./LocalDialogue";
 import { McpToolsPanel } from "./McpToolsPanel";
@@ -78,6 +79,7 @@ export function FabriqueEnvironment({
 }) {
   const [view, setView] = useState<View | null>(null);
   const [engineOpen, setEngineOpen] = useState(false);
+  const [typographyOpen, setTypographyOpen] = useState(false);
   const [kind, setKind] = useState<ProjectKind>("Application");
   const [name, setName] = useState("");
   const [goal, setGoal] = useState("");
@@ -242,6 +244,8 @@ export function FabriqueEnvironment({
       }
     }
   }
+  if (typographyOpen)
+    return <TypographyAtelier onClose={() => setTypographyOpen(false)} />;
   if (engineOpen)
     return (
       <CreativeEngineWorkspace
@@ -308,6 +312,14 @@ export function FabriqueEnvironment({
               <span>
                 <strong>IDA Creative Engine</strong>
                 <small>Références · plans · dossiers de conception</small>
+              </span>
+              <span aria-hidden="true">→</span>
+            </button>
+            <button className="reference-row" type="button" onClick={() => setTypographyOpen(true)}>
+              <LineIcon kind="book" />
+              <span>
+                <strong>Atelier typographique</strong>
+                <small>Identités distinctes · aperçu · sauvegarde · export CSS</small>
               </span>
               <span aria-hidden="true">→</span>
             </button>
