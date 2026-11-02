@@ -2,11 +2,11 @@ import { type CSSProperties, type RefObject, useEffect, useRef, useState } from 
 import { completeTask, createTask, fetchTasks, type TaskRecord } from "./api";
 import { IdaApiError } from "./api-transport";
 import { CreativeEngineWorkspace } from "./CreativeEngineWorkspace";
-import { TypographyAtelier } from "./TypographyAtelier";
 import type { NavigationId } from "./data";
 import { LocalDialogue } from "./LocalDialogue";
 import { McpToolsPanel } from "./McpToolsPanel";
 import { LineIcon, ReferenceRail, Sheet } from "./ReferenceChrome";
+import { TypographyAtelier } from "./TypographyAtelier";
 
 type ProjectKind = "Application" | "Agent" | "Automatisation" | "Outil";
 type View = "create" | "templates" | "projects" | "detail" | "collaborate" | "dialogue" | "mcp";
@@ -96,7 +96,7 @@ export function FabriqueEnvironment({
   const [failure, setFailure] = useState("");
   const [notice, setNotice] = useState("");
   const [saving, setSaving] = useState(false);
-  const [revision, setRevision] = useState(0);
+  const [_revision, setRevision] = useState(0);
   const generation = useRef(0);
   const viewGeneration = useRef(0);
   const mutation = useRef(false);
@@ -126,7 +126,7 @@ export function FabriqueEnvironment({
     return () => {
       generation.current++;
     };
-  }, [revision]);
+  }, []);
   const title = `${projectPrefix}${kind} · ${name.trim()}`;
   const description = `TYPE : ${kind}\n\nOBJECTIF\n${goal.trim()}\n\nLIVRABLE\n${deliverable.trim()}\n\nLIMITES ET VALIDATION\n${limits.trim()}\n\nRESPONSABLE\n${owner.trim() || "À désigner"}\n\nSTATUT : brief de conception uniquement. Aucun agent enregistré, outil exécuté, automatisation activée ou application déployée.`;
   const filtered = tasks.filter(
@@ -244,8 +244,7 @@ export function FabriqueEnvironment({
       }
     }
   }
-  if (typographyOpen)
-    return <TypographyAtelier onClose={() => setTypographyOpen(false)} />;
+  if (typographyOpen) return <TypographyAtelier onClose={() => setTypographyOpen(false)} />;
   if (engineOpen)
     return (
       <CreativeEngineWorkspace
@@ -425,16 +424,16 @@ export function FabriqueEnvironment({
             view === "mcp"
               ? "Outils MCP · lecture documentaire"
               : view === "create"
-              ? `Nouveau projet · ${kind}`
-              : view === "templates"
-                ? "Templates"
-                : view === "projects"
-                  ? "Mes projets"
-                  : view === "detail"
-                    ? "Mon brief de projet"
-                    : view === "collaborate"
-                      ? "Préparer une collaboration"
-                      : "Réfléchir avec IDA"
+                ? `Nouveau projet · ${kind}`
+                : view === "templates"
+                  ? "Templates"
+                  : view === "projects"
+                    ? "Mes projets"
+                    : view === "detail"
+                      ? "Mon brief de projet"
+                      : view === "collaborate"
+                        ? "Préparer une collaboration"
+                        : "Réfléchir avec IDA"
           }
           close={() => open(null)}
         >

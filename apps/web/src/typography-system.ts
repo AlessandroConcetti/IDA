@@ -19,32 +19,85 @@ export const fonts: Record<FontId, { name: string; stack: string; note: string }
   space: { name: "Space Grotesk", stack: '"Space Grotesk", "Trebuchet MS", sans-serif', note: "À auto-héberger" },
   plex: { name: "IBM Plex Sans", stack: '"IBM Plex Sans", Arial, sans-serif', note: "À auto-héberger" },
   cormorant: { name: "Cormorant Garamond", stack: '"Cormorant Garamond", Georgia, serif', note: "À auto-héberger" },
-  manrope: { name: "Manrope", stack: 'Manrope, Arial, sans-serif', note: "À auto-héberger" },
+  manrope: { name: "Manrope", stack: "Manrope, Arial, sans-serif", note: "À auto-héberger" },
   bodoni: { name: "Bodoni Moda", stack: '"Bodoni Moda", "Times New Roman", serif', note: "À auto-héberger" },
-  helvetica: { name: "Helvetica Neue (système)", stack: '"Helvetica Neue", Arial, sans-serif', note: "Licence système à vérifier pour toute distribution" },
+  helvetica: {
+    name: "Helvetica Neue (système)",
+    stack: '"Helvetica Neue", Arial, sans-serif',
+    note: "Licence système à vérifier pour toute distribution",
+  },
   syne: { name: "Syne", stack: 'Syne, "Arial Black", sans-serif', note: "À auto-héberger" },
-  georgia: { name: "Georgia (système)", stack: 'Georgia, serif', note: "Police système sans fichier embarqué" },
+  georgia: { name: "Georgia (système)", stack: "Georgia, serif", note: "Police système sans fichier embarqué" },
 };
 
 export const brandMeta: Record<BrandId, { name: string; description: string; mood: string }> = {
-  "ida-studio": { name: "IDA Studio", description: "Précision technologique et architecture", mood: "DIGITAL OBJECTS / HUMAN IDEAS" },
-  alessandro: { name: "Alessandro", description: "Éditorial mariage, ivoire et lumière", mood: "Une autre idée de la célébration" },
+  "ida-studio": {
+    name: "IDA Studio",
+    description: "Précision technologique et architecture",
+    mood: "DIGITAL OBJECTS / HUMAN IDEAS",
+  },
+  alessandro: {
+    name: "Alessandro",
+    description: "Éditorial mariage, ivoire et lumière",
+    mood: "Une autre idée de la célébration",
+  },
   egeri: { name: "Egeri", description: "Portfolio mannequin, luxe éditorial", mood: "The presence of a silhouette." },
-  astromer: { name: "Astromer / Makerz", description: "Musique et expérimentation visuelle", mood: "SOUND IS ANOTHER DIMENSION" },
+  astromer: {
+    name: "Astromer / Makerz",
+    description: "Musique et expérimentation visuelle",
+    mood: "SOUND IS ANOTHER DIMENSION",
+  },
 };
 
 export const defaultTypography: Record<BrandId, TypographyConfig> = {
-  "ida-studio": { brand: "ida-studio", display: "space", body: "plex", tracking: -0.035, scale: 1.1, weight: 500, uppercase: false, motion: "rise" },
-  alessandro: { brand: "alessandro", display: "cormorant", body: "manrope", tracking: -0.015, scale: 1.25, weight: 400, uppercase: false, motion: "fade" },
-  egeri: { brand: "egeri", display: "bodoni", body: "helvetica", tracking: 0.015, scale: 1.22, weight: 400, uppercase: true, motion: "fade" },
-  astromer: { brand: "astromer", display: "syne", body: "plex", tracking: -0.05, scale: 1.18, weight: 700, uppercase: true, motion: "rise" },
+  "ida-studio": {
+    brand: "ida-studio",
+    display: "space",
+    body: "plex",
+    tracking: -0.035,
+    scale: 1.1,
+    weight: 500,
+    uppercase: false,
+    motion: "rise",
+  },
+  alessandro: {
+    brand: "alessandro",
+    display: "cormorant",
+    body: "manrope",
+    tracking: -0.015,
+    scale: 1.25,
+    weight: 400,
+    uppercase: false,
+    motion: "fade",
+  },
+  egeri: {
+    brand: "egeri",
+    display: "bodoni",
+    body: "helvetica",
+    tracking: 0.015,
+    scale: 1.22,
+    weight: 400,
+    uppercase: true,
+    motion: "fade",
+  },
+  astromer: {
+    brand: "astromer",
+    display: "syne",
+    body: "plex",
+    tracking: -0.05,
+    scale: 1.18,
+    weight: 700,
+    uppercase: true,
+    motion: "rise",
+  },
 };
 
 export function parseTypography(input: unknown, brand: BrandId): TypographyConfig {
   const base = defaultTypography[brand];
   if (typeof input !== "object" || input === null || Array.isArray(input)) return { ...base };
   const record = input as Record<string, unknown>;
-  const isFont = (value: unknown): value is FontId => typeof value === "string" && (fontIds as readonly string[]).includes(value);
+  const isFont = (value: unknown): value is FontId =>
+    typeof value === "string" && (fontIds as readonly string[]).includes(value);
   const isMotion = (value: unknown): value is TypographyConfig["motion"] =>
     value === "none" || value === "fade" || value === "rise";
   const numeric = (value: unknown, min: number, max: number, fallback: number) =>
@@ -63,13 +116,15 @@ export function parseTypography(input: unknown, brand: BrandId): TypographyConfi
 }
 
 export function sameTypography(left: TypographyConfig, right: TypographyConfig): boolean {
-  return left.display === right.display &&
+  return (
+    left.display === right.display &&
     left.body === right.body &&
     left.tracking === right.tracking &&
     left.scale === right.scale &&
     left.weight === right.weight &&
     left.uppercase === right.uppercase &&
-    left.motion === right.motion;
+    left.motion === right.motion
+  );
 }
 
 /** Les variations de graisse ou de mouvement ne créent pas une identité nouvelle. */
@@ -85,27 +140,29 @@ export function typographyCss(config: TypographyConfig): string {
   const c = parseTypography(config, config.brand);
   const heading = fonts[c.display].stack;
   const body = fonts[c.body].stack;
-  const spacing = c.tracking.toFixed(3) + "em";
-  const displaySize = (c.scale * 4.2).toFixed(2) + "rem";
+  const spacing = `${c.tracking.toFixed(3)}em`;
+  const displaySize = `${(c.scale * 4.2).toFixed(2)}rem`;
   const lines = [
     "/* IDA Studio | Typography tokens v1 | vérifier les licences et auto-héberger les polices */",
     ":root {",
-    "  --site-font-display: " + heading + ";",
-    "  --site-font-body: " + body + ";",
-    "  --site-title-spacing: " + spacing + ";",
-    "  --site-title-scale: " + displaySize + ";",
-    "  --site-title-weight: " + c.weight + ";",
+    `  --site-font-display: ${heading};`,
+    `  --site-font-body: ${body};`,
+    `  --site-title-spacing: ${spacing};`,
+    `  --site-title-scale: ${displaySize};`,
+    `  --site-title-weight: ${c.weight};`,
     "}",
     "body { font-family: var(--site-font-body); }",
-    "h1, h2, .site-display { font-family: var(--site-font-display); font-weight: var(--site-title-weight); letter-spacing: var(--site-title-spacing); text-transform: " + (c.uppercase ? "uppercase" : "none") + "; }",
+    `h1, h2, .site-display { font-family: var(--site-font-display); font-weight: var(--site-title-weight); letter-spacing: var(--site-title-spacing); text-transform: ${c.uppercase ? "uppercase" : "none"}; }`,
     "h1 { font-size: clamp(2.2rem, 6vw, var(--site-title-scale)); line-height: 1.05; }",
     "p, li { line-height: 1.6; }",
   ];
   if (c.motion !== "none") {
-    lines.push(".site-display { animation: ida-type-" + c.motion + " 650ms ease-out both; }");
+    lines.push(`.site-display { animation: ida-type-${c.motion} 650ms ease-out both; }`);
     lines.push("@keyframes ida-type-fade { from { opacity: 0; } to { opacity: 1; } }");
-    lines.push("@keyframes ida-type-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }");
+    lines.push(
+      "@keyframes ida-type-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }",
+    );
     lines.push("@media (prefers-reduced-motion: reduce) { .site-display { animation: none; } }");
   }
-  return lines.join("\n") + "\n";
+  return `${lines.join("\n")}\n`;
 }

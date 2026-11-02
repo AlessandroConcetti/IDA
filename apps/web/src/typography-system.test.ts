@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { brandIds, defaultTypography, duplicateOf, parseTypography, sameTypography, sameTypefacePair, typographyCss } from "./typography-system";
+import {
+  brandIds,
+  defaultTypography,
+  duplicateOf,
+  parseTypography,
+  sameTypefacePair,
+  sameTypography,
+  typographyCss,
+} from "./typography-system";
 
 describe("La Fabrique — typographie", () => {
   it("livre quatre identités distinctes", () => {
@@ -9,7 +17,10 @@ describe("La Fabrique — typographie", () => {
     }
   });
   it("refuse les valeurs corrompues ou CSS non autorisé", () => {
-    const invalid = parseTypography({ display: "url(https://evil)", tracking: 999, scale: NaN, uppercase: "true", motion: "spin" }, "ida-studio");
+    const invalid = parseTypography(
+      { display: "url(https://evil)", tracking: 999, scale: NaN, uppercase: "true", motion: "spin" },
+      "ida-studio",
+    );
     expect(invalid).toEqual(defaultTypography["ida-studio"]);
     expect(typographyCss(invalid)).not.toContain("evil");
   });
