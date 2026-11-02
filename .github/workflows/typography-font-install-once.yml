@@ -1,0 +1,43 @@
+name: Temporary Fontsource Installation
+
+on:
+  push:
+    branches:
+      - feature/fabrique-typography-atelier
+
+permissions:
+  contents: write
+
+jobs:
+  install-licensed-fonts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: pnpm install --frozen-lockfile
+      - name: Add six locally bundled, OFL-licensed variable font packages
+        run: |
+          pnpm --filter @ida/web add \
+            @fontsource-variable/bodoni-moda \
+            @fontsource-variable/cormorant-garamond \
+            @fontsource-variable/ibm-plex-sans \
+            @fontsource-variable/manrope \
+            @fontsource-variable/space-grotesk \
+            @fontsource-variable/syne
+          git diff --check
+      - name: Save deterministic dependency lock on feature branch
+        run: |
+          if ! git diff --quiet -- apps/web/package.json pnpm-lock.yaml; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add apps/web/package.json pnpm-lock.yaml
+            git commit -m "build(typography): lock self-hosted Fontsource variable fonts"
+            git push origin HEAD:feature/fabrique-typography-atelier
+          fi
