@@ -1,0 +1,45 @@
+name: Fabrique Typography CI
+
+on:
+  push:
+    branches:
+      - feature/fabrique-typography-atelier
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "apps/web/src/typography-*"
+      - "apps/web/src/TypographyAtelier.tsx"
+      - "apps/web/src/FabriqueEnvironment.tsx"
+      - "docs/TYPOGRAPHY_ATELIER.md"
+      - ".github/workflows/fabrique-typography.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  typography:
+    name: TypeScript, Vitest and Biome
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout the submitted commit
+        uses: actions/checkout@v4
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+          run_install: false
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck the web application
+        run: pnpm --filter @ida/web typecheck
+      - name: Test typography and the existing Creative Engine
+        run: pnpm exec vitest run apps/web/src/typography-system.test.ts apps/web/src/typography-atelier.test.ts apps/web/src/creative-engine.test.ts
+      - name: Lint modified source files
+        run: pnpm exec biome check apps/web/src/typography-system.ts apps/web/src/typography-system.test.ts apps/web/src/TypographyAtelier.tsx apps/web/src/typography-atelier.test.ts apps/web/src/FabriqueEnvironment.tsx
