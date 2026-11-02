@@ -1,19 +1,19 @@
-# La Fabrique — Atelier typographique (proposition v1)
+# La Fabrique — Atelier typographique (proposition v2)
 
 ## Périmètre vérifié
 - Point d'entrée dans La Fabrique du dépôt IDA : aperçu local des quatre marques IDA Studio, Alessandro, Egeri et Astromer/Makerz.
 - Choix contrôlé de polices d'affichage et de texte, corps, interlettrage, graisse, capitales et apparition.
 - Comparaison avec le préréglage d'origine, détection des doublons entre marques, export du CSS/JSON.
-- La sauvegarde du brouillon ne concerne que le navigateur via localStorage. Aucune synchronisation workspace/API, aucune modification d'un site client, aucune publication, aucune installation de police.
+- La sauvegarde du brouillon ne concerne que le navigateur via localStorage. Aucune synchronisation workspace/API, aucune modification d'un site client ni publication. Six familles libres auto-hébergées sont installées dans le module de prévisualisation.
 - Restaurer le préréglage est une action locale. Le vrai checkpoint de code est la branche Git immuable à conserver : checkpoint/typography-before-2026-11-02 à la révision 92a8ff47350681fdf8c6e2eccd232dcc0a728417.
 
 ## Polices, légalité et RGPD
-Les noms de polices sont des propositions de direction artistique ; l'aperçu utilise une police système de repli quand la police cible n'est pas installée sur l'appareil. Aucune importation Google Fonts ni requête automatique ne doit être ajoutée : pour la mise en production sur un site tiers, vérifier la licence exacte de chaque fichier, ajouter des fichiers WOFF2 auto-hébergés et déclarer les @font-face / droits d'utilisation. Helvetica Neue ne peut pas être librement distribuée avec le site sans licence adéquate.
+Le module inclut six dépendances `@fontsource-variable/*` enregistrées dans `apps/web/package.json` et `pnpm-lock.yaml` : Space Grotesk, IBM Plex Sans, Cormorant Garamond, Manrope, Bodoni Moda et Syne. Toutes sont distribuées sous OFL-1.1 selon les fiches Fontsource et lues depuis les assets WOFF2 du site : aucune requête à Google Fonts ni à un CDN en exécution. Le navigateur ne télécharge que les sous-ensembles réellement utilisés. Les polices système Helvetica Neue et Georgia ne sont pas distribuées. Pour tout site client, utiliser les packages indiqués par l'export CSS/JSON et inclure les textes de licence applicables ; n'intégrer aucun fichier Helvetica Neue sans autorisation distincte. Le fallback local garantit le fonctionnement hors chargement des polices.
 
 ## Vérifications requises avant fusion
-- pnpm --filter @ida/web typecheck
-- pnpm exec vitest run apps/web/src/typography-system.test.ts
-- pnpm lint
+- pnpm exec tsc --project apps/web/tsconfig.typography.json (strict sur le module ; la vérification globale du dépôt est momentanément bloquée par des défauts préexistants)
+- pnpm exec vitest run apps/web/src/typography-system.test.ts apps/web/src/typography-atelier.test.ts
+- pnpm exec biome check apps/web/src/typography-system.ts apps/web/src/typography-system.test.ts apps/web/src/TypographyAtelier.tsx apps/web/src/typography-atelier.test.ts apps/web/src/FabriqueEnvironment.tsx
 - Parcours manuel : choisir une marque, modifier les contrôles, sauvegarder localement, recharger, restaurer, comparer et exporter, vérifier le blocage des doublons.
 - Vérifier visuellement iPhone / PC, zoom 200 %, clavier, contraste, et prefers-reduced-motion.
 - Aucun déploiement automatique avant validation visuelle.
