@@ -17,3 +17,16 @@ Les noms de polices sont des propositions de direction artistique ; l'aperçu ut
 - Parcours manuel : choisir une marque, modifier les contrôles, sauvegarder localement, recharger, restaurer, comparer et exporter, vérifier le blocage des doublons.
 - Vérifier visuellement iPhone / PC, zoom 200 %, clavier, contraste, et prefers-reduced-motion.
 - Aucun déploiement automatique avant validation visuelle.
+
+## Prévisualisation et recette isolée (tranche v2)
+- Lancer depuis la racine : `pnpm install --frozen-lockfile`.
+- Compiler les éléments propres à l'atelier : `pnpm exec tsc --project apps/web/tsconfig.typography.json`.
+- Démarrer sans lancer IDA Core : `pnpm --dir apps/web exec vite --config vite.typography.config.ts --host 127.0.0.1 --port 5174`. Ouvrir `http://127.0.0.1:5174/typography-preview.html`.
+- Construire le prototype statique isolé : `pnpm --dir apps/web exec vite build --config vite.typography.config.ts`.
+- Lancer l'essai ordinateur / mobile : `pnpm exec playwright install chromium && pnpm exec playwright test --config playwright.typography.config.ts`.
+- L'action GitHub **Fabrique Typography CI** produit un artefact `ida-typography-review` avec le build et, en cas de réussite, les captures des deux formats.
+- Modifications non sauvegardées conservées entre marques pendant la session d'édition. Le brouillon sauvegardé reste local au navigateur et n'est pas synchronisé au compte IDA.
+- Les quatre préréglages sont des **propositions nouvelles**, pas des captures ni un relevé automatisé de la typographie actuellement publiée sur les sites.
+
+## Réserves de compilation existantes dans le dépôt
+À l'origine, le dépôt présente déjà des erreurs indépendantes de cette tranche, notamment une dépendance `music-contacts.js` absente dans les contrats et des imports / types manquants dans le Hub, la météo ou la musique. Le workflow vérifie strictement le module typographique en isolation, lance les tests et la vérification de style ; il laisse les contrôles globaux du dépôt en rapports non bloquants jusqu'à correction spécifique de la base. Un test isolé réussi ne prouve pas que l'application complète est déployable.
