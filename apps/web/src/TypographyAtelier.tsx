@@ -43,7 +43,7 @@ function downloadFile(name: string, data: string, mime: string): void {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function TypographicSample({ config, original }: { config: TypographyConfig; original?: boolean }) {
+function TypographicSample({ config, original, sampleText }: { config: TypographyConfig; original?: boolean; sampleText?: string }) {
   const info = brandMeta[config.brand];
   const style = {
     "--typo-display": fonts[config.display].stack,
@@ -59,7 +59,7 @@ function TypographicSample({ config, original }: { config: TypographyConfig; ori
       <div className="typo-sample-content">
         <small>TYPOGRAPHY / CREATIVE DIRECTION</small>
         <h3 className={config.motion !== "none" && !original ? "typo-motion-" + config.motion : ""}>
-          {info.name}
+          {sampleText?.trim() || info.name}
         </h3>
         <p className="typo-sample-statement">{info.mood}</p>
         <p className="typo-sample-description">{info.description}. Un langage visuel propre à chaque identité, sans modèle standard imposé.</p>
@@ -72,7 +72,9 @@ function TypographicSample({ config, original }: { config: TypographyConfig; ori
 export function TypographyAtelier({ onClose }: { onClose: () => void }) {
   const [brand, setBrand] = useState<BrandId>("ida-studio");
   const [saved, setSaved] = useState<SavedDrafts>(freshDrafts);
-  const [draft, setDraft] = useState<TypographyConfig>({ ...defaultTypography["ida-studio"] });
+  const [pending, setPending] = useState<SavedDrafts>(freshDrafts);
+  const [sampleText, setSampleText] = useState("");
+  const draft = pending[brand];
   const [notice, setNotice] = useState("");
   const [storageError, setStorageError] = useState("");
   const [showCompare, setShowCompare] = useState(true);
@@ -80,7 +82,7 @@ export function TypographyAtelier({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     const restored = readDrafts();
     setSaved(restored.drafts);
-    setDraft(restored.drafts["ida-studio"]);
+    setPending(restored.drafts);
     setStorageError(restored.error);
     setReady(true);
   }, []);
@@ -88,12 +90,15 @@ export function TypographyAtelier({ onClose }: { onClose: () => void }) {
   const modified = !sameTypography(draft, saved[brand]);
   const resetDiff = !sameTypography(draft, defaultTypography[brand]);
   const set = (next: Partial<TypographyConfig>) => {
-    setDraft((previous) => parseTypography({ ...previous, ...next }, brand));
+    setPending((previous) => ({
+      ...previous,
+      [brand]: parseTypography({ ...previous[brand], ...next }, brand),
+    }));
     setNotice("");
   };
   const chooseBrand = (next: BrandId) => {
     setBrand(next);
-    setDraft({ ...saved[next] });
+    setSampleText("");
     setNotice("");
   };
   function save() {
@@ -110,7 +115,7 @@ export function TypographyAtelier({ onClose }: { onClose: () => void }) {
     }
   }
   function restore() {
-    setDraft({ ...defaultTypography[brand] });
+    setPending((previous) => ({ ...previous, [brand]: { ...defaultTypography[brand] } }));
     setNotice("Préréglage d’origine rétabli dans l’aperçu. Cliquez sur Sauvegarder pour le conserver.");
   }
   function exportFile(format: "css" | "json") {
@@ -145,18 +150,21 @@ export function TypographyAtelier({ onClose }: { onClose: () => void }) {
       <div className="typo-workspace">
         <main className="typo-stage">
           <div className="typo-stage-heading">
-            <div><span className="typo-kicker">LIVE PREVIEW / ÉDITEUR LOCAL</span><h2>{brandMeta[brand].name}</h2></div>
+            <div><span className="typo-kicker">LIVE PREVIEW / ÉDITEUR LOCAL</span><h2>{brandMeta[brand].name}{modified ? " · Modifié" : ""}</h2></div>
             <label className="typo-toggle">
               <input type="checkbox" checked={showCompare} onChange={(event) => setShowCompare(event.target.checked)}/>
               Comparer les versions
             </label>
           </div>
+          <label className="typo-sample-input">Texte à tester
+            <input type="text" maxLength={80} value={sampleText} placeholder="Saisissez votre futur titre de site" onChange={(event) => setSampleText(event.target.value)}/>
+          </label>
           <div className={"typo-previews" + (showCompare ? "" : " typo-single")}>
-            {showCompare && <TypographicSample config={defaultTypography[brand]} original />}
-            <TypographicSample key={brand + draft.display + draft.motion + draft.tracking} config={draft}/>
+            {showCompare && <TypographicSample config={defaultTypography[brand]} original sampleText={sampleText} />}
+            <TypographicSample key={brand + draft.display + draft.motion + draft.tracking} config={draft} sampleText={sampleText}/>
           </div>
           <p className="typo-disclaimer">L’aperçu utilise les polices présentes sur cet appareil et leurs polices de secours. Le rendu définitif exige l’hébergement des fichiers autorisés.</p>
-          {duplicate && <p className="typo-warning" role="alert">Identité identique à {brandMeta[duplicate].name}. Modifie au moins un choix typographique avant de sauvegarder ou exporter.</p>}
+          {duplicate && <p className="typo-warning" role="alert">Même duo de polices que {brandMeta[duplicate].name}. Changez la police des titres ou du corps pour différencier réellement les marques.</p>}
           {storageError && <p className="typo-warning" role="alert">{storageError}</p>}
           {notice && <p className="typo-notice" role="status">{notice}</p>}
         </main>
@@ -174,6 +182,7 @@ export function TypographyAtelier({ onClose }: { onClose: () => void }) {
               {fontIds.map((id) => <option key={id} value={id}>{fonts[id].name}</option>)}
             </select>
           </label>
+          <p className="typo-font-note">Police titre : {fonts[draft.display].note}. Police corps : {fonts[draft.body].note}.</p>
           <label>
             Échelle des titres <output>{Math.round(draft.scale * 100)} %</output>
             <input type="range" min="0.8" max="1.5" step="0.01" value={draft.scale} onChange={(event) => set({ scale: Number(event.target.value) })}/>
@@ -207,7 +216,7 @@ export function TypographyAtelier({ onClose }: { onClose: () => void }) {
               <button type="button" disabled={!!duplicate} onClick={() => exportFile("json")}>Exporter JSON</button>
             </div>
           </div>
-          <p className="typo-panel-footnote">Checkpoint Git séparé conservé. Les brouillons sont stockés dans ce navigateur uniquement, pas dans le compte IDA. Aucune publication ni changement des sites en ligne.</p>
+          <p className="typo-panel-footnote">Les modifications non sauvegardées restent disponibles entre les marques tant que cet atelier reste ouvert. Checkpoint Git séparé conservé. Les brouillons sont stockés dans ce navigateur uniquement, pas dans le compte IDA. Aucune publication ni changement des sites en ligne.</p>
         </aside>
       </div>
     </section>
