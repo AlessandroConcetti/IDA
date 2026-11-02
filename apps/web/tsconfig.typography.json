@@ -2,6 +2,7 @@
   "extends": "./tsconfig.json",
   "include": [
     "src/typography-system.ts",
-    "src/TypographyAtelier.tsx"
+    "src/TypographyAtelier.tsx",
+    "src/typography-preview.tsx"
   ]
 }
