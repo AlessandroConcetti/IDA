@@ -15,18 +15,18 @@ export interface TypographyConfig {
   motion: "none" | "fade" | "rise";
 }
 
-export const fonts: Record<FontId, { name: string; stack: string; note: string }> = {
-  space: { name: "Space Grotesk", stack: '"Space Grotesk", "Trebuchet MS", sans-serif', note: "À auto-héberger" },
-  plex: { name: "IBM Plex Sans", stack: '"IBM Plex Sans", Arial, sans-serif', note: "À auto-héberger" },
-  cormorant: { name: "Cormorant Garamond", stack: '"Cormorant Garamond", Georgia, serif', note: "À auto-héberger" },
-  manrope: { name: "Manrope", stack: "Manrope, Arial, sans-serif", note: "À auto-héberger" },
-  bodoni: { name: "Bodoni Moda", stack: '"Bodoni Moda", "Times New Roman", serif', note: "À auto-héberger" },
+export const fonts: Record<FontId, { name: string; stack: string; note: string; packageName?: string }> = {
+  space: { name: "Space Grotesk", stack: '"Space Grotesk Variable", "Trebuchet MS", sans-serif', note: "Famille variable auto-hébergée (Fontsource, OFL-1.1)", packageName: "@fontsource-variable/space-grotesk" },
+  plex: { name: "IBM Plex Sans", stack: '"IBM Plex Sans Variable", Arial, sans-serif', note: "Famille variable auto-hébergée (Fontsource, OFL-1.1)", packageName: "@fontsource-variable/ibm-plex-sans" },
+  cormorant: { name: "Cormorant Garamond", stack: '"Cormorant Garamond Variable", Georgia, serif', note: "Famille variable auto-hébergée (Fontsource, OFL-1.1)", packageName: "@fontsource-variable/cormorant-garamond" },
+  manrope: { name: "Manrope", stack: "Manrope Variable", Arial, sans-serif", note: "Famille variable auto-hébergée (Fontsource, OFL-1.1)", packageName: "@fontsource-variable/manrope" },
+  bodoni: { name: "Bodoni Moda", stack: '"Bodoni Moda Variable", "Times New Roman", serif', note: "Famille variable auto-hébergée (Fontsource, OFL-1.1)", packageName: "@fontsource-variable/bodoni-moda" },
   helvetica: {
     name: "Helvetica Neue (système)",
     stack: '"Helvetica Neue", Arial, sans-serif',
     note: "Licence système à vérifier pour toute distribution",
   },
-  syne: { name: "Syne", stack: 'Syne, "Arial Black", sans-serif', note: "À auto-héberger" },
+  syne: { name: "Syne", stack: '"Syne Variable", "Arial Black", sans-serif', note: "Famille variable auto-hébergée (Fontsource, OFL-1.1)", packageName: "@fontsource-variable/syne" },
   georgia: { name: "Georgia (système)", stack: "Georgia, serif", note: "Police système sans fichier embarqué" },
 };
 
@@ -136,6 +136,11 @@ export function duplicateOf(config: TypographyConfig, saved: Record<BrandId, Typ
   return brandIds.find((id) => id !== config.brand && sameTypefacePair(config, saved[id])) ?? null;
 }
 
+/** Dépendances de police à exporter vers le site client : aucune URL externe. */
+export function typographyFontPackages(config: TypographyConfig): string[] {
+  return [...new Set([fonts[config.display].packageName, fonts[config.body].packageName].filter((value): value is string => Boolean(value)))].sort();
+}
+
 export function typographyCss(config: TypographyConfig): string {
   const c = parseTypography(config, config.brand);
   const heading = fonts[c.display].stack;
@@ -143,7 +148,8 @@ export function typographyCss(config: TypographyConfig): string {
   const spacing = `${c.tracking.toFixed(3)}em`;
   const displaySize = `${(c.scale * 4.2).toFixed(2)}rem`;
   const lines = [
-    "/* IDA Studio | Typography tokens v1 | vérifier les licences et auto-héberger les polices */",
+    "/* IDA Studio | Typography tokens v2 | polices locales, sans CDN */",
+    `/* Packages requis : ${typographyFontPackages(c).join(", ") || "polices système uniquement"} */`,
     ":root {",
     `  --site-font-display: ${heading};`,
     `  --site-font-body: ${body};`,
