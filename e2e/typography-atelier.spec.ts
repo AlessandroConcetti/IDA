@@ -48,4 +48,20 @@ test("reduced motion stays accessible and export remains local", async ({ page }
     path: testInfo.outputPath(`atelier-${testInfo.project.name}.png`),
     fullPage: true,
   });
+  const brands = [
+    { name: /IDA Studio.*Précision technologique/, slug: "ida-studio" },
+    { name: /Alessandro.*Éditorial mariage/, slug: "alessandro" },
+    { name: /Egeri.*Portfolio mannequin/, slug: "egeri" },
+    { name: /Astromer \/ Makerz.*Musique/, slug: "astromer" },
+  ];
+  for (const brand of brands) {
+    await page.getByRole("button", { name: brand.name }).click();
+    await page.evaluate(async () => {
+      await document.fonts.ready;
+    });
+    await page.locator(".typo-sample").last().screenshot({
+      path: testInfo.outputPath(`carte-${brand.slug}-${testInfo.project.name}.png`),
+      animations: "disabled",
+    });
+  }
 });
