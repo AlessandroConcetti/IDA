@@ -160,7 +160,7 @@ export function TypographyAtelier({ onClose }: { onClose: () => void }) {
             {
               format: "ida-typography-v1",
               status: "design-proposal",
-              requiresFontInstallation: false,
+              requiresFontInstallation: typographyFontPackages(draft).length > 0,
       fontPackages: typographyFontPackages(draft),
               ...draft,
             },
