@@ -11,7 +11,7 @@ test("isolated atelier: editing, brand switching, browser save and rollback", as
   await page.getByRole("button", { name: /Alessandro.*Éditorial mariage/ }).click();
   await expect(page.getByLabel("Police des titres")).toHaveValue("bodoni");
   await page.getByRole("button", { name: "Sauvegarder le brouillon" }).click();
-  await expect(page.getByRole("status")).toContainText("Brouillon sauvegardé");
+  await expect(page.locator(".typo-notice")).toContainText("Brouillon sauvegardé");
   await page.reload();
   await page.getByRole("button", { name: /Alessandro.*Éditorial mariage/ }).click();
   await expect(page.getByLabel("Police des titres")).toHaveValue("bodoni");
