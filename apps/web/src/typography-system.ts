@@ -19,7 +19,7 @@ export const fonts: Record<FontId, { name: string; stack: string; note: string; 
   space: { name: "Space Grotesk", stack: '"Space Grotesk Variable", "Trebuchet MS", sans-serif', note: "Famille variable auto-hébergée (Fontsource, OFL-1.1)", packageName: "@fontsource-variable/space-grotesk" },
   plex: { name: "IBM Plex Sans", stack: '"IBM Plex Sans Variable", Arial, sans-serif', note: "Famille variable auto-hébergée (Fontsource, OFL-1.1)", packageName: "@fontsource-variable/ibm-plex-sans" },
   cormorant: { name: "Cormorant Garamond", stack: '"Cormorant Garamond Variable", Georgia, serif', note: "Famille variable auto-hébergée (Fontsource, OFL-1.1)", packageName: "@fontsource-variable/cormorant-garamond" },
-  manrope: { name: "Manrope", stack: "Manrope Variable", Arial, sans-serif", note: "Famille variable auto-hébergée (Fontsource, OFL-1.1)", packageName: "@fontsource-variable/manrope" },
+  manrope: { name: "Manrope", stack: '"Manrope Variable", Arial, sans-serif', note: "Famille variable auto-hébergée (Fontsource, OFL-1.1)", packageName: "@fontsource-variable/manrope" },
   bodoni: { name: "Bodoni Moda", stack: '"Bodoni Moda Variable", "Times New Roman", serif', note: "Famille variable auto-hébergée (Fontsource, OFL-1.1)", packageName: "@fontsource-variable/bodoni-moda" },
   helvetica: {
     name: "Helvetica Neue (système)",
