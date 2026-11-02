@@ -49,7 +49,7 @@ function TypographicSample({ config, original }: { config: TypographyConfig; ori
     "--typo-display": fonts[config.display].stack,
     "--typo-body": fonts[config.body].stack,
     "--typo-spacing": config.tracking + "em",
-    "--typo-size": config.scale * 3.9 + "rem",
+    "--typo-size": config.scale * 4.2 + "rem",
     "--typo-weight": config.weight,
     "--typo-case": config.uppercase ? "uppercase" : "none",
   } as CSSProperties;
