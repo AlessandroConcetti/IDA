@@ -1,0 +1,7 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "src/typography-system.ts",
+    "src/TypographyAtelier.tsx"
+  ]
+}
