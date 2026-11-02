@@ -72,8 +72,13 @@ export function sameTypography(left: TypographyConfig, right: TypographyConfig):
     left.motion === right.motion;
 }
 
+/** Les variations de graisse ou de mouvement ne créent pas une identité nouvelle. */
+export function sameTypefacePair(left: TypographyConfig, right: TypographyConfig): boolean {
+  return left.display === right.display && left.body === right.body;
+}
+
 export function duplicateOf(config: TypographyConfig, saved: Record<BrandId, TypographyConfig>): BrandId | null {
-  return brandIds.find((id) => id !== config.brand && sameTypography(config, saved[id])) ?? null;
+  return brandIds.find((id) => id !== config.brand && sameTypefacePair(config, saved[id])) ?? null;
 }
 
 export function typographyCss(config: TypographyConfig): string {
