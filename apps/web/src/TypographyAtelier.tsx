@@ -55,7 +55,7 @@ function TypographicSample({ config, original }: { config: TypographyConfig; ori
   } as CSSProperties;
   return (
     <article className={"typo-sample typo-brand-" + config.brand} style={style}>
-      <div className="typo-sample-eyebrow">{original ? "01 / CHECKPOINT ORIGINAL" : "02 / PROPOSITION"}</div>
+      <div className="typo-sample-eyebrow">{original ? "01 / PRÉRÉGLAGE DE RÉFÉRENCE" : "02 / PROPOSITION"}</div>
       <div className="typo-sample-content">
         <small>TYPOGRAPHY / CREATIVE DIRECTION</small>
         <h3 className={config.motion !== "none" && !original ? "typo-motion-" + config.motion : ""}>
