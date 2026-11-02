@@ -161,7 +161,7 @@ export function TypographyAtelier({ onClose }: { onClose: () => void }) {
               format: "ida-typography-v1",
               status: "design-proposal",
               requiresFontInstallation: typographyFontPackages(draft).length > 0,
-      fontPackages: typographyFontPackages(draft),
+              fontPackages: typographyFontPackages(draft),
               ...draft,
             },
             null,
@@ -172,7 +172,9 @@ export function TypographyAtelier({ onClose }: { onClose: () => void }) {
       text,
       format === "css" ? "text/css;charset=utf-8" : "application/json;charset=utf-8",
     );
-    setNotice("Export demandé. Aucun déploiement automatique. Ajouter les packages Fontsource exportés au site client avant publication.");
+    setNotice(
+      "Export demandé. Aucun déploiement automatique. Ajouter les packages Fontsource exportés au site client avant publication.",
+    );
   }
   return (
     <section className="environment-screen typography-atelier" aria-label="Atelier typographique IDA">
