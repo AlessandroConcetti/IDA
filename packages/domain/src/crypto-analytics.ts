@@ -184,7 +184,7 @@ export function historicalVaRAndES(equity: number, weights: readonly number[], o
   if (!(confidence > 0 && confidence < 1)) throw new RangeError("invalid confidence");
   weights.forEach((w) => fraction(w, "spot weight"));
   if (weights.reduce((s, w) => s + w, 0) > 1 + 1e-10) throw new RangeError("leverage or shorts forbidden");
-  const tailObservations = Math.ceil((1 - confidence) * observations.length);
+  const tailObservations = Math.ceil((1 - confidence) * observations.length - 1e-10);
   if (tailObservations < 5) throw new RangeError("insufficient tail observations: need >= 5");
   const losses = observations.map((row) => {
     if (row.length !== weights.length) throw new RangeError("unaligned asset returns");
