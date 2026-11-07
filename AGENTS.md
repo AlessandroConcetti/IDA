@@ -48,3 +48,17 @@
 - Documenter uniquement les contrats/comportements réellement modifiés. Préserver les checkpoints significatifs et un moyen de rollback ; ne pas démarrer des sous-chantiers pour remplir une roadmap.
 
 **Principe : une modification demandée = un périmètre ; une création visuelle demandée = une première livraison déjà au standard ; une réponse courte = davantage de travail concret, pas moins de qualité.**
+
+## CONTRAT PERMANENT — PREMIUM UPGRADE / CONSERVATION DES VERSIONS VENDABLES (07/11/2026)
+
+- Le niveau actuel des sites est **déjà commercialisable**. Ne jamais qualifier les versions présentes de brouillons, les effacer, ni bloquer leur présentation/vente sous prétexte d'un futur upgrade.
+- **Avant tout premium upgrade**, enregistrer un checkpoint Git immuable : commit SHA de `main`, branche d'archive `archive/sellable-baseline-20261107` lorsqu'elle existe, et branches dédiées à la nouvelle réalisation. Garder `main` et les versions publiques stables. Ne jamais faire `reset --hard`, force push, rebase destructif ni écraser un autre travail.
+- Mode `PATCH_CIBLE` : ne changer que l'élément explicitement demandé. Mode `PREMIUM_UPGRADE` : uniquement quand le propriétaire le demande explicitement, travailler sur `feature/premium-upgrade-20261107` (ou une branche équivalente dédiée), jamais directement sur les branches sellables.
+- Le chantier `PREMIUM_UPGRADE` vise un **saut de finition**, pas un redesign gratuit : narration produit, hiérarchie, rythme de sections, typographie éditoriale, motion scrollytelling, 3D réelle, qualité mobile, vitesse perçue, preuves client, accessibilité. Référence d'exigence : `https://tryholo.ai/` ; référence UX mobile app-like : `https://on.com/`. S'inspirer du niveau de maîtrise, **pas copier le code, la marque, les visuels ni les textes**.
+- **Conserver chaque option actuelle** (contenus, parcours métiers, interactions, thèmes, effets déjà réussis, CTA, SEO, formulaires et APIs). Faire un inventaire avant changement et une recette de non-régression. Toute suppression ou modification métier nécessite une commande explicite.
+- Après l'upgrade : comparer visuellement avant/après sur **vrai navigateur desktop + Safari iPhone**, montrer captures/vidéos, mesurer les performances, tester clavier et motion réduit. Une livraison non vérifiée doit être marquée `NON VALIDÉ VISUELLEMENT`; aucun merge ni déploiement sans validation du propriétaire.
+- L'upgrade doit pouvoir être **refusé ou revert immédiatement** au profit de la version sellable, sans perte de contenu, client, historique ni assets.
+- Les primitives réutilisables (viewport, PWA, transitions, layout, motion, composants, fallback, tests) doivent être référencées dans la **Fabrique IDA Web Engine**, avec presets par marque et isolation des thèmes ; ne pas transformer tous les clients en clones d'IDA Studio.
+- Ne jamais forcer un vrai plein écran Safari : en onglet, garder scroll et barres natives ; en mode `standalone`, installer via action utilisateur. Lire `docs/IDA_APP_LIKE_MOBILE_STANDARD.md` dans IDA Studio lorsque ce chantier est concerné.
+- **Réponse Codex compacte :** branche/checkpoint, fichiers changés, tests/captures, statut, points bloqués. Pas de token gaspillé en plans répétés ou auto-congratulations.
+
