@@ -1,0 +1,26 @@
+name: IDA Shield security checks
+on:
+  pull_request:
+    paths:
+      - 'apps/api/src/ida-shield*'
+      - 'docs/IDA_SHIELD*'
+      - '.github/workflows/ida-shield.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  shield:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm exec vitest run apps/api/src/ida-shield.test.ts

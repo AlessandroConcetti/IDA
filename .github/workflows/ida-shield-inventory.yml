@@ -1,0 +1,20 @@
+name: IDA Shield inventory gate
+on:
+  pull_request:
+    paths:
+      - 'security/**'
+      - '.github/workflows/ida-shield-inventory.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Validate IDA Shield site inventory
+        run: node security/check-inventory.mjs
