@@ -1,4 +1,4 @@
-import { type DragEvent, type FormEvent, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { type DragEvent, type FormEvent, lazy, Suspense, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { AuroraHome } from "./AuroraHome";
 import { ThemePicker } from "./ThemePicker";
 import { LocalDialogue } from "./LocalDialogue";
@@ -3325,36 +3325,13 @@ function CampaignsView() {
   );
 }
 
-export function AnalyticsView() {
-  const metrics = [
-    ["Portée", "—", "Connexion API nécessaire"],
-    ["Engagement", "—", "Connexion API nécessaire"],
-    ["Fraîcheur", "—", "Calcul non disponible"],
-  ] as const;
+const GrowthDashboard = lazy(() => import("./GrowthDashboard"));
 
+export function AnalyticsView() {
   return (
-    <section className="panel wide-panel analytics-card">
-      <div className="panel-heading">
-        <div>
-          <p className="eyebrow">STATISTIQUES</p>
-          <h2>Des statistiques vérifiables.</h2>
-        </div>
-        <span className="quiet-label">Données non connectées</span>
-      </div>
-      <div className="metrics-grid">
-        {metrics.map(([label, value, detail]) => (
-          <article key={label}>
-            <p>{label}</p>
-            <strong>{value}</strong>
-            <span>{detail}</span>
-          </article>
-        ))}
-      </div>
-      <p className="panel-intro">
-        Lorsque les adaptateurs sociaux seront disponibles, IDA expliquera les recommandations à partir de métriques
-        synchronisées — sans modifier automatiquement ta stratégie.
-      </p>
-    </section>
+    <Suspense fallback={<section className="panel wide-panel analytics-card" role="status"><p>Chargement d’IDA GROWTH…</p></section>}>
+      <GrowthDashboard />
+    </Suspense>
   );
 }
 
