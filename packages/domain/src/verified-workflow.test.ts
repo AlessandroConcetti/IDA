@@ -217,7 +217,7 @@ describe("Verified workflow — synthetic end-to-end graph scenarios", () => {
   it("uses the existing ToolGateway and refuses an unlisted write before execution", async () => {
     const gateway = new ToolGateway(undefined, [{ toolKey: "check_evidence", moduleKey: "IDA", permission: "READ" }]);
     let invoked = 0;
-    const graph: WorkflowDefinition<{}> = {
+    const graph: WorkflowDefinition<Record<string, never>> = {
       key: "policy",
       version: "1",
       startNode: "blocked",
@@ -225,7 +225,7 @@ describe("Verified workflow — synthetic end-to-end graph scenarios", () => {
       timeoutMs: 2_000,
       nodes: [{ id: "blocked", edges: [], async execute(state) { invoked++; return { kind: "COMPLETE", state }; } }],
     };
-    const store = syntheticStore<{}>();
+    const store = syntheticStore<Record<string, never>>();
     await expect(
       runVerifiedWorkflow(graph, store, {
         ...base,
@@ -267,7 +267,7 @@ describe("Verified workflow — synthetic end-to-end graph scenarios", () => {
   });
 
   it("blocks undeclared transitions and preserves the uncertain checkpoint", async () => {
-    const graph: WorkflowDefinition<{}> = {
+    const graph: WorkflowDefinition<Record<string, never>> = {
       key: "invalid",
       version: "1",
       startNode: "a",
@@ -281,10 +281,33 @@ describe("Verified workflow — synthetic end-to-end graph scenarios", () => {
         },
       }],
     };
-    const store = syntheticStore<{}>();
+    const store = syntheticStore<Record<string, never>>();
     await expect(runVerifiedWorkflow(graph, store, { ...base, initialState: {} })).rejects.toMatchObject({
       code: "INVALID_TRANSITION",
     } satisfies Partial<WorkflowFailure>);
+    expect((await store.load(base.workspaceId, base.runId))?.status).toBe("IN_FLIGHT");
+  });
+
+  it("aborts a non-cooperative pending node at the configured deadline", async () => {
+    const graph: WorkflowDefinition<{ value: number }> = {
+      key: "timeout",
+      version: "1",
+      startNode: "slow",
+      maxSteps: 2,
+      timeoutMs: 25,
+      nodes: [{
+        id: "slow",
+        edges: [],
+        async execute(state) {
+          await new Promise((resolve) => setTimeout(resolve, 200));
+          return { kind: "COMPLETE", state };
+        },
+      }],
+    };
+    const store = syntheticStore<{ value: number }>();
+    await expect(runVerifiedWorkflow(graph, store, { ...base, initialState: { value: 0 } })).rejects.toMatchObject({
+      code: "INTERRUPTED",
+    });
     expect((await store.load(base.workspaceId, base.runId))?.status).toBe("IN_FLIGHT");
   });
 
