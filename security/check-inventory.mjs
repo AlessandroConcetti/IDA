@@ -3,7 +3,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const inventoryPath = path.join(root, 'security/sites.json');
 const errors = [];
 let data;
