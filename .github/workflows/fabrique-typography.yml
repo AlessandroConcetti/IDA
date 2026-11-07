@@ -1,0 +1,91 @@
+name: Fabrique Typography CI
+
+on:
+  push:
+    branches:
+      - feature/fabrique-typography-atelier
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "apps/web/src/typography-*"
+      - "apps/web/src/TypographyAtelier.tsx"
+      - "apps/web/src/FabriqueEnvironment.tsx"
+      - "docs/TYPOGRAPHY_ATELIER.md"
+      - "apps/web/tsconfig.typography.json"
+      - "apps/web/typography-preview.html"
+      - "apps/web/src/typography-preview.tsx"
+      - "apps/web/vite.typography.config.ts"
+      - "e2e/typography-atelier.spec.ts"
+      - "playwright.typography.config.ts"
+      - ".github/workflows/fabrique-typography.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  typography:
+    name: TypeScript, Vitest and Biome
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout the submitted commit
+        uses: actions/checkout@v4
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+          run_install: false
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck typography module in isolation
+        run: pnpm exec tsc --project apps/web/tsconfig.typography.json
+      - name: Test typography and the existing Creative Engine
+        run: pnpm exec vitest run apps/web/src/typography-system.test.ts apps/web/src/typography-atelier.test.ts apps/web/src/creative-engine.test.ts
+      - name: Lint modified source files
+        run: pnpm exec biome check apps/web/src/typography-system.ts apps/web/src/typography-system.test.ts apps/web/src/TypographyAtelier.tsx apps/web/src/typography-atelier.test.ts apps/web/src/FabriqueEnvironment.tsx
+      - name: Lint standalone preview and browser tests
+        run: pnpm exec biome lint apps/web/src/typography-preview.tsx apps/web/vite.typography.config.ts e2e/typography-atelier.spec.ts playwright.typography.config.ts
+      - name: Audit existing shared workspace build (known baseline issues)
+        continue-on-error: true
+        run: pnpm --filter @ida/contracts build && pnpm --filter @ida/domain build
+      - name: Audit full web application (known baseline issues)
+        continue-on-error: true
+        run: pnpm --filter @ida/web typecheck
+
+  browser:
+    name: Chromium desktop + mobile
+    needs: typography
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Compile isolated interactive preview
+        run: pnpm --dir apps/web exec vite build --config vite.typography.config.ts
+      - name: Install Chromium test browser
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Test browser interactions, persistence and reduced-motion
+        run: pnpm exec playwright test --config playwright.typography.config.ts
+      - name: Upload interactive preview and screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ida-typography-review
+          path: |
+            apps/web/dist-typography/
+            test-results/
+          if-no-files-found: warn

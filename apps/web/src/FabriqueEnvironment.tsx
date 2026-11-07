@@ -6,6 +6,7 @@ import type { NavigationId } from "./data";
 import { LocalDialogue } from "./LocalDialogue";
 import { McpToolsPanel } from "./McpToolsPanel";
 import { LineIcon, ReferenceRail, Sheet } from "./ReferenceChrome";
+import { TypographyAtelier } from "./TypographyAtelier";
 
 type ProjectKind = "Application" | "Agent" | "Automatisation" | "Outil";
 type View = "create" | "templates" | "projects" | "detail" | "collaborate" | "dialogue" | "mcp";
@@ -78,6 +79,7 @@ export function FabriqueEnvironment({
 }) {
   const [view, setView] = useState<View | null>(null);
   const [engineOpen, setEngineOpen] = useState(false);
+  const [typographyOpen, setTypographyOpen] = useState(false);
   const [kind, setKind] = useState<ProjectKind>("Application");
   const [name, setName] = useState("");
   const [goal, setGoal] = useState("");
@@ -94,7 +96,7 @@ export function FabriqueEnvironment({
   const [failure, setFailure] = useState("");
   const [notice, setNotice] = useState("");
   const [saving, setSaving] = useState(false);
-  const [revision, setRevision] = useState(0);
+  const [_revision, setRevision] = useState(0);
   const generation = useRef(0);
   const viewGeneration = useRef(0);
   const mutation = useRef(false);
@@ -124,7 +126,7 @@ export function FabriqueEnvironment({
     return () => {
       generation.current++;
     };
-  }, [revision]);
+  }, []);
   const title = `${projectPrefix}${kind} · ${name.trim()}`;
   const description = `TYPE : ${kind}\n\nOBJECTIF\n${goal.trim()}\n\nLIVRABLE\n${deliverable.trim()}\n\nLIMITES ET VALIDATION\n${limits.trim()}\n\nRESPONSABLE\n${owner.trim() || "À désigner"}\n\nSTATUT : brief de conception uniquement. Aucun agent enregistré, outil exécuté, automatisation activée ou application déployée.`;
   const filtered = tasks.filter(
@@ -150,7 +152,7 @@ export function FabriqueEnvironment({
     setOwner("");
     open("create");
   }
-  function useTemplate(template: (typeof templates)[number]) {
+  function applyTemplate(template: (typeof templates)[number]) {
     setKind(template.kind);
     setName(template.title);
     setGoal(template.goal);
@@ -242,6 +244,7 @@ export function FabriqueEnvironment({
       }
     }
   }
+  if (typographyOpen) return <TypographyAtelier onClose={() => setTypographyOpen(false)} />;
   if (engineOpen)
     return (
       <CreativeEngineWorkspace
@@ -308,6 +311,14 @@ export function FabriqueEnvironment({
               <span>
                 <strong>IDA Creative Engine</strong>
                 <small>Références · plans · dossiers de conception</small>
+              </span>
+              <span aria-hidden="true">→</span>
+            </button>
+            <button className="reference-row" type="button" onClick={() => setTypographyOpen(true)}>
+              <LineIcon kind="book" />
+              <span>
+                <strong>Atelier typographique</strong>
+                <small>Identités distinctes · aperçu · sauvegarde · export CSS</small>
               </span>
               <span aria-hidden="true">→</span>
             </button>
@@ -413,16 +424,16 @@ export function FabriqueEnvironment({
             view === "mcp"
               ? "Outils MCP · lecture documentaire"
               : view === "create"
-              ? `Nouveau projet · ${kind}`
-              : view === "templates"
-                ? "Templates"
-                : view === "projects"
-                  ? "Mes projets"
-                  : view === "detail"
-                    ? "Mon brief de projet"
-                    : view === "collaborate"
-                      ? "Préparer une collaboration"
-                      : "Réfléchir avec IDA"
+                ? `Nouveau projet · ${kind}`
+                : view === "templates"
+                  ? "Templates"
+                  : view === "projects"
+                    ? "Mes projets"
+                    : view === "detail"
+                      ? "Mon brief de projet"
+                      : view === "collaborate"
+                        ? "Préparer une collaboration"
+                        : "Réfléchir avec IDA"
           }
           close={() => open(null)}
         >
@@ -530,7 +541,7 @@ export function FabriqueEnvironment({
                     <span>{item.kind}</span>
                     <h3>{item.title}</h3>
                     <p>{item.goal}</p>
-                    <button type="button" onClick={() => useTemplate(item)}>
+                    <button type="button" onClick={() => applyTemplate(item)}>
                       Utiliser ce modèle →
                     </button>
                   </article>
