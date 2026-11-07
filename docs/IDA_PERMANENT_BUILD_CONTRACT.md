@@ -36,9 +36,9 @@ Toute capacité construite pour Alessandro devient accessible dans l’UX de l�
 
 Quand la refonte générale du frontend est en pause, ne pas redessiner IDA. Toute nouvelle fonction reçoit néanmoins son point d’entrée, sa vue métier minimale, ses états, ses contrôles et son retour utilisateur, en réutilisant le Design System existant. La finition artistique générale peut être réalisée dans une tranche séparée.
 
-### 08 — Fonction avant décoration
+### 08 — Fonction avant décoration, MAIS qualité avant livraison
 
-Pour un chantier métier, progresser dans cet ordre : fonctionnement, intégration, UX, finition visuelle, animation. Ne pas investir dans l’embellissement d’une fonction qui ne marche pas encore.
+Pour un chantier métier, progresser en interne dans cet ordre : fonctionnement, intégration, UX, finition visuelle, animation. **Cela n'autorise pas une livraison visuelle provisoire** lorsque l'utilisateur a demandé un site, une refonte, une 3D, un hero, un motion design ou une interface premium. Dans ce cas, la fidélité, les matériaux, la composition, le mobile et les interactions font partie de la même tranche explicitement demandée. Vérifier et corriger le rendu avant la première restitution ; appliquer `docs/IDA_FIRST_PASS_VISUAL_STANDARD.md`. Pour une modification ciblée, geler tout ce qui n'est pas demandé, même au nom de la qualité.
 
 ## Références visuelles, 3D et mouvement
 
