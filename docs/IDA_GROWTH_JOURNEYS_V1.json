@@ -1,0 +1,599 @@
+{
+  "schema_version": "1.0.0",
+  "lifecycle": "REFERENCE_DATA_NOT_ACTIVE",
+  "module": "IDA Growth",
+  "journey_stages": [
+    "AWARENESS",
+    "REFRAME",
+    "POSSIBILITY",
+    "PROOF",
+    "OBJECTIONS",
+    "DECISION",
+    "ONBOARDING",
+    "EXPANSION"
+  ],
+  "journeys": [
+    {
+      "kind": "A",
+      "slug": "entreprise-sans-site",
+      "name": "Visibilité sans site",
+      "target": "Entreprise sans site vérifié",
+      "entry_conditions": [
+        "website_status=VERIFIED_ABSENT",
+        "verification_date and source present"
+      ],
+      "goal": "Diagnostic de présence numérique",
+      "episodes": [
+        {
+          "id": "A01",
+          "order": 1,
+          "stage": "AWARENESS",
+          "title": "Un site est-il vraiment inutile ?",
+          "belief_before": "Mon entreprise fonctionne sans site.",
+          "belief_after_goal": "La visibilité numérique est une décision commerciale à examiner.",
+          "key_message": "Questionner les limites des recommandations et du bouche-à-oreille.",
+          "evidence_required": "Exemples métiers contextualisés, sans chiffres inventés.",
+          "format_candidates": [
+            "short_video",
+            "carousel",
+            "landing_section"
+          ],
+          "cta": "Explorer le diagnostic",
+          "destination": "/growth/parcours/a",
+          "next_episode_id": "A02"
+        },
+        {
+          "id": "A02",
+          "order": 2,
+          "stage": "REFRAME",
+          "title": "Êtes-vous trouvable au bon moment ?",
+          "belief_before": "Les clients me trouvent déjà.",
+          "belief_after_goal": "Certains prospects peuvent chercher ailleurs.",
+          "key_message": "Démontrer où l'entreprise est ou non trouvable sur des recherches ciblées.",
+          "evidence_required": "Constat de recherche daté et reproductible.",
+          "format_candidates": [
+            "short_video",
+            "carousel",
+            "landing_section"
+          ],
+          "cta": "Voir les points à vérifier",
+          "destination": "/growth/parcours/a",
+          "next_episode_id": "A03"
+        },
+        {
+          "id": "A03",
+          "order": 3,
+          "stage": "REFRAME",
+          "title": "Réseaux sociaux ou site : les deux rôles",
+          "belief_before": "Instagram suffit à tout faire.",
+          "belief_after_goal": "Le site joue un rôle complémentaire aux réseaux sociaux.",
+          "key_message": "Comparer contrôle, indexation, parcours et mesure, sans généralisation absolue.",
+          "evidence_required": "Comparatif réel de fonctionnalités et limites.",
+          "format_candidates": [
+            "short_video",
+            "carousel",
+            "landing_section"
+          ],
+          "cta": "Comparer les parcours",
+          "destination": "/growth/parcours/a",
+          "next_episode_id": "A04"
+        },
+        {
+          "id": "A04",
+          "order": 4,
+          "stage": "POSSIBILITY",
+          "title": "Une vitrine utile, pas un simple catalogue",
+          "belief_before": "Un site n'est qu'une carte de visite.",
+          "belief_after_goal": "Il peut simplifier prise de contact, devis et informations.",
+          "key_message": "Montrer un micro-parcours fluide, mobile-first.",
+          "evidence_required": "Démonstration fonctionnelle et accessible.",
+          "format_candidates": [
+            "short_video",
+            "carousel",
+            "landing_section"
+          ],
+          "cta": "Voir la démonstration",
+          "destination": "/growth/demos",
+          "next_episode_id": "A05"
+        },
+        {
+          "id": "A05",
+          "order": 5,
+          "stage": "PROOF",
+          "title": "Avant/après de l'expérience client",
+          "belief_before": "Créer un site ne change rien.",
+          "belief_after_goal": "Une interface peut réduire les frictions observables.",
+          "key_message": "Comparer un parcours de recherche et contact avant/après.",
+          "evidence_required": "Démo autorisée clairement étiquetée ; aucun cas client fictif.",
+          "format_candidates": [
+            "short_video",
+            "carousel",
+            "landing_section"
+          ],
+          "cta": "Tester le parcours",
+          "destination": "/growth/demos",
+          "next_episode_id": "A06"
+        },
+        {
+          "id": "A06",
+          "order": 6,
+          "stage": "PROOF",
+          "title": "Que peut prendre en charge IDA ?",
+          "belief_before": "Un site est statique.",
+          "belief_after_goal": "Selon le besoin, des flux simples peuvent lui être associés.",
+          "key_message": "Illustrer un formulaire, agenda ou une qualification sans promettre des services non livrables.",
+          "evidence_required": "Démo du code existant ou étiquette concept.",
+          "format_candidates": [
+            "short_video",
+            "carousel",
+            "landing_section"
+          ],
+          "cta": "Voir les fonctionnalités",
+          "destination": "/growth/demos",
+          "next_episode_id": "A07"
+        },
+        {
+          "id": "A07",
+          "order": 7,
+          "stage": "OBJECTIONS",
+          "title": "Combien coûte un site utile ?",
+          "belief_before": "C'est forcément trop cher ou complexe.",
+          "belief_after_goal": "Une offre et ses limites doivent être comparées au besoin.",
+          "key_message": "Présenter les facteurs de coût, propriété, maintenance, droits et délais.",
+          "evidence_required": "Devis type explicitement illustratif ou tarifs approuvés du catalogue.",
+          "format_candidates": [
+            "short_video",
+            "carousel",
+            "landing_section"
+          ],
+          "cta": "Identifier les prérequis",
+          "destination": "/growth/diagnostic",
+          "next_episode_id": "A08"
+        },
+        {
+          "id": "A08",
+          "order": 8,
+          "stage": "DECISION",
+          "title": "Votre diagnostic numérique",
+          "belief_before": "Je ne sais pas par où commencer.",
+          "belief_after_goal": "Je peux obtenir une recommandation adaptée sans engagement.",
+          "key_message": "Proposer un échange cadré, des choix et une suite explicite.",
+          "evidence_required": "Formulaire fonctionnel et traitement transparent des données.",
+          "format_candidates": [
+            "short_video",
+            "carousel",
+            "landing_section"
+          ],
+          "cta": "Demander un diagnostic",
+          "destination": "/growth/diagnostic",
+          "next_episode_id": null
+        }
+      ]
+    },
+    {
+      "kind": "B",
+      "slug": "refonte",
+      "name": "Refonte fondée sur l'audit",
+      "target": "Entreprise avec site existant et limites observables",
+      "entry_conditions": [
+        "website_status=VERIFIED_PRESENT",
+        "audit_findings>=1"
+      ],
+      "goal": "Audit / proposition de refonte",
+      "episodes": [
+        {
+          "id": "B01",
+          "order": 1,
+          "stage": "AWARENESS",
+          "title": "Votre site fait-il vraiment le travail ?",
+          "belief_before": "Il est en ligne, donc c'est suffisant.",
+          "belief_after_goal": "Une présence en ligne ne prouve pas l'utilité.",
+          "key_message": "Introduire des tâches client testables.",
+          "evidence_required": "URL et critères d'évaluation datés.",
+          "format_candidates": [
+            "short_video",
+            "carousel",
+            "landing_section"
+          ],
+          "cta": "Voir les critères",
+          "destination": "/growth/parcours/b",
+          "next_episode_id": "B02"
+        },
+        {
+          "id": "B02",
+          "order": 2,
+          "stage": "PROOF",
+          "title": "Audit de parcours concret",
+          "belief_before": "Il suffit de refaire le design.",
+          "belief_after_goal": "Les problèmes peuvent être plus profonds que l'esthétique.",
+          "key_message": "Mesurer performance, accès mobile, accessibilité, navigation et contact.",
+          "evidence_required": "Audit documenté ; distinguo mesures/avis.",
+          "format_candidates": [
+            "short_video",
+            "carousel",
+            "landing_section"
+          ],
+          "cta": "Voir l'audit",
+          "destination": "/growth/audit",
+          "next_episode_id": "B03"
+        },
+        {
+          "id": "B03",
+          "order": 3,
+          "stage": "POSSIBILITY",
+          "title": "Projection avant/après",
+          "belief_before": "La refonte est un risque sans valeur.",
+          "belief_after_goal": "Une refonte ciblée peut répondre à des frictions démontrées.",
+          "key_message": "Présenter un prototype avec périmètre et limites.",
+          "evidence_required": "Prototype fidèle non présenté comme déjà livré.",
+          "format_candidates": [
+            "short_video",
+            "carousel",
+            "landing_section"
+          ],
+          "cta": "Demander une proposition",
+          "destination": "/growth/diagnostic",
+          "next_episode_id": "B04"
+        },
+        {
+          "id": "B04",
+          "order": 4,
+          "stage": "DECISION",
+          "title": "Prioriser la refonte utile",
+          "belief_before": "Tout refaire d'un coup est obligatoire.",
+          "belief_after_goal": "Une amélioration peut être cadrée et priorisée.",
+          "key_message": "Proposer un diagnostic et devis selon audit.",
+          "evidence_required": "Hypothèses, budget et tests explicités.",
+          "format_candidates": [
+            "short_video",
+            "carousel",
+            "landing_section"
+          ],
+          "cta": "Planifier un audit",
+          "destination": "/growth/diagnostic",
+          "next_episode_id": null
+        }
+      ]
+    },
+    {
+      "kind": "C",
+      "slug": "ida-pro",
+      "name": "Automatisation métier maîtrisée",
+      "target": "Entreprise avec processus répétitifs identifiés",
+      "entry_conditions": [
+        "process_need=DECLARED_OR_VERIFIED"
+      ],
+      "goal": "Atelier métier / pilote IDA PRO",
+      "episodes": [
+        {
+          "id": "C01",
+          "order": 1,
+          "stage": "AWARENESS",
+          "title": "Où va le temps de votre équipe ?",
+          "belief_before": "Mes tâches répétitives sont inévitables.",
+          "belief_after_goal": "Certaines étapes pourraient être simplifiées.",
+          "key_message": "Cartographier sans présumer des gains.",
+          "evidence_required": "Exemples métier réalistes, à confirmer.",
+          "format_candidates": [
+            "short_video",
+            "carousel",
+            "landing_section"
+          ],
+          "cta": "Cartographier un processus",
+          "destination": "/growth/parcours/c",
+          "next_episode_id": "C02"
+        },
+        {
+          "id": "C02",
+          "order": 2,
+          "stage": "REFRAME",
+          "title": "Automatiser sans perdre le contrôle",
+          "belief_before": "L'IA doit prendre toutes les décisions.",
+          "belief_after_goal": "L'automatisation peut conserver l'humain aux validations.",
+          "key_message": "Montrer contrôle d'accès, approbations, journaux et limites.",
+          "evidence_required": "Démonstration réellement disponible ou marquée à venir.",
+          "format_candidates": [
+            "short_video",
+            "carousel",
+            "landing_section"
+          ],
+          "cta": "Voir un flux",
+          "destination": "/growth/demos",
+          "next_episode_id": "C03"
+        },
+        {
+          "id": "C03",
+          "order": 3,
+          "stage": "PROOF",
+          "title": "Un cas de flux vérifiable",
+          "belief_before": "C'est trop complexe à installer.",
+          "belief_after_goal": "Une tranche pilote limitée permet d'évaluer l'intérêt.",
+          "key_message": "Montrer entrée -> validation -> résultat avec cas d'échec.",
+          "evidence_required": "Démo avec état réel et temps mesuré si disponible.",
+          "format_candidates": [
+            "short_video",
+            "carousel",
+            "landing_section"
+          ],
+          "cta": "Tester un cas",
+          "destination": "/growth/demos",
+          "next_episode_id": "C04"
+        },
+        {
+          "id": "C04",
+          "order": 4,
+          "stage": "DECISION",
+          "title": "Pilote avant déploiement",
+          "belief_before": "Je dois tout changer d'un coup.",
+          "belief_after_goal": "Un pilote avec critères d'arrêt permet une décision informée.",
+          "key_message": "Proposer cadrage du besoin, sécurité et coûts.",
+          "evidence_required": "Périmètre et prérequis validés.",
+          "format_candidates": [
+            "short_video",
+            "carousel",
+            "landing_section"
+          ],
+          "cta": "Demander un atelier",
+          "destination": "/growth/diagnostic",
+          "next_episode_id": null
+        }
+      ]
+    },
+    {
+      "kind": "D",
+      "slug": "expansion-client",
+      "name": "Pluralisation des services — client existant",
+      "target": "Client actif avec commande signée",
+      "entry_conditions": [
+        "customer_status=ACTIVE",
+        "contract_reference_present=true",
+        "initial_product_present=true",
+        "documented_need_or_audit=true"
+      ],
+      "goal": "Offre complémentaire adaptée, validée par le client",
+      "episodes": [
+        {
+          "id": "D01",
+          "order": 1,
+          "stage": "ONBOARDING",
+          "title": "Bilan du service déjà livré",
+          "belief_before": "Mon besoin initial est couvert.",
+          "belief_after_goal": "Vérifier l'usage réel et la satisfaction avant toute proposition.",
+          "key_message": "Recueillir ce qui fonctionne, les attentes et les irritants.",
+          "evidence_required": "Livraison/contrat et retour client réels.",
+          "format_candidates": [
+            "short_video",
+            "carousel",
+            "landing_section"
+          ],
+          "cta": "Faire le bilan",
+          "destination": "/growth/client/bilan",
+          "next_episode_id": "D02"
+        },
+        {
+          "id": "D02",
+          "order": 2,
+          "stage": "AWARENESS",
+          "title": "Identifier la prochaine limite",
+          "belief_before": "Tout est terminé avec le site.",
+          "belief_after_goal": "De nouveaux besoins peuvent exister, sans obligation d'achat.",
+          "key_message": "Diagnostic circonstancié de SEO, visibilité, visuels, conversion ou opérations.",
+          "evidence_required": "Audit daté et besoin déclaré, pas d'upsell déduit du seul chiffre d'affaires.",
+          "format_candidates": [
+            "short_video",
+            "carousel",
+            "landing_section"
+          ],
+          "cta": "Voir mon diagnostic",
+          "destination": "/growth/client/diagnostic",
+          "next_episode_id": "D03"
+        },
+        {
+          "id": "D03",
+          "order": 3,
+          "stage": "REFRAME",
+          "title": "Prioriser les fondations",
+          "belief_before": "La publicité est toujours la meilleure suite.",
+          "belief_after_goal": "Les dépenses marketing demandent un parcours et une mesure fiables.",
+          "key_message": "Vérifier visibilité, offre, mesure, performance et conversion avant budget média.",
+          "evidence_required": "Checklist factuelle adaptée au produit en place.",
+          "format_candidates": [
+            "short_video",
+            "carousel",
+            "landing_section"
+          ],
+          "cta": "Voir les priorités",
+          "destination": "/growth/client/plan",
+          "next_episode_id": "D04"
+        },
+        {
+          "id": "D04",
+          "order": 4,
+          "stage": "PROOF",
+          "title": "Une seule démonstration adaptée",
+          "belief_before": "Les services supplémentaires sont accessoires.",
+          "belief_after_goal": "Un complément peut résoudre un problème précisément identifié.",
+          "key_message": "Montrer SEO, visuels, publicité ou automatisation uniquement si pertinent.",
+          "evidence_required": "Démonstration liée au besoin, catalogue et droits réels.",
+          "format_candidates": [
+            "short_video",
+            "carousel",
+            "landing_section"
+          ],
+          "cta": "Examiner une solution",
+          "destination": "/growth/client/demos",
+          "next_episode_id": "D05"
+        },
+        {
+          "id": "D05",
+          "order": 5,
+          "stage": "OBJECTIONS",
+          "title": "Coût, limites et retour attendu",
+          "belief_before": "Le prochain achat est imposé.",
+          "belief_after_goal": "Le choix reste optionnel, explicite et réversible selon contrat.",
+          "key_message": "Exposer tarif autorisé, dépendances, efforts et incertitudes.",
+          "evidence_required": "Devis individuel validé, aucune promesse de ROAS.",
+          "format_candidates": [
+            "short_video",
+            "carousel",
+            "landing_section"
+          ],
+          "cta": "Examiner l'offre",
+          "destination": "/growth/client/offre",
+          "next_episode_id": "D06"
+        },
+        {
+          "id": "D06",
+          "order": 6,
+          "stage": "DECISION",
+          "title": "Proposition complémentaire ciblée",
+          "belief_before": "Je n'ai pas de décision claire.",
+          "belief_after_goal": "Je peux accepter, refuser ou reporter.",
+          "key_message": "Une recommandation principale, jamais un lot de ventes imposées.",
+          "evidence_required": "Validation humaine, préférence de contact et décision tracée.",
+          "format_candidates": [
+            "short_video",
+            "carousel",
+            "landing_section"
+          ],
+          "cta": "Choisir la suite",
+          "destination": "/growth/client/offre",
+          "next_episode_id": "D07"
+        },
+        {
+          "id": "D07",
+          "order": 7,
+          "stage": "EXPANSION",
+          "title": "Mesurer et recommander avec retenue",
+          "belief_before": "L'upsell est une suite sans fin.",
+          "belief_after_goal": "Seuls de nouveaux besoins démontrés justifient une autre proposition.",
+          "key_message": "Mesurer la prestation acceptée puis revoir les priorités sur demande.",
+          "evidence_required": "Résultats réellement mesurés, refus respectés.",
+          "format_candidates": [
+            "short_video",
+            "carousel",
+            "landing_section"
+          ],
+          "cta": "Consulter le suivi",
+          "destination": "/growth/client/suivi",
+          "next_episode_id": null
+        }
+      ]
+    }
+  ],
+  "service_catalog_reference": [
+    {
+      "id": "website",
+      "label": "Création/refonte de site",
+      "prerequisites": [
+        "needs_audit"
+      ],
+      "compatible_next": [
+        "seo",
+        "visuals",
+        "analytics",
+        "care",
+        "ads",
+        "ida_pro"
+      ]
+    },
+    {
+      "id": "seo",
+      "label": "SEO technique et local",
+      "prerequisites": [
+        "site_access",
+        "indexed_or_indexable",
+        "needs_audit"
+      ],
+      "compatible_next": [
+        "analytics",
+        "content"
+      ]
+    },
+    {
+      "id": "visuals",
+      "label": "Visuels / identité / création vidéo",
+      "prerequisites": [
+        "rights_confirmed",
+        "creative_brief"
+      ],
+      "compatible_next": [
+        "content",
+        "ads"
+      ]
+    },
+    {
+      "id": "analytics",
+      "label": "Mesure et optimisation des conversions",
+      "prerequisites": [
+        "privacy_review",
+        "tracking_plan"
+      ],
+      "compatible_next": [
+        "ads",
+        "seo"
+      ]
+    },
+    {
+      "id": "ads",
+      "label": "Publicité / campagnes payantes",
+      "prerequisites": [
+        "explicit_budget_approval",
+        "ready_landing",
+        "measurement_plan",
+        "human_campaign_approval"
+      ],
+      "compatible_next": [
+        "analytics",
+        "visuals"
+      ]
+    },
+    {
+      "id": "ida_pro",
+      "label": "IDA PRO et automatisation",
+      "prerequisites": [
+        "verified_workflow",
+        "scope_approval",
+        "capability_available"
+      ],
+      "compatible_next": [
+        "care"
+      ]
+    },
+    {
+      "id": "care",
+      "label": "Maintenance / accompagnement",
+      "prerequisites": [
+        "scope_and_service_level_approved"
+      ],
+      "compatible_next": [
+        "seo",
+        "analytics"
+      ]
+    },
+    {
+      "id": "content",
+      "label": "Contenu éditorial récurrent",
+      "prerequisites": [
+        "editorial_plan",
+        "approved_assets"
+      ],
+      "compatible_next": [
+        "seo",
+        "ads"
+      ]
+    }
+  ],
+  "acceptance_invariants": [
+    "D requires active customer, signed contract and documented need",
+    "No public posting or outbound message without approval",
+    "No invented conversion, ranking or ROI",
+    "Episode ordering and all next_episode_id references valid within their journey",
+    "No episode dependency requires user to have seen prior episode",
+    "Refusal prevents automated followups for that offer",
+    "Products already active cannot be upsold again without a renewal/upgrade reason",
+    "No paid ads recommendation absent budget, conversion destination and measurement",
+    "No inferred belief change from click/impression",
+    "Workspace isolation and idempotent event ingestion"
+  ]
+}
