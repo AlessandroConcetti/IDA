@@ -34,7 +34,7 @@
 
 ## 4. VaR, ES, FRTB: méthodologie correctement bornée
 - Historique: aligner **les mêmes jours et heures**; cryptos 365/365, actions 252 séances; pas de matrice de rendements sans calendrier cohérent. Retours simples = P_t/P_{t-1}-1; ne pas mélanger log/simple sans transformation.
-- VaR historique à confiance c: seuil du pire `ceil((1-c)×N)`-ième scénario P&L; ES moyenne des `ceil((1-c)×N)` pires pertes. Minimum de 5 réalisations de queue pour cette version d'étude; 99% et N=500 => 6 réalisations (convention prudente d'arrondi), **les autres conventions interpolées peuvent différer**.
+- VaR historique à confiance c: seuil du pire `ceil((1-c)×N)`-ième scénario P&L; ES moyenne des `ceil((1-c)×N)` pires pertes. Minimum de 5 réalisations de queue pour cette version d'étude; 99% et N=500 => 5 réalisations (corriger l’arrondi flottant), **les autres conventions interpolées peuvent différer**.
 - Paramétrique: sigma_portefeuille = sqrt(wᵀ Σ w) pour rendements journaliers; VaR ~= max(0,E[z_c σ_p sqrt(h)-μ_p h]); normalité fragile en crypto, gap/tails/corrélation de stress. Étendre avec Student / scénarios bootstrap / Monte Carlo quand validés. Pas de fausse précision.
 - Stress: -30%, -60%, chute de liquidité 90%, gapping et depeg; calcul coût de sortie au carnet et ES sur scénarios; ES n'est pas perte maximale.
 - FRTB bancaire IMA: ES 97.5% une queue, horizons 10/20/40/60/120 j, période de stress ≥12 mois et set réduit de facteurs; NMRF soumis à SES, DRC spécifique au défaut; ne **pas** présenter cela comme requis pour portefeuille crypto retail. Basel SCO60 (en vigueur 2026) distingue Group 1/2 et précise les traitements crypto bancaires (IMA non applicable aux Group 2a).
