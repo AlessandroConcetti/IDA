@@ -6,3 +6,4 @@ export * from "./provider-registry.js";
 export * from "./provider-router.js";
 export * from "./quota-manager.js";
 export * from "./tool-policy.js";
+export * from "./verified-workflow.js";
