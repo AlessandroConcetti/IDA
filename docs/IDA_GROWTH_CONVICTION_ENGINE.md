@@ -34,7 +34,7 @@ Services possibles, selon catalogue réellement commercialisable et capacités e
 - Site créé/refondu -> SEO technique et local si lacunes mesurées ; analytics et suivi des conversions si absents.
 - Nouveau site + manque de contenu de qualité -> visuels, identité, photos/vidéos commerciales **uniquement avec droits et moyens de production validés**.
 - Acquisition organique en place + objectif de volume + budget confirmé -> publicité / campagnes payantes **après** mesure, landing pertinente et validation du coût.
-- Demand es répétitives identifiées -> IDA PRO, automatisation métier, devis, qualification, prise de rendez-vous si les fonctions existent et sont conformes.
+- Demandes répétitives identifiées -> IDA PRO, automatisation métier, devis, qualification, prise de rendez-vous si les fonctions existent et sont conformes.
 - Besoin récurrent explicite -> maintenance, optimisation UX/SEO, contenu ou accompagnement.
 
 **Garde-fou d'offre D :** chaque recommandation nécessite `trigger vérifié + besoin confirmé ou diagnostic explicite + produit compatible + bénéfice prudent + prérequis + coût estimatif validé + preuve livrable + responsable humain`. Une proposition sans justification reste `DRAFT/NEEDS_VALIDATION` ; pas de relance ni de devis automatiques.
