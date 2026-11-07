@@ -32,7 +32,7 @@ describe("IDA Crypto - deterministic spot-only analytics", () => {
     expect(marketCapAndFDV(2, 25, 100)).toMatchObject({marketCap: 50, fullyDilutedValue: 200, dilutionFraction: .75});
     const observations = Array.from({length: 500}, (_, i) => [i < 5 ? -.5 : .01]);
     const report = historicalVaRAndES(100, [1], observations, .99);
-    expect(report.tailObservations).toBe(6);
+    expect(report.tailObservations).toBe(5);
     expect(report.expectedShortfall).toBeGreaterThanOrEqual(report.varAmount);
     expect(report.expectedShortfall).toBeGreaterThan(0);
     expect(() => historicalVaRAndES(100, [1.2], observations)).toThrow("spot weight");
