@@ -92,6 +92,20 @@ function validate<State>(definition: WorkflowDefinition<State>): Map<string, Wor
   return nodes;
 }
 
+async function awaitWithAbort<T>(signal: AbortSignal, task: () => Promise<T>): Promise<T> {
+  if (signal.aborted) throw new WorkflowFailure("INTERRUPTED");
+  let listener: (() => void) | undefined;
+  const aborted = new Promise<never>((_resolve, reject) => {
+    listener = () => reject(new WorkflowFailure("INTERRUPTED"));
+    signal.addEventListener("abort", listener, { once: true });
+  });
+  try {
+    return await Promise.race([task(), aborted]);
+  } finally {
+    if (listener) signal.removeEventListener("abort", listener);
+  }
+}
+
 export interface WorkflowRunOptions<State> {
   readonly runId: string;
   readonly workspaceId: string;
@@ -161,17 +175,19 @@ export async function runVerifiedWorkflow<State>(
     const node = checkpoint.nodeId ? nodes.get(checkpoint.nodeId) : undefined;
     if (!node) throw new WorkflowFailure("WORKFLOW_MISMATCH");
 
-    await options.authorize(options.workspaceId, options.runId, node.id);
+    await awaitWithAbort(signal, () => options.authorize(options.workspaceId, options.runId, node.id));
     if (signal.aborted) throw new WorkflowFailure("INTERRUPTED");
     await commit({ ...checkpoint, status: "IN_FLIGHT", revision: checkpoint.revision + 1 });
     // Deliberately no catch/retry: failure leaves IN_FLIGHT for reconciliation.
-    await options.authorize(options.workspaceId, options.runId, node.id);
-    const decision = await node.execute(structuredClone(checkpoint.state), {
-      signal,
-      idempotencyKey: options.runId + ":" + String(checkpoint.steps + 1) + ":" + node.id,
-    });
+    await awaitWithAbort(signal, () => options.authorize(options.workspaceId, options.runId, node.id));
+    const decision = await awaitWithAbort(signal, () =>
+      node.execute(structuredClone(checkpoint.state), {
+        signal,
+        idempotencyKey: options.runId + ":" + String(checkpoint.steps + 1) + ":" + node.id,
+      }),
+    );
     if (signal.aborted) throw new WorkflowFailure("INTERRUPTED");
-    await options.authorize(options.workspaceId, options.runId, node.id);
+    await awaitWithAbort(signal, () => options.authorize(options.workspaceId, options.runId, node.id));
     if (
       !decision ||
       !["NEXT", "PAUSE", "COMPLETE"].includes(decision.kind) ||
